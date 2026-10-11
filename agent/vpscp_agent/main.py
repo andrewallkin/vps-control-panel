@@ -6,13 +6,17 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import JSONResponse
 
 from vpscp_agent import __version__, audit, container_metrics, metrics
+from vpscp_agent.commands import run_command
 from vpscp_agent.config import Settings
+from vpscp_agent.jobs import JobLockedError, JobManager
+from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.state import StateDB
 
 
-def create_app(settings: Settings) -> FastAPI:
+def create_app(settings: Settings, runner=run_command) -> FastAPI:
     db = StateDB(settings.state_db_path)
 
     @asynccontextmanager
@@ -44,6 +48,14 @@ def create_app(settings: Settings) -> FastAPI:
     )
     app.state.settings = settings
     app.state.db = db
+    app.state.runner = runner
+    app.state.jobs = JobManager(db)
+
+    @app.exception_handler(JobLockedError)
+    async def job_locked_handler(_request, _exc: JobLockedError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": "job lock held"})
+
+    app.include_router(jobs_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
