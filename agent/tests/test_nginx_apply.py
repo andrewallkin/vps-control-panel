@@ -3,7 +3,9 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+import vpscp_agent.nginx_apply as nginx_apply_mod
 from tests.fakes import FakeRunner
+from vpscp_agent.commands import CommandError
 from vpscp_agent.config import load_settings
 from vpscp_agent.domains import register_domain
 from vpscp_agent.hostnames import claim_hostnames
@@ -145,6 +147,94 @@ def test_remove_site_nginx_failure_restores(nginx_env):
         remove_site("budget", settings=settings, runner=runner, db=db)
     assert conf.read_bytes() == saved
     assert site_enabled_path(settings.nginx_dir, "budget").exists()
+
+
+def test_ensure_base_config_nginx_test_failure_restores_previous(nginx_env):
+    settings, runner, db, _letsencrypt = nginx_env
+
+    def fake_fetch():
+        return ["203.0.113.0/24"], ["2001:db8::/32"]
+
+    realip = settings.nginx_dir / "conf.d" / "vpscp-realip.conf"
+    default_conf = settings.nginx_dir / "sites-available" / "vpscp-default.conf"
+    default_link = settings.nginx_dir / "sites-enabled" / "vpscp-default.conf"
+    stock_default = settings.nginx_dir / "sites-enabled" / "default"
+    stock_target = settings.nginx_dir / "sites-available" / "default"
+
+    realip.parent.mkdir(parents=True)
+    realip.write_bytes(b"old realip\n")
+    default_conf.parent.mkdir(parents=True)
+    default_conf.write_bytes(b"old default server\n")
+    default_link.parent.mkdir(parents=True)
+    default_link.symlink_to(default_conf)
+    stock_target.write_bytes(b"stock default\n")
+    stock_default.parent.mkdir(parents=True, exist_ok=True)
+    stock_default.symlink_to(stock_target)
+
+    runner.responses.clear()
+    runner.on("nginx -t", stderr="base broken\n", returncode=1)
+    with pytest.raises(NginxTestError, match="base broken"):
+        ensure_base_config(settings=settings, runner=runner, db=db, fetch=fake_fetch)
+
+    assert realip.read_bytes() == b"old realip\n"
+    assert default_conf.read_bytes() == b"old default server\n"
+    assert default_link.is_symlink() and default_link.resolve() == default_conf.resolve()
+    assert stock_default.is_symlink() and stock_default.resolve() == stock_target.resolve()
+
+
+def test_apply_site_reload_failure_restores_previous(nginx_env):
+    settings, runner, _db, letsencrypt = nginx_env
+    _touch_cert(letsencrypt, "example.com")
+    original = b"original nginx config\n"
+    conf = site_conf_path(settings.nginx_dir, "budget")
+    conf.parent.mkdir(parents=True)
+    conf.write_bytes(original)
+    enabled = site_enabled_path(settings.nginx_dir, "budget")
+    enabled.parent.mkdir(parents=True)
+    enabled.symlink_to(conf)
+
+    runner.responses.clear()
+    runner.on("nginx -t", stdout="syntax ok\n")
+    runner.on("systemctl reload nginx", returncode=1, stderr="reload failed\n")
+    content = render_site(_site_spec())
+    with pytest.raises(CommandError):
+        apply_site("budget", content, settings=settings, runner=runner)
+    assert conf.read_bytes() == original
+    assert enabled.is_symlink() and enabled.resolve() == conf.resolve()
+
+
+def test_apply_site_post_install_failure_removes_new_config(nginx_env):
+    settings, runner, _db, letsencrypt = nginx_env
+    _touch_cert(letsencrypt, "example.com")
+    conf = site_conf_path(settings.nginx_dir, "budget")
+    enabled = site_enabled_path(settings.nginx_dir, "budget")
+    assert not conf.exists()
+
+    runner.responses.clear()
+    runner.on("nginx -t", stderr="bad\n", returncode=1)
+    content = render_site(_site_spec())
+    with pytest.raises(NginxTestError):
+        apply_site("budget", content, settings=settings, runner=runner)
+    assert not conf.exists()
+    assert not enabled.exists()
+
+
+def test_apply_site_symlink_failure_restores_previous(nginx_env, monkeypatch):
+    settings, runner, _db, letsencrypt = nginx_env
+    _touch_cert(letsencrypt, "example.com")
+    original = b"original nginx config\n"
+    conf = site_conf_path(settings.nginx_dir, "budget")
+    conf.parent.mkdir(parents=True)
+    conf.write_bytes(original)
+
+    def boom(*_args, **_kwargs):
+        raise OSError("symlink failed")
+
+    monkeypatch.setattr(nginx_apply_mod, "_ensure_symlink", boom)
+    content = render_site(_site_spec())
+    with pytest.raises(OSError, match="symlink failed"):
+        apply_site("budget", content, settings=settings, runner=runner)
+    assert conf.read_bytes() == original
 
 
 def test_ensure_base_config_writes_realip_and_default(nginx_env):

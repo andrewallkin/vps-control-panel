@@ -83,6 +83,40 @@ def _ensure_symlink(link: Path, target: Path) -> None:
     link.symlink_to(target.resolve())
 
 
+class _PathSnapshot:
+    __slots__ = ("content", "existed", "link_target")
+
+    def __init__(
+        self,
+        *,
+        existed: bool,
+        content: bytes | None = None,
+        link_target: Path | None = None,
+    ) -> None:
+        self.existed = existed
+        self.content = content
+        self.link_target = link_target
+
+
+def _snapshot_path(path: Path) -> _PathSnapshot:
+    if path.is_symlink():
+        return _PathSnapshot(existed=True, link_target=Path(os.readlink(path)))
+    if path.is_file():
+        return _PathSnapshot(existed=True, content=path.read_bytes())
+    return _PathSnapshot(existed=False)
+
+
+def _restore_path(path: Path, snapshot: _PathSnapshot) -> None:
+    path.unlink(missing_ok=True)
+    if not snapshot.existed:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if snapshot.link_target is not None:
+        path.symlink_to(snapshot.link_target)
+    elif snapshot.content is not None:
+        path.write_bytes(snapshot.content)
+
+
 def _restore_site_config(
     *,
     conf_path: Path,
@@ -122,20 +156,23 @@ def apply_site(
                 prev_path.unlink()
             conf_path.replace(prev_path)
         os.replace(temp_path, conf_path)
-        _ensure_symlink(enabled_path, conf_path)
+        try:
+            _ensure_symlink(enabled_path, conf_path)
 
-        result = runner(["nginx", "-t"], check=False)
-        if result.returncode != 0:
+            result = runner(["nginx", "-t"], check=False)
+            if result.returncode != 0:
+                raise NginxTestError(_nginx_test_output(result))
+
+            runner(["systemctl", "reload", "nginx"])
+            prev_path.unlink(missing_ok=True)
+        except Exception:
             _restore_site_config(
                 conf_path=conf_path,
                 enabled_path=enabled_path,
                 prev_path=prev_path,
                 had_previous=had_previous,
             )
-            raise NginxTestError(_nginx_test_output(result))
-
-        runner(["systemctl", "reload", "nginx"])
-        prev_path.unlink(missing_ok=True)
+            raise
     finally:
         temp_path.unlink(missing_ok=True)
 
@@ -241,6 +278,11 @@ def ensure_base_config(
     default_enabled = nginx_dir / "sites-enabled" / "vpscp-default.conf"
     stock_default = nginx_dir / "sites-enabled" / "default"
 
+    realip_prev = _snapshot_path(realip_path)
+    default_avail_prev = _snapshot_path(default_available)
+    default_enabled_prev = _snapshot_path(default_enabled)
+    stock_default_prev = _snapshot_path(stock_default)
+
     _write_atomic(realip_path, render_cloudflare_realip(ipv4, ipv6))
     _write_atomic(default_available, render_default_server())
     _ensure_symlink(default_enabled, default_available)
@@ -248,6 +290,10 @@ def ensure_base_config(
 
     result = runner(["nginx", "-t"], check=False)
     if result.returncode != 0:
+        _restore_path(realip_path, realip_prev)
+        _restore_path(default_available, default_avail_prev)
+        _restore_path(default_enabled, default_enabled_prev)
+        _restore_path(stock_default, stock_default_prev)
         raise NginxTestError(_nginx_test_output(result))
     runner(["systemctl", "reload", "nginx"])
 
