@@ -34,6 +34,13 @@ class Runner(Protocol):
         cwd: Path | None = None,
     ) -> CommandResult: ...
 
+    def stream_to_file(
+        self,
+        args: list[str],
+        path: Path,
+        timeout: float | None = 120,
+    ) -> None: ...
+
 
 def _finish(result: CommandResult, *, check: bool) -> CommandResult:
     if check and result.returncode != 0:
@@ -87,3 +94,39 @@ def run_command(
 
     result = CommandResult(completed.returncode, stdout, stderr)
     return _finish(result, check=check)
+
+
+def stream_to_file(
+    args: list[str],
+    path: Path,
+    timeout: float | None = 120,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with open(path, "wb") as stdout_file:
+            proc = subprocess.Popen(
+                args,
+                stdout=stdout_file,
+                stderr=subprocess.PIPE,
+                env=os.environ,
+            )
+            try:
+                _, stderr_bytes = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                path.unlink(missing_ok=True)
+                raise
+        stderr = (stderr_bytes or b"").decode(errors="replace")
+        result = CommandResult(proc.returncode or 0, "", stderr)
+        if result.returncode != 0:
+            path.unlink(missing_ok=True)
+            raise CommandError(result)
+    except CommandError:
+        raise
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
+run_command.stream_to_file = stream_to_file  # type: ignore[attr-defined]

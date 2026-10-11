@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from pathlib import Path
 
 from vpscp_agent.commands import CommandError, CommandResult
 
@@ -6,6 +7,8 @@ from vpscp_agent.commands import CommandError, CommandResult
 class FakeRunner:
     def __init__(self) -> None:
         self.calls: list[dict] = []
+        self.stream_calls: list[dict] = []
+        self.stream_payload: bytes = b"PGDMP-fake-dump"
         self.responses: list[tuple[Callable[[list[str]], bool], CommandResult | Exception]] = []
 
     def __call__(
@@ -58,3 +61,13 @@ class FakeRunner:
         else:
             predicate = match
         self.responses.append((predicate, CommandResult(returncode, stdout, stderr)))
+
+    def stream_to_file(
+        self,
+        args: list[str],
+        path: Path,
+        timeout: float | None = 120,
+    ) -> None:
+        self.stream_calls.append({"args": args, "path": path, "timeout": timeout})
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(self.stream_payload)

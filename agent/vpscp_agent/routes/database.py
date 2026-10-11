@@ -2,6 +2,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
+from starlette.responses import FileResponse
 
 from vpscp_agent import audit
 from vpscp_agent.db_ops import (
@@ -15,6 +16,7 @@ from vpscp_agent.db_ops import (
     rotate_password,
     verify_password,
 )
+from vpscp_agent.dumps import DumpInfo, dump_path, dump_project, list_dumps
 from vpscp_agent.validation import Slug, SqlIdent, validate_env_value
 
 router = APIRouter(prefix="/v1/db", tags=["database"])
@@ -164,3 +166,27 @@ def post_detach(body: DetachDatabaseBody, request: Request) -> Response:
     with audit.audited(db, "db.detach", params):
         detach(db, slug=body.slug)
     return Response(status_code=204)
+
+
+@router.post("/dumps/{slug}")
+def post_dump_project(slug: Slug, request: Request) -> DumpInfo:
+    settings = request.app.state.settings
+    db = request.app.state.db
+    psql = request.app.state.psql
+    runner = request.app.state.runner
+    params = {"slug": slug}
+    with audit.audited(db, "db.dump_project", params):
+        return dump_project(settings, psql, runner, db, slug=slug)
+
+
+@router.get("/dumps/{slug}")
+def get_dumps(slug: Slug, request: Request) -> list[DumpInfo]:
+    return list_dumps(request.app.state.settings, slug)
+
+
+@router.get("/dumps/{slug}/{name}")
+def get_dump_download(slug: Slug, name: str, request: Request) -> FileResponse:
+    path = dump_path(request.app.state.settings, slug, name)
+    if not path.is_file():
+        raise ValueError(f"dump not found: {name!r}")
+    return FileResponse(path, media_type="application/octet-stream", filename=name)
