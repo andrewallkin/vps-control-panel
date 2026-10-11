@@ -1,10 +1,12 @@
 from datetime import UTC, datetime
 
+import httpx
 import pyotp
 import pytest
 from fastapi.testclient import TestClient
 
 import vpscp_panel.db as db_module
+from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.db import init_db, run_migrations
 from vpscp_panel.main import create_app
@@ -39,6 +41,21 @@ def client(panel_settings, frozen_time):
     app.state.clock = lambda: frozen_time
     with TestClient(app) as test_client:
         yield test_client
+
+
+@pytest.fixture
+def client_factory(panel_settings, frozen_time):
+    """Build a TestClient, optionally with a MockTransport-backed AgentClient."""
+
+    def _factory(*, transport: httpx.MockTransport | None = None) -> TestClient:
+        agent = None
+        if transport is not None:
+            agent = AgentClient("/fake.sock", transport=transport)
+        app = create_app(settings=panel_settings, agent=agent)
+        app.state.clock = lambda: frozen_time
+        return TestClient(app)
+
+    return _factory
 
 
 @pytest.fixture
