@@ -2,6 +2,12 @@ export interface EnvRow {
   key: string
   value: string
   locked: boolean
+  /** True after the user changed this row in the editor (not set from API load). */
+  edited?: boolean
+}
+
+export function isMaskedEnvPlaceholder(value: string): boolean {
+  return value.startsWith('••••')
 }
 
 const MANAGED_KEYS = new Set([
@@ -113,7 +119,7 @@ export function applyEnvPaste(
     if (row.locked || !(row.key in applied)) {
       return row
     }
-    return { ...row, value: applied[row.key]! }
+    return { ...row, value: applied[row.key]!, edited: true }
   })
   const existingKeys = new Set(next.map((r) => r.key))
   for (const [key, value] of Object.entries(applied)) {
@@ -123,7 +129,7 @@ export function applyEnvPaste(
     if (isEnvKeyLocked(key, routePortEnvVars)) {
       continue
     }
-    next.push({ key, value, locked: false })
+    next.push({ key, value, locked: false, edited: true })
     existingKeys.add(key)
   }
   return { rows: next, invalidLines }

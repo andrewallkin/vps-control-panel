@@ -6,9 +6,15 @@ export interface ProjectDeleteSectionProps {
   slug: string
   onDelete: (payload: DeleteProjectPayload) => void | Promise<void>
   busy?: boolean
+  error?: string | null
 }
 
-export function ProjectDeleteSection({ slug, onDelete, busy = false }: ProjectDeleteSectionProps) {
+export function ProjectDeleteSection({
+  slug,
+  onDelete,
+  busy = false,
+  error = null,
+}: ProjectDeleteSectionProps) {
   const inputId = useId()
   const [confirmText, setConfirmText] = useState('')
   const [dropDatabase, setDropDatabase] = useState(false)
@@ -68,6 +74,7 @@ export function ProjectDeleteSection({ slug, onDelete, busy = false }: ProjectDe
           Remove DNS records
         </label>
       </div>
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
       <button
         type="button"
         disabled={!canDelete}

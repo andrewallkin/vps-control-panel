@@ -109,6 +109,7 @@ export function ProjectPage() {
   const [healthCheckUrl, setHealthCheckUrl] = useState('')
   const [dbRestartPrompt, setDbRestartPrompt] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   useEffect(() => {
     const onHashChange = () => setActiveTab(tabFromHash(window.location.hash))
@@ -360,6 +361,7 @@ export function ProjectPage() {
   const handleDelete = useCallback(
     async (payload: Parameters<typeof deleteProject>[1]) => {
       setDeleteBusy(true)
+      setDeleteError(null)
       try {
         await deleteProject(slug, payload)
         await queryClient.invalidateQueries({ queryKey: ['projects'] })
@@ -368,6 +370,8 @@ export function ProjectPage() {
         if (isStepUpRequired(error)) {
           throw error
         }
+        const detail = apiErrorDetail(error)
+        setDeleteError(detail || 'Delete failed.')
       } finally {
         setDeleteBusy(false)
       }
@@ -685,13 +689,7 @@ export function ProjectPage() {
             </div>
             <div>
               <dt className="text-muted-foreground">Size</dt>
-              <dd className="font-mono">
-                {dumpsQuery.data?.length
-                  ? formatBytes(
-                      dumpsQuery.data.reduce((sum, row) => sum + (row.size_bytes ?? 0), 0),
-                    )
-                  : '—'}
-              </dd>
+              <dd className="font-mono">—</dd>
             </div>
           </dl>
           {project.database_mode !== 'none' ? (
@@ -815,7 +813,12 @@ export function ProjectPage() {
           >
             Save settings
           </button>
-          <ProjectDeleteSection slug={slug} onDelete={handleDelete} busy={deleteBusy} />
+          <ProjectDeleteSection
+            slug={slug}
+            onDelete={handleDelete}
+            busy={deleteBusy}
+            error={deleteError}
+          />
         </div>
       ) : null}
     </div>

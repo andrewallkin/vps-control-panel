@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { formatPushedAtRelative } from '../../lib/format'
 import type { RegistryTagOption } from '../../lib/projectDeployTypes'
 
@@ -23,16 +24,17 @@ export function TagPicker({
   onSelectedNameChange,
   now = Date.now(),
 }: TagPickerProps) {
+  const selectId = useId()
   const options = normalizeTags(tags)
   const selected = options.find((tag) => tag.name === selectedName) ?? options[0]
 
   return (
     <div className="space-y-2">
-      <label className="text-sm font-medium" htmlFor="tag-picker-select">
+      <label className="text-sm font-medium" htmlFor={selectId}>
         Image tag
       </label>
       <select
-        id="tag-picker-select"
+        id={selectId}
         className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
         value={selected?.name ?? ''}
         onChange={(event) => onSelectedNameChange(event.target.value)}

@@ -32,7 +32,18 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
   }
 
   function updateRow(index: number, patch: Partial<EnvRow>) {
-    emit(localRows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+    emit(
+      localRows.map((row, i) => {
+        if (i !== index) {
+          return row
+        }
+        const next = { ...row, ...patch }
+        if (!row.locked && (patch.value !== undefined || patch.key !== undefined)) {
+          return { ...next, edited: true }
+        }
+        return next
+      }),
+    )
   }
 
   function removeRow(index: number) {
