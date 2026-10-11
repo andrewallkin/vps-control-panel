@@ -2,7 +2,9 @@ import json
 import os
 import shutil
 import stat
+from unittest.mock import patch
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -16,6 +18,9 @@ from vpscp_agent.main import create_app
 from vpscp_agent.projects import (
     register_project,
     update_project,
+)
+from vpscp_agent.projects import (
+    test_repo_access as check_repo_access,
 )
 from vpscp_agent.state import StateDB
 from vpscp_agent.validation import (
@@ -420,6 +425,37 @@ def test_test_access_missing_deploy_key(project_client):
 
     assert response.status_code == 200
     assert response.json() == {"ok": False, "message": "deploy key is not generated"}
+    assert not [c for c in runner.calls if c["args"][:1] == ["git"]]
+
+
+def test_test_access_known_hosts_fetch_failure(settings: Settings, state_db: StateDB):
+    register_project(
+        state_db,
+        settings,
+        slug="budget-hq",
+        repo_url=SSH_OK,
+        branch="main",
+        compose_file="docker-compose.yml",
+        deploy_mode="build",
+    )
+    key_path = deploy_key_private_path(settings, "budget-hq")
+    key_path.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(key_path.parent, 0o700)
+    key_path.write_text("fake-private")
+    os.chmod(key_path, 0o600)
+    runner = FakeRunner()
+
+    request = httpx.Request("GET", "https://api.github.com/meta")
+    err = httpx.ConnectError("connection refused", request=request)
+
+    with patch(
+        "vpscp_agent.projects.ensure_known_hosts",
+        side_effect=err,
+    ):
+        result = check_repo_access(settings, state_db, runner, slug="budget-hq")
+
+    assert result.ok is False
+    assert result.message
     assert not [c for c in runner.calls if c["args"][:1] == ["git"]]
 
 

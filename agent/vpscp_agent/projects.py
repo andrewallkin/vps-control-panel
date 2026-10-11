@@ -4,6 +4,7 @@ import os
 import sqlite3
 from datetime import UTC, datetime
 
+import httpx
 from pydantic import BaseModel
 
 from vpscp_agent.audit import scrub_error_message
@@ -179,8 +180,11 @@ def test_repo_access(
             return TestAccessResult(ok=False, message="deploy key is not generated")
         try:
             known_hosts = ensure_known_hosts(settings)
-        except (ValueError, OSError) as exc:
-            return TestAccessResult(ok=False, message=str(exc))
+        except (ValueError, OSError, httpx.HTTPError) as exc:
+            return TestAccessResult(
+                ok=False,
+                message=scrub_error_message(str(exc)),
+            )
         extra_env["GIT_SSH_COMMAND"] = git_ssh_command(private_path, known_hosts)
 
     result = runner(
