@@ -54,7 +54,10 @@ def validate_env_value(value: str) -> str:
 
 def safe_project_path(apps_dir: Path, slug: str, relative: str = "") -> Path:
     validate_slug(slug)
+    apps_root = apps_dir.resolve()
     base = (apps_dir / slug).resolve()
+    if base != apps_root and apps_root not in base.parents:
+        raise ValueError(f"path escapes project directory: {relative or slug!r}")
     target = (base / relative).resolve()
     if target != base and base not in target.parents:
         raise ValueError(f"path escapes project directory: {relative!r}")

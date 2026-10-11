@@ -26,3 +26,9 @@ def test_load_settings_splits_disk_paths():
     settings = load_settings({"VPSCP_DISK_PATHS": "/,/srv"})
 
     assert settings.disk_paths == ("/", "/srv")
+
+
+def test_load_settings_strips_disk_paths_and_drops_empty():
+    settings = load_settings({"VPSCP_DISK_PATHS": " / , , /srv , "})
+
+    assert settings.disk_paths == ("/", "/srv")

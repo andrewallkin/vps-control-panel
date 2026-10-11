@@ -1,4 +1,5 @@
 import asyncio
+import json
 import subprocess
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -71,6 +72,9 @@ def create_app(settings: Settings) -> FastAPI:
             FileNotFoundError,
             subprocess.CalledProcessError,
             subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+            ValueError,
+            KeyError,
         ) as exc:
             raise HTTPException(status_code=503, detail=f"docker unavailable: {exc}") from exc
 

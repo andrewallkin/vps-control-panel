@@ -56,7 +56,11 @@ def _now_iso() -> str:
 def collect_disks(paths: Iterable[str]) -> list[DiskUsage]:
     disks = []
     for path in paths:
-        usage = psutil.disk_usage(path)
+        try:
+            usage = psutil.disk_usage(path)
+        except OSError as exc:
+            logger.warning("disk usage unavailable for %s: %s", path, exc)
+            continue
         disks.append(
             DiskUsage(
                 path=path,
@@ -114,6 +118,8 @@ def store_sample(db: StateDB, sample: HostMetrics) -> None:
 
 
 def history(db: StateDB, since: datetime) -> list[MetricPoint]:
+    if since.tzinfo is None or since.tzinfo.utcoffset(since) is None:
+        raise ValueError("since must be a timezone-aware datetime")
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT * FROM metric_sample WHERE ts >= ? ORDER BY ts",

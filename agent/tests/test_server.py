@@ -33,6 +33,26 @@ def test_bind_socket_sets_mode_660(short_dir):
         sock.close()
 
 
+def test_bind_socket_applies_group_gid(short_dir, monkeypatch):
+    path = short_dir / "agent.sock"
+    chown_calls: list[tuple] = []
+
+    class FakeGroup:
+        gr_gid = 42
+
+    monkeypatch.setattr("vpscp_agent.server.grp.getgrnam", lambda name: FakeGroup())
+    monkeypatch.setattr(
+        "vpscp_agent.server.os.chown",
+        lambda p, uid, gid: chown_calls.append((p, uid, gid)),
+    )
+
+    sock = bind_socket(path, group="vpscp")
+    try:
+        assert chown_calls == [(path, -1, 42)]
+    finally:
+        sock.close()
+
+
 def test_bind_socket_replaces_stale_socket(short_dir):
     path = short_dir / "agent.sock"
     bind_socket(path, group=None).close()

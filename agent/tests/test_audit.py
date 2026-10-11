@@ -16,8 +16,9 @@ def test_mask_secrets_masks_secret_named_keys_recursively():
         "slug": "budgethq",
         "password": "hunter2",
         "cloudflare_token": "cf",
-        "nested": {"client_secret": "x", "name": "n"},
-        "items": [{"private_key": "k", "port": 10000}],
+        "api_key": "ak",
+        "nested": {"client_secret": "x", "service_account": "sa", "name": "n"},
+        "items": [{"private_key": "k", "credentials": "c", "port": 10000}],
     }
 
     masked = audit.mask_secrets(params)
@@ -26,10 +27,30 @@ def test_mask_secrets_masks_secret_named_keys_recursively():
         "slug": "budgethq",
         "password": "***",
         "cloudflare_token": "***",
-        "nested": {"client_secret": "***", "name": "n"},
-        "items": [{"private_key": "***", "port": 10000}],
+        "api_key": "***",
+        "nested": {"client_secret": "***", "service_account": "***", "name": "n"},
+        "items": [{"private_key": "***", "credentials": "***", "port": 10000}],
     }
     assert params["password"] == "hunter2"
+
+
+def test_scrub_error_message_redacts_secrets_and_postgres_urls():
+    raw = (
+        "connect failed password=hunter2 token:abc123 "
+        "postgresql://user:sekret@db.example.com:5432/app"
+    )
+
+    assert audit.scrub_error_message(raw) == (
+        "connect failed password=*** token:*** postgresql://user:***@db.example.com:5432/app"
+    )
+
+
+def test_audited_scrubs_exception_message_in_audit_log(db):
+    with pytest.raises(RuntimeError), audit.audited(db, "db.create", {"name": "x"}):
+        raise RuntimeError("failed password=leaked")
+
+    [event] = audit.list_events(db)
+    assert event.error == "RuntimeError: failed password=***"
 
 
 def test_mask_secrets_masks_extra_fields():

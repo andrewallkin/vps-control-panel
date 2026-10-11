@@ -28,7 +28,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         apps_dir=Path(env.get("VPSCP_APPS_DIR", "/srv/apps")),
         stack_dir=Path(env.get("VPSCP_STACK_DIR", "/srv/vpscp/stack")),
         socket_group=env.get("VPSCP_SOCKET_GROUP", "vpscp"),
-        disk_paths=tuple(p for p in env.get("VPSCP_DISK_PATHS", "/").split(",") if p),
+        disk_paths=tuple(
+            p.strip() for p in env.get("VPSCP_DISK_PATHS", "/").split(",") if p.strip()
+        ),
         metrics_interval_seconds=int(env.get("VPSCP_METRICS_INTERVAL", "60")),
         metrics_retention_days=int(env.get("VPSCP_METRICS_RETENTION_DAYS", "7")),
     )

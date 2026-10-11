@@ -20,6 +20,12 @@ def test_collect_host_reports_sane_values(tmp_path):
     assert sample.ts.endswith("+00:00")
 
 
+def test_collect_host_skips_unusable_disk_paths(tmp_path):
+    sample = metrics.collect_host([str(tmp_path), "/nonexistent-vpscp-disk-path"], cpu_interval=0.1)
+
+    assert [disk.path for disk in sample.disks] == [str(tmp_path)]
+
+
 def test_metrics_current_endpoint(client, settings):
     response = client.get("/v1/metrics/current")
 

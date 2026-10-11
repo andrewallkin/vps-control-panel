@@ -33,6 +33,11 @@ def _sample(ts: datetime, cpu: float = 10.0) -> metrics.HostMetrics:
     )
 
 
+def test_history_rejects_naive_since(db):
+    with pytest.raises(ValueError, match="timezone-aware"):
+        metrics.history(db, since=datetime.now())
+
+
 def test_history_returns_samples_since_oldest_first(db):
     now = datetime.now(UTC).replace(microsecond=0)
     metrics.store_sample(db, _sample(now - timedelta(hours=30), cpu=1))

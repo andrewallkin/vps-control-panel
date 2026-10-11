@@ -11,7 +11,20 @@ from pydantic import BaseModel
 from vpscp_agent.state import StateDB
 
 MASK = "***"
-_SECRET_NAME = re.compile(r"password|token|secret|credential|passphrase|private_key", re.IGNORECASE)
+_SECRET_NAME = re.compile(
+    r"password|token|secret|credential|passphrase|private_key|api_key|apikey|"
+    r"credentials|secret_key|service_account",
+    re.IGNORECASE,
+)
+_KV_SECRET = re.compile(
+    r"(?i)((?:password|token|secret|api_key|apikey|credentials|private_key|secret_key)\s*[=:])\s*\S+"
+)
+_POSTGRES_URL = re.compile(r"(postgresql://[^:]+:)([^@]+)(@)")
+
+
+def scrub_error_message(message: str) -> str:
+    scrubbed = _POSTGRES_URL.sub(r"\1***\3", message)
+    return _KV_SECRET.sub(r"\1***", scrubbed)
 
 
 class AuditEvent(BaseModel):
@@ -78,7 +91,7 @@ def audited(
             operation,
             params,
             ok=False,
-            error=f"{type(exc).__name__}: {exc}",
+            error=f"{type(exc).__name__}: {scrub_error_message(str(exc))}",
             duration_ms=int((time.monotonic() - start) * 1000),
             extra_secret_fields=extra_secret_fields,
         )

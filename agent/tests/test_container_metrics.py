@@ -89,6 +89,15 @@ def test_containers_endpoint_returns_503_without_docker(client, monkeypatch):
     assert response.status_code == 503
 
 
+def test_containers_endpoint_returns_503_on_malformed_stats(client, monkeypatch):
+    def bad_stats(*_args, **_kwargs):
+        raise json.JSONDecodeError("bad", "doc", 0)
+
+    monkeypatch.setattr(container_metrics, "collect_containers", bad_stats)
+
+    assert client.get("/v1/metrics/containers").status_code == 503
+
+
 def test_containers_endpoint_returns_503_when_docker_fails(client, monkeypatch):
     def failing(*_args, **_kwargs):
         raise subprocess.CalledProcessError(1, ["docker", "stats"])

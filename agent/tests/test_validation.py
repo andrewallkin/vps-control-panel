@@ -138,6 +138,17 @@ def test_safe_project_path_rejects_symlink_escape(tmp_path):
         safe_project_path(tmp_path, "budgethq", "link/passwd")
 
 
+def test_safe_project_path_rejects_symlinked_project_root_outside_apps(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    apps = tmp_path / "apps"
+    apps.mkdir()
+    (apps / "budgethq").symlink_to(outside)
+
+    with pytest.raises(ValueError):
+        safe_project_path(apps, "budgethq")
+
+
 def test_safe_project_path_rejects_bad_slug(tmp_path):
     with pytest.raises(ValueError):
         safe_project_path(tmp_path, "../x")
