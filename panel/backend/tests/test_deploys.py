@@ -88,6 +88,16 @@ def test_image_deploy_succeeded(
     client_factory, admin_user, frozen_time, db_session, agent_requests
 ):
     _ready_project(db_session)
+    db_session.add(
+        ProjectService(
+            project_slug="myapp",
+            service_name="web",
+            image_env_var="DOCKER_IMAGE_WEB",
+            tag_prefix="backend",
+            current_tag=None,
+        )
+    )
+    db_session.commit()
     tags = {"DOCKER_IMAGE_WEB": "backend-main-abc1234"}
     deploy_post_bodies: list[dict] = []
 
@@ -139,6 +149,8 @@ def test_image_deploy_succeeded(
         assert row.status == "succeeded"
         assert row.commit == "abc1234"
         assert "hello" in row.log
+        svc = db.scalars(select(ProjectService).where(ProjectService.project_slug == "myapp")).one()
+        assert svc.current_tag == "backend-main-abc1234"
 
 
 def test_deploy_finished_at_uses_end_clock(

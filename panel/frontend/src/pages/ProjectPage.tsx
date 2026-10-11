@@ -7,6 +7,7 @@ import { EnvEditor } from '../components/projects/EnvEditor'
 import { HostnameEditor } from '../components/projects/HostnameEditor'
 import { ProjectDeleteSection } from '../components/projects/ProjectDeleteSection'
 import { RouteEditor } from '../components/projects/RouteEditor'
+import { ServiceMappingEditor } from '../components/projects/ServiceMappingEditor'
 import { TagPicker } from '../components/projects/TagPicker'
 import { StatusBadge } from '../components/StatusBadge'
 import { ApiError, isStepUpRequired } from '../lib/api'
@@ -18,8 +19,14 @@ import { formatBytes } from '../lib/format'
 import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
 import type { RegistryTagOption } from '../lib/projectDeployTypes'
 import {
+  prepareServiceMappingRows,
+  tagPrefixFromImageEnvVar,
+  type ServiceMappingRow,
+} from '../lib/serviceMappingUtils'
+import {
   deleteProject,
   fetchComposePs,
+  fetchComposeServices,
   fetchProject,
   fetchProjectDeploys,
   fetchProjectDumps,
@@ -29,6 +36,7 @@ import {
   patchProjectSettings,
   projectDumpDownloadUrl,
   putProjectRouting,
+  putProjectServices,
   redeployDeploy,
   restartProjectCompose,
   rotateProjectDatabase,
@@ -111,6 +119,10 @@ export function ProjectPage() {
   const [dbRestartPrompt, setDbRestartPrompt] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [servicesDraft, setServicesDraft] = useState<ServiceMappingRow[]>([])
+  const [servicesMappingValid, setServicesMappingValid] = useState(true)
+  const [detectComposeError, setDetectComposeError] = useState<string | null>(null)
+  const [detectComposeBusy, setDetectComposeBusy] = useState(false)
 
   useEffect(() => {
     const onHashChange = () => setActiveTab(tabFromHash(window.location.hash))
@@ -147,6 +159,13 @@ export function ProjectPage() {
     setMigrationCommand(project.migration_command ?? '')
     setMigrationService(project.migration_service ?? '')
     setHealthCheckUrl(project.health_check_url ?? '')
+    setServicesDraft(
+      project.services.map((svc) => ({
+        service_name: svc.service_name,
+        image_env_var: svc.image_env_var,
+        tag_prefix: svc.tag_prefix,
+      })),
+    )
   }, [project])
 
   const psQuery = useQuery({
@@ -351,6 +370,55 @@ export function ProjectPage() {
     },
   })
 
+  const servicesSaveMutation = useMutation({
+    mutationFn: () => {
+      const prepared = prepareServiceMappingRows(servicesDraft)
+      if (!prepared.ok) {
+        throw new Error(prepared.error)
+      }
+      return putProjectServices(slug, prepared.rows)
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['project', slug] })
+      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'tags'] })
+    },
+  })
+
+  const detectFromCompose = useCallback(async () => {
+    setDetectComposeError(null)
+    setDetectComposeBusy(true)
+    try {
+      const data = await fetchComposeServices(slug)
+      const existing = new Set(servicesDraft.map((row) => row.image_env_var))
+      const appended: ServiceMappingRow[] = []
+      for (const entry of data.services) {
+        const imageVar = entry.image_var
+        if (!imageVar || existing.has(imageVar)) {
+          continue
+        }
+        const tagPrefix = tagPrefixFromImageEnvVar(imageVar)
+        if (!tagPrefix) {
+          continue
+        }
+        appended.push({
+          service_name: entry.name,
+          image_env_var: imageVar,
+          tag_prefix: tagPrefix,
+        })
+        existing.add(imageVar)
+      }
+      if (appended.length > 0) {
+        setServicesDraft((prev) => [...prev, ...appended])
+      }
+    } catch {
+      setDetectComposeError('Could not load services from compose.')
+    } finally {
+      setDetectComposeBusy(false)
+    }
+  }, [servicesDraft, slug])
+
+  const imageServicesConfigured = (project?.services.length ?? 0) > 0
+
   const rotateMutation = useMutation({
     mutationFn: () => rotateProjectDatabase(slug),
     onSuccess: () => {
@@ -524,7 +592,21 @@ export function ProjectPage() {
             </div>
           ) : null}
 
-          {project.deploy_mode === 'image' ? (
+          {project.deploy_mode === 'image' && !imageServicesConfigured ? (
+            <p className="text-sm text-muted-foreground">
+              Image services are not configured.{' '}
+              <button
+                type="button"
+                className="text-accent hover:underline cursor-pointer"
+                onClick={() => selectTab('settings')}
+              >
+                Open Settings
+              </button>{' '}
+              to map compose services to Docker Hub tags.
+            </p>
+          ) : null}
+
+          {project.deploy_mode === 'image' && imageServicesConfigured ? (
             <div className="space-y-4">
               {(tagsQuery.data?.services ?? []).map((svc) => {
                 const options = normalizeRegistryTags(svc.tags)
@@ -543,14 +625,14 @@ export function ProjectPage() {
               })}
               <button
                 type="button"
-                disabled={deployMutation.isPending}
+                disabled={deployMutation.isPending || Object.keys(selectedTags).length === 0}
                 className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
                 onClick={() => deployMutation.mutate({ tags: selectedTags })}
               >
                 Deploy
               </button>
             </div>
-          ) : (
+          ) : project.deploy_mode === 'build' ? (
             <button
               type="button"
               disabled={deployMutation.isPending}
@@ -559,7 +641,7 @@ export function ProjectPage() {
             >
               Build &amp; deploy
             </button>
-          )}
+          ) : null}
 
           {liveDeployLog ? (
             <pre className="max-h-64 overflow-auto rounded-md border border-border bg-card p-3 font-mono text-xs">
@@ -769,16 +851,35 @@ export function ProjectPage() {
               <dd>{project.deploy_mode}</dd>
             </div>
           </dl>
-          {project.services.length > 0 ? (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold">Services</h2>
-              <ul className="divide-y divide-border rounded-md border border-border text-sm">
-                {project.services.map((svc) => (
-                  <li key={svc.service_name} className="px-3 py-2 font-mono">
-                    {svc.service_name} · {svc.image_env_var} · {svc.current_tag ?? '—'}
-                  </li>
-                ))}
-              </ul>
+          {project.deploy_mode === 'image' ? (
+            <section className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">Image services</h2>
+                <button
+                  type="button"
+                  disabled={detectComposeBusy}
+                  className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 cursor-pointer"
+                  onClick={() => void detectFromCompose()}
+                >
+                  Detect from compose
+                </button>
+              </div>
+              {detectComposeError ? (
+                <p className="text-sm text-destructive">{detectComposeError}</p>
+              ) : null}
+              <ServiceMappingEditor
+                services={servicesDraft}
+                onChange={setServicesDraft}
+                onValidationChange={(ok) => setServicesMappingValid(ok)}
+              />
+              <button
+                type="button"
+                disabled={!servicesMappingValid || servicesSaveMutation.isPending}
+                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                onClick={() => servicesSaveMutation.mutate()}
+              >
+                Save services
+              </button>
             </section>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">

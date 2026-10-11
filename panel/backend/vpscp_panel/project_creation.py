@@ -8,9 +8,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from vpscp_panel.agent_client import AgentClient, AgentError
-from vpscp_panel.models import PortAllocation, Project, ProjectHostname, ProjectRoute
+from vpscp_panel.models import (
+    PortAllocation,
+    Project,
+    ProjectHostname,
+    ProjectRoute,
+    ProjectService,
+)
 from vpscp_panel.project_env import build_project_env_content
-from vpscp_panel.validation import validate_sql_ident
+from vpscp_panel.validation import (
+    tag_prefix_from_docker_image_env,
+    validate_service_name,
+    validate_sql_ident,
+)
 
 
 def initial_creation_state() -> dict[str, Any]:
@@ -104,6 +114,56 @@ def _nginx_spec(
             for row in routes
         ],
     }
+
+
+def insert_discovered_compose_services(
+    db: Session,
+    slug: str,
+    compose_payload: dict[str, Any],
+) -> None:
+    existing = db.scalars(select(ProjectService).where(ProjectService.project_slug == slug)).all()
+    if existing:
+        return
+
+    used_names = {row.service_name for row in existing}
+    used_env_vars = {row.image_env_var for row in existing}
+    services = compose_payload.get("services")
+    if not isinstance(services, list):
+        return
+
+    added = False
+    for entry in services:
+        if not isinstance(entry, dict):
+            continue
+        image_var = entry.get("image_var")
+        if not isinstance(image_var, str):
+            continue
+        tag_prefix = tag_prefix_from_docker_image_env(image_var)
+        if tag_prefix is None:
+            continue
+        name = entry.get("name")
+        if not isinstance(name, str):
+            continue
+        try:
+            validate_service_name(name)
+        except ValueError:
+            continue
+        if name in used_names or image_var in used_env_vars:
+            continue
+        db.add(
+            ProjectService(
+                project_slug=slug,
+                service_name=name,
+                image_env_var=image_var,
+                tag_prefix=tag_prefix,
+                current_tag=None,
+            )
+        )
+        used_names.add(name)
+        used_env_vars.add(image_var)
+        added = True
+    if added:
+        db.commit()
 
 
 async def _poll_job(agent: AgentClient, job_id: str) -> None:
@@ -215,7 +275,7 @@ async def _step_deploy_key(
 
 
 async def _step_clone(
-    _db: Session,
+    db: Session,
     agent: AgentClient,
     project: Project,
     _state: dict[str, Any],
@@ -224,6 +284,15 @@ async def _step_clone(
     result = await agent.post(f"/v1/projects/{project.slug}/clone")
     job_id = result["job_id"]
     await _poll_job(agent, job_id)
+    if project.deploy_mode != "image":
+        return
+    existing = db.scalars(
+        select(ProjectService).where(ProjectService.project_slug == project.slug)
+    ).all()
+    if existing:
+        return
+    compose_payload = await agent.get(f"/v1/projects/{project.slug}/compose-services")
+    insert_discovered_compose_services(db, project.slug, compose_payload)
 
 
 async def _step_ports(

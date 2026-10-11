@@ -8,7 +8,14 @@ from sqlalchemy import select
 
 import vpscp_panel.db as db_module
 from vpscp_panel.agent_client import AgentClient
-from vpscp_panel.models import Domain, PortAllocation, Project, ProjectHostname, ProjectRoute
+from vpscp_panel.models import (
+    Domain,
+    PortAllocation,
+    Project,
+    ProjectHostname,
+    ProjectRoute,
+    ProjectService,
+)
 from vpscp_panel.project_creation import initial_creation_state, run_creation
 
 
@@ -20,6 +27,8 @@ def _make_project(
     write_database_url: bool = True,
     user_env: str | None = None,
     repo_url: str = "https://github.com/acme/myapp.git",
+    deploy_mode: str = "build",
+    docker_hub_repo: str | None = None,
 ) -> Project:
     db.add(
         Domain(
@@ -35,8 +44,8 @@ def _make_project(
         repo_url=repo_url,
         branch="main",
         compose_file="docker-compose.yml",
-        deploy_mode="build",
-        docker_hub_repo=None,
+        deploy_mode=deploy_mode,
+        docker_hub_repo=docker_hub_repo,
         database_mode=database_mode,
         db_name="myapp",
         db_user="myapp_user",
@@ -231,6 +240,114 @@ async def test_run_creation_fails_when_clone_returns_no_job_id(db_session):
     step_by_name = {s["name"]: s for s in state["steps"]}
     assert step_by_name["clone"]["status"] == "failed"
     assert step_by_name["clone"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_run_creation_image_mode_discovers_services_after_clone(db_session):
+    compose_payload = {
+        "services": [
+            {"name": "web", "image": "", "image_var": "DOCKER_IMAGE_WEB"},
+            {"name": "worker", "image": "", "image_var": "DOCKER_IMAGE_WORKER"},
+        ],
+        "networks": ["postgres-net"],
+        "warning": None,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/projects" and request.method == "POST":
+            return httpx.Response(200, json={"slug": "imgapp"})
+        if path == "/v1/projects/imgapp/clone" and request.method == "POST":
+            return httpx.Response(200, json={"job_id": "job-1"})
+        if path == "/v1/jobs/job-1" and request.method == "GET":
+            return httpx.Response(200, json={"status": "succeeded"})
+        if path == "/v1/projects/imgapp/compose-services" and request.method == "GET":
+            return httpx.Response(200, json=compose_payload)
+        if path == "/v1/ports/allocate" and request.method == "POST":
+            return httpx.Response(200, json={"port": 10001})
+        if path == "/v1/projects/imgapp/env" and request.method == "PUT":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/nginx/sites" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/dns/records/upsert" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404, json={"detail": f"unexpected {request.method} {path}"})
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(
+        db_session,
+        slug="imgapp",
+        database_mode="none",
+        write_database_url=False,
+        deploy_mode="image",
+        docker_hub_repo="acme/imgapp",
+    )
+
+    await run_creation(db_session, agent, "imgapp")
+
+    rows = db_session.scalars(
+        select(ProjectService).where(ProjectService.project_slug == "imgapp")
+    ).all()
+    assert len(rows) == 2
+    by_name = {row.service_name: row for row in rows}
+    assert by_name["web"].image_env_var == "DOCKER_IMAGE_WEB"
+    assert by_name["web"].tag_prefix == "web"
+    assert by_name["worker"].tag_prefix == "worker"
+
+
+@pytest.mark.asyncio
+async def test_run_creation_skips_discovery_when_user_services_exist(db_session):
+    compose_calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/projects" and request.method == "POST":
+            return httpx.Response(200, json={"slug": "imgapp"})
+        if path == "/v1/projects/imgapp/clone" and request.method == "POST":
+            return httpx.Response(200, json={"job_id": "job-1"})
+        if path == "/v1/jobs/job-1" and request.method == "GET":
+            return httpx.Response(200, json={"status": "succeeded"})
+        if path == "/v1/projects/imgapp/compose-services" and request.method == "GET":
+            compose_calls.append(path)
+            return httpx.Response(200, json={"services": []})
+        if path == "/v1/ports/allocate" and request.method == "POST":
+            return httpx.Response(200, json={"port": 10001})
+        if path == "/v1/projects/imgapp/env" and request.method == "PUT":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/nginx/sites" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/dns/records/upsert" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404, json={"detail": f"unexpected {request.method} {path}"})
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(
+        db_session,
+        slug="imgapp",
+        database_mode="none",
+        write_database_url=False,
+        deploy_mode="image",
+        docker_hub_repo="acme/imgapp",
+    )
+    db_session.add(
+        ProjectService(
+            project_slug="imgapp",
+            service_name="api",
+            image_env_var="DOCKER_IMAGE_API",
+            tag_prefix="api",
+            current_tag=None,
+        )
+    )
+    db_session.commit()
+
+    await run_creation(db_session, agent, "imgapp")
+
+    rows = db_session.scalars(
+        select(ProjectService).where(ProjectService.project_slug == "imgapp")
+    ).all()
+    assert len(rows) == 1
+    assert rows[0].service_name == "api"
+    assert compose_calls == []
 
 
 def test_delete_project_requires_csrf(client, admin_user, frozen_time, db_session):

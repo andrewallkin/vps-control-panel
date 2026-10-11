@@ -6,6 +6,7 @@ import { CreationChecklist } from '../components/projects/CreationChecklist'
 import { EnvEditor, syncLockedEnvRows } from '../components/projects/EnvEditor'
 import { ProjectWizardStepper, type WizardStepId } from '../components/projects/ProjectWizardStepper'
 import { RouteEditor } from '../components/projects/RouteEditor'
+import { ServiceMappingEditor } from '../components/projects/ServiceMappingEditor'
 import type { EnvRow } from '../lib/envEditorUtils'
 import { fetchDomains } from '../lib/domainsApi'
 import type { RoutesValidationResult } from '../lib/routeValidation'
@@ -25,6 +26,11 @@ import {
   type ProjectHostname,
 } from '../lib/projectsApi'
 import { slugFromName, validateProjectSlug } from '../lib/slugFromName'
+import {
+  prepareServiceMappingRows,
+  validateServiceMappingRows,
+  type ServiceMappingRow,
+} from '../lib/serviceMappingUtils'
 import { buildFqdn, validateSubdomain } from '../lib/subdomainValidation'
 import { ApiError } from '../lib/api'
 
@@ -81,6 +87,7 @@ export function NewProjectWizardPage() {
   const [createError, setCreateError] = useState<string | null>(null)
   const [activeCreationSlug, setActiveCreationSlug] = useState<string | null>(retrySlug)
   const [testAccessMessage, setTestAccessMessage] = useState<string | null>(null)
+  const [serviceRows, setServiceRows] = useState<ServiceMappingRow[]>([])
 
   const domainsQuery = useQuery({
     queryKey: ['domains'],
@@ -224,7 +231,8 @@ export function NewProjectWizardPage() {
     validateRepoUrl(repoUrl) &&
     validateBranch(branch) &&
     composeFile.trim().length > 0 &&
-    (deployMode === 'build' || validateDockerHubRepo(dockerHubRepo))
+    (deployMode === 'build' || validateDockerHubRepo(dockerHubRepo)) &&
+    (deployMode === 'build' || validateServiceMappingRows(serviceRows))
 
   const primarySubdomainResult = validateSubdomain(primarySubdomain)
   const domainValid =
@@ -327,6 +335,12 @@ export function NewProjectWizardPage() {
           ? dbUser
           : null
 
+    const preparedServices =
+      deployMode === 'image' ? prepareServiceMappingRows(serviceRows) : { ok: true as const, rows: [] }
+    if (!preparedServices.ok) {
+      return
+    }
+
     createMutation.mutate({
       slug,
       display_name: displayName.trim(),
@@ -345,6 +359,7 @@ export function NewProjectWizardPage() {
         path_prefix: r.path_prefix,
         port_env_var: r.port_env_var,
       })),
+      services: preparedServices.rows,
     })
   }, [
     adoptedDbName,
@@ -364,6 +379,7 @@ export function NewProjectWizardPage() {
     slug,
     userEnv,
     writeDatabaseUrl,
+    serviceRows,
   ])
 
   function goBack() {
@@ -493,18 +509,28 @@ export function NewProjectWizardPage() {
             </label>
           </fieldset>
           {deployMode === 'image' ? (
-            <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="docker-hub">
-                Docker Hub repository
-              </label>
-              <input
-                id="docker-hub"
-                placeholder="namespace/name"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
-                value={dockerHubRepo}
-                onChange={(e) => setDockerHubRepo(e.target.value)}
-              />
-            </div>
+            <>
+              <div className="space-y-1">
+                <label className="text-sm font-medium" htmlFor="docker-hub">
+                  Docker Hub repository
+                </label>
+                <input
+                  id="docker-hub"
+                  placeholder="namespace/name"
+                  className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
+                  value={dockerHubRepo}
+                  onChange={(e) => setDockerHubRepo(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  Leave the list empty to detect services from the compose file after clone, or
+                  fill service name, <span className="font-mono">DOCKER_IMAGE_*</span> variable,
+                  and tag prefix yourself.
+                </p>
+                <ServiceMappingEditor services={serviceRows} onChange={setServiceRows} />
+              </div>
+            </>
           ) : null}
           {isSshRepoUrl(repoUrl) ? (
             <div className="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground">

@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from vpscp_panel.agent_client import AgentClient
-from vpscp_panel.models import Deploy, Project
+from vpscp_panel.models import Deploy, Project, ProjectService
 
 
 class DeployAlreadyRunningError(Exception):
@@ -79,6 +79,7 @@ def _terminal_deploy_status(end_status: str, error: str | None) -> str:
 
 
 def _apply_end_event(
+    db: DbSession,
     deploy: Deploy,
     project: Project,
     log_lines: list[str],
@@ -101,6 +102,14 @@ def _apply_end_event(
                 result_tags = result.get("tags")
                 if isinstance(result_tags, dict):
                     deploy.tags_json = json.dumps(result_tags)
+                    rows = db.scalars(
+                        select(ProjectService).where(ProjectService.project_slug == project.slug)
+                    ).all()
+                    by_env = {row.image_env_var: row for row in rows}
+                    for key, tag_value in result_tags.items():
+                        row = by_env.get(str(key))
+                        if row is not None:
+                            row.current_tag = str(tag_value)
 
 
 def deploy_row_payload(row: Deploy) -> dict[str, Any]:
@@ -160,7 +169,7 @@ async def run_deploy(
         start = await agent.post(f"/v1/projects/{project.slug}/deploy", json=agent_body)
         job_id = start["job_id"]
         log_lines, end_data = await consume_job_events(agent, job_id)
-        _apply_end_event(deploy, project, log_lines, end_data, clock())
+        _apply_end_event(db, deploy, project, log_lines, end_data, clock())
     except Exception as exc:  # noqa: BLE001
         deploy.status = "failed"
         deploy.finished_at = clock()

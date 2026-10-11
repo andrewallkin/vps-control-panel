@@ -16,6 +16,7 @@ from starlette.responses import StreamingResponse
 import vpscp_panel.db as db_module
 from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.auth import current_session, get_db, require_csrf, require_step_up
+from vpscp_panel.deploy_ops import has_running_deploy
 from vpscp_panel.models import (
     Deploy,
     Domain,
@@ -36,13 +37,16 @@ from vpscp_panel.project_creation import (
 )
 from vpscp_panel.validation import (
     BranchName,
+    DockerImageEnv,
     DomainName,
     EnvKey,
     RepoUrl,
     RoutePath,
+    ServiceName,
     Slug,
     SqlIdent,
     Subdomain,
+    TagPrefix,
     validate_docker_hub_repo,
     validate_sql_ident,
 )
@@ -70,6 +74,21 @@ class RouteInput(BaseModel):
     port_env_var: EnvKey
 
 
+class ServiceInput(BaseModel):
+    service_name: ServiceName
+    image_env_var: DockerImageEnv
+    tag_prefix: TagPrefix
+
+
+def _validate_unique_services(services: list[ServiceInput]) -> None:
+    names = [row.service_name for row in services]
+    if len(names) != len(set(names)):
+        raise ValueError("duplicate service_name")
+    env_vars = [row.image_env_var for row in services]
+    if len(env_vars) != len(set(env_vars)):
+        raise ValueError("duplicate image_env_var")
+
+
 class CreateProjectBody(BaseModel):
     slug: Slug
     display_name: str
@@ -85,6 +104,7 @@ class CreateProjectBody(BaseModel):
     hostnames: list[HostnameInput]
     routes: list[RouteInput]
     docker_hub_repo: str | None = None
+    services: list[ServiceInput] = []
 
     @field_validator("display_name", "compose_file")
     @classmethod
@@ -117,6 +137,16 @@ class CreateProjectBody(BaseModel):
         paths = [route.path_prefix for route in self.routes]
         if len(paths) != len(set(paths)):
             raise ValueError("route paths must be unique")
+        _validate_unique_services(self.services)
+        return self
+
+
+class PutServicesBody(BaseModel):
+    services: list[ServiceInput] = []
+
+    @model_validator(mode="after")
+    def check_unique(self) -> PutServicesBody:
+        _validate_unique_services(self.services)
         return self
 
 
@@ -339,6 +369,16 @@ async def create_project(
                 port_env_var=route.port_env_var,
             )
         )
+    for service in body.services:
+        db.add(
+            ProjectService(
+                project_slug=body.slug,
+                service_name=service.service_name,
+                image_env_var=service.image_env_var,
+                tag_prefix=service.tag_prefix,
+                current_tag=None,
+            )
+        )
     db.commit()
 
     async def _background_creation() -> None:
@@ -397,6 +437,50 @@ async def patch_project(
     updates = body.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(project, key, value)
+    db.commit()
+    db.refresh(project)
+    return _project_detail_payload(db, project)
+
+
+@router.get("/{slug}/compose-services")
+async def get_compose_services(
+    slug: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(current_session)],
+) -> Any:
+    if db.get(Project, slug) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return await agent.get(f"/v1/projects/{slug}/compose-services")
+
+
+@router.put("/{slug}/services")
+async def put_project_services(
+    slug: str,
+    body: PutServicesBody,
+    db: Annotated[DbSession, Depends(get_db)],
+    _session: Annotated[Session, Depends(require_csrf)],
+) -> dict[str, Any]:
+    project = db.get(Project, slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if has_running_deploy(db, slug):
+        raise HTTPException(status_code=409, detail="deploy already running")
+
+    existing = db.scalars(select(ProjectService).where(ProjectService.project_slug == slug)).all()
+    tags_by_env = {row.image_env_var: row.current_tag for row in existing}
+
+    db.execute(delete(ProjectService).where(ProjectService.project_slug == slug))
+    for service in body.services:
+        db.add(
+            ProjectService(
+                project_slug=slug,
+                service_name=service.service_name,
+                image_env_var=service.image_env_var,
+                tag_prefix=service.tag_prefix,
+                current_tag=tags_by_env.get(service.image_env_var),
+            )
+        )
     db.commit()
     db.refresh(project)
     return _project_detail_payload(db, project)

@@ -18,6 +18,9 @@ _HTTPS_REPO_RE = re.compile(
     r"^https://github\.com/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})(\.git)?$"
 )
 RESERVED_SLUGS = frozenset({"panel", "vpscp-panel", "vpscp"})
+_SERVICE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
+_DOCKER_IMAGE_ENV_RE = re.compile(r"^DOCKER_IMAGE_[A-Z0-9_]+$")
+_TAG_PREFIX_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 
 
 def validate_domain(value: str) -> str:
@@ -86,6 +89,34 @@ def validate_docker_hub_repo(value: str) -> str:
     return value
 
 
+def validate_service_name(value: str) -> str:
+    if not _SERVICE_NAME_RE.fullmatch(value):
+        raise ValueError(f"invalid service name: {value!r}")
+    return value
+
+
+def validate_docker_image_env(value: str) -> str:
+    if not _DOCKER_IMAGE_ENV_RE.fullmatch(value):
+        raise ValueError(f"invalid docker image env var: {value!r}")
+    return value
+
+
+def validate_tag_prefix(value: str) -> str:
+    if not _TAG_PREFIX_RE.fullmatch(value):
+        raise ValueError(f"invalid tag prefix: {value!r}")
+    return value
+
+
+def tag_prefix_from_docker_image_env(env_var: str) -> str | None:
+    if not _DOCKER_IMAGE_ENV_RE.fullmatch(env_var):
+        return None
+    raw = env_var[len("DOCKER_IMAGE_") :]
+    prefix = raw.lower().replace("_", "-")
+    if not _TAG_PREFIX_RE.fullmatch(prefix):
+        return None
+    return prefix
+
+
 DomainName = Annotated[str, AfterValidator(validate_domain)]
 Subdomain = Annotated[str, AfterValidator(validate_subdomain)]
 Slug = Annotated[str, AfterValidator(validate_slug)]
@@ -94,3 +125,6 @@ EnvKey = Annotated[str, AfterValidator(validate_env_key)]
 RoutePath = Annotated[str, AfterValidator(validate_route_path)]
 BranchName = Annotated[str, AfterValidator(validate_branch)]
 RepoUrl = Annotated[str, AfterValidator(validate_repo_url)]
+ServiceName = Annotated[str, AfterValidator(validate_service_name)]
+DockerImageEnv = Annotated[str, AfterValidator(validate_docker_image_env)]
+TagPrefix = Annotated[str, AfterValidator(validate_tag_prefix)]

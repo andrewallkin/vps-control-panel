@@ -37,10 +37,13 @@ export interface ProjectRoute {
   pass_authorization?: boolean
 }
 
-export interface ProjectServiceRow {
+export interface ProjectServiceInput {
   service_name: string
   image_env_var: string
   tag_prefix: string
+}
+
+export interface ProjectServiceRow extends ProjectServiceInput {
   current_tag: string | null
 }
 
@@ -91,6 +94,7 @@ export interface CreateProjectPayload {
   user_env?: string | null
   hostnames: ProjectHostname[]
   routes: ProjectRoute[]
+  services?: ProjectServiceInput[]
 }
 
 export async function fetchProjects(): Promise<ProjectSummary[]> {
@@ -99,6 +103,37 @@ export async function fetchProjects(): Promise<ProjectSummary[]> {
 
 export async function fetchProject(slug: string): Promise<ProjectDetail> {
   return apiJson<ProjectDetail>(`/api/projects/${encodeURIComponent(slug)}`)
+}
+
+export interface ComposeDiscoveredService {
+  name: string
+  image: string
+  image_var: string | null
+}
+
+export async function fetchComposeServices(slug: string): Promise<{
+  services: ComposeDiscoveredService[]
+  networks: string[]
+  warning: string | null
+}> {
+  return apiJson(`/api/projects/${encodeURIComponent(slug)}/compose-services`)
+}
+
+export async function putProjectServices(
+  slug: string,
+  services: ProjectServiceInput[],
+): Promise<ProjectDetail> {
+  return apiJson<ProjectDetail>(`/api/projects/${encodeURIComponent(slug)}/services`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      services: services.map((row) => ({
+        service_name: row.service_name,
+        image_env_var: row.image_env_var,
+        tag_prefix: row.tag_prefix,
+      })),
+    }),
+  })
 }
 
 export async function patchProjectSettings(
