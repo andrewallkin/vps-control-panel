@@ -15,7 +15,20 @@ def test_migrate_creates_tables(tmp_path):
     version = db.migrate()
 
     assert version == len(MIGRATIONS)
-    assert {"schema_version", "audit_event", "metric_sample"} <= _tables(db)
+    assert {"schema_version", "audit_event", "metric_sample", "db_attachment"} <= _tables(db)
+
+
+def test_migration_creates_db_attachment(tmp_path):
+    db = StateDB(tmp_path / "state.db")
+    db.migrate()
+
+    with db.connect() as conn:
+        row = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'db_attachment'"
+        ).fetchone()
+    assert row is not None
+    assert "db_name TEXT PRIMARY KEY" in row["sql"]
+    assert "slug TEXT NOT NULL UNIQUE" in row["sql"]
 
 
 def test_migrate_is_idempotent(tmp_path):

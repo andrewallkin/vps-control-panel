@@ -12,6 +12,7 @@ from vpscp_agent import __version__, audit, container_metrics, metrics
 from vpscp_agent.commands import run_command
 from vpscp_agent.config import Settings
 from vpscp_agent.jobs import JobLockedError, JobManager
+from vpscp_agent.pg import Psql
 from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.state import StateDB
 
@@ -49,6 +50,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.state.settings = settings
     app.state.db = db
     app.state.runner = runner
+    app.state.psql = Psql(settings, runner)
     app.state.jobs = JobManager(db)
 
     @app.exception_handler(JobLockedError)
