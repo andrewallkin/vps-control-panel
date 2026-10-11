@@ -22,6 +22,7 @@ from vpscp_agent.registry import DockerHubLoginError
 from vpscp_agent.routes import backup as backup_routes
 from vpscp_agent.routes import compose as compose_routes
 from vpscp_agent.routes import database as database_routes
+from vpscp_agent.routes import deploy as deploy_routes
 from vpscp_agent.routes import dns as dns_routes
 from vpscp_agent.routes import docker as docker_routes
 from vpscp_agent.routes import jobs as jobs_routes
@@ -139,6 +140,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(nginx_routes.router)
     app.include_router(projects_routes.router)
     app.include_router(compose_routes.router)
+    app.include_router(deploy_routes.router)
     app.include_router(registry_routes.router)
 
     @app.get("/v1/health")
