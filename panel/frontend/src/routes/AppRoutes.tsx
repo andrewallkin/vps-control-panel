@@ -5,6 +5,9 @@ import { isAuthenticated, useAuthMe } from '../hooks/useAuthMe'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DomainsPage } from '../pages/DomainsPage'
 import { LoginPage } from '../pages/LoginPage'
+import { NewProjectWizardPage } from '../pages/NewProjectWizardPage'
+import { ProjectPlaceholderPage } from '../pages/ProjectPlaceholderPage'
+import { ProjectsListPage } from '../pages/ProjectsListPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { SetupPage } from '../pages/SetupPage'
 
@@ -61,6 +64,30 @@ function DomainsEntry() {
   )
 }
 
+function ProjectsEntry() {
+  return (
+    <RequireSetupComplete>
+      <ProjectsListPage />
+    </RequireSetupComplete>
+  )
+}
+
+function NewProjectEntry() {
+  return (
+    <RequireSetupComplete>
+      <NewProjectWizardPage />
+    </RequireSetupComplete>
+  )
+}
+
+function ProjectSlugEntry() {
+  return (
+    <RequireSetupComplete>
+      <ProjectPlaceholderPage />
+    </RequireSetupComplete>
+  )
+}
+
 function SettingsEntry() {
   return (
     <RequireSetupComplete>
@@ -92,6 +119,9 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route index element={<DashboardEntry />} />
+          <Route path="projects" element={<ProjectsEntry />} />
+          <Route path="projects/new" element={<NewProjectEntry />} />
+          <Route path="projects/:slug" element={<ProjectSlugEntry />} />
           <Route path="domains" element={<DomainsEntry />} />
           <Route path="settings" element={<SettingsEntry />} />
         </Route>

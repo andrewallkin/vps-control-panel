@@ -45,6 +45,7 @@ from vpscp_panel.validation import (
 )
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
+utility_router = APIRouter(prefix="/api", tags=["projects"])
 
 
 def _agent(request: Request) -> AgentClient:
@@ -282,6 +283,17 @@ async def create_project(
     asyncio.create_task(_background_creation())
 
     return {"slug": body.slug, "creation_state": state}
+
+
+@utility_router.get("/databases")
+async def list_adoptable_databases(
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(current_session)],
+) -> list[dict[str, Any]]:
+    result = await agent.get("/v1/db/databases")
+    if not isinstance(result, list):
+        raise HTTPException(status_code=502, detail="invalid databases response from agent")
+    return [row for row in result if row.get("attached_slug") is None]
 
 
 @router.get("")
