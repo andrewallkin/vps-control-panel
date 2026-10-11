@@ -1,11 +1,14 @@
+import json
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import select
+from sqlalchemy.orm import Session as DbSession
 
 from vpscp_panel.agent_client import AgentClient, AgentError
-from vpscp_panel.auth import current_session
-from vpscp_panel.models import Session
+from vpscp_panel.auth import current_session, get_db
+from vpscp_panel.models import Project, Session
 
 router = APIRouter(tags=["dashboard"])
 
@@ -71,6 +74,55 @@ def _agent_unreachable(exc: AgentError) -> bool:
     return exc.status == 503 and exc.detail == "agent unavailable"
 
 
+def _ready_project_slugs(db: DbSession) -> list[str]:
+    slugs: list[str] = []
+    for project in db.scalars(select(Project)).all():
+        state = json.loads(project.creation_state)
+        if state.get("status") == "ready":
+            slugs.append(project.slug)
+    return slugs
+
+
+def _classify_compose_ps(ps: Any) -> str | None:
+    if not isinstance(ps, dict):
+        return "unhealthy"
+    services = ps.get("services")
+    if not isinstance(services, list):
+        return "unhealthy"
+    if not services:
+        return None
+    for svc in services:
+        if not isinstance(svc, dict):
+            return "unhealthy"
+        if svc.get("state") != "running":
+            return "unhealthy"
+        if svc.get("health") == "unhealthy":
+            return "unhealthy"
+    return "up"
+
+
+async def _project_counts(
+    agent: AgentClient,
+    db: DbSession,
+) -> dict[str, int]:
+    slugs = _ready_project_slugs(db)
+    total = len(slugs)
+    up = 0
+    unhealthy = 0
+    for slug in slugs:
+        try:
+            ps = await agent.get(f"/v1/projects/{slug}/compose/ps")
+        except AgentError:
+            unhealthy += 1
+            continue
+        kind = _classify_compose_ps(ps)
+        if kind == "up":
+            up += 1
+        elif kind == "unhealthy":
+            unhealthy += 1
+    return {"total": total, "up": up, "unhealthy": unhealthy}
+
+
 def _empty_summary() -> dict[str, Any]:
     return {
         "backup": None,
@@ -107,6 +159,7 @@ def _schedule_hours_from_settings(settings: Any) -> str | None:
 @router.get("/api/dashboard/summary")
 async def dashboard_summary(
     request: Request,
+    db: Annotated[DbSession, Depends(get_db)],
     _session: Annotated[Session, Depends(current_session)],
     agent: Annotated[AgentClient, Depends(_agent)],
 ) -> dict[str, Any]:
@@ -217,9 +270,11 @@ async def dashboard_summary(
                     }
                 )
 
+    projects = await _project_counts(agent, db)
+
     return {
         "backup": backup,
         "warnings": warnings,
-        "projects": {"total": 0, "up": 0, "unhealthy": 0},
+        "projects": projects,
         "nearest_cert_expiry": nearest_cert_expiry,
     }

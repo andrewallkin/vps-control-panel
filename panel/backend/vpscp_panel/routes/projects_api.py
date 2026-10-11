@@ -15,11 +15,13 @@ import vpscp_panel.db as db_module
 from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.auth import current_session, get_db, require_csrf, require_step_up
 from vpscp_panel.models import (
+    Deploy,
     Domain,
     PortAllocation,
     Project,
     ProjectHostname,
     ProjectRoute,
+    ProjectService,
     Session,
 )
 from vpscp_panel.project_creation import (
@@ -437,6 +439,8 @@ async def delete_project(
     db.execute(delete(ProjectHostname).where(ProjectHostname.project_slug == slug))
     db.execute(delete(ProjectRoute).where(ProjectRoute.project_slug == slug))
     db.execute(delete(PortAllocation).where(PortAllocation.project_slug == slug))
+    db.execute(delete(Deploy).where(Deploy.project_slug == slug))
+    db.execute(delete(ProjectService).where(ProjectService.project_slug == slug))
     db.delete(project)
     db.commit()
     return Response(status_code=204)

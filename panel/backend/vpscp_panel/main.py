@@ -13,6 +13,7 @@ from vpscp_panel.auth import router as auth_router
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.db import init_db, run_migrations
 from vpscp_panel.routes.dashboard import router as dashboard_router
+from vpscp_panel.routes.deploys_api import router as deploys_api_router
 from vpscp_panel.routes.domains_api import router as domains_api_router
 from vpscp_panel.routes.jobs import router as jobs_router
 from vpscp_panel.routes.metrics import router as metrics_router
@@ -90,6 +91,7 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
     app.include_router(setup_router)
     app.include_router(domains_api_router)
     app.include_router(projects_api_router)
+    app.include_router(deploys_api_router)
 
     @app.get("/api")
     @app.get("/api/")
