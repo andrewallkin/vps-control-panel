@@ -57,4 +57,33 @@ describe('uploadDumpFile resume', () => {
     expect(fetchReceived).toHaveBeenCalledWith('up-test')
     expect(putOffsets).toEqual([0, 2])
   })
+
+  it('does not complete when aborted after the last chunk is sent', async () => {
+    const file = new File([new Uint8Array([1, 2, 3])], 'dump.sql', {
+      type: 'application/octet-stream',
+    })
+    const controller = new AbortController()
+    const completeUpload = vi.fn()
+    const deleteUpload = vi.fn(async () => undefined)
+
+    await expect(
+      uploadDumpFile(file, {
+        signal: controller.signal,
+        deps: {
+          createUpload: vi.fn(async () => ({ upload_id: 'up-abort' })),
+          putChunk: vi.fn(async (_id, offset, body) => {
+            const received = offset + (await body.arrayBuffer()).byteLength
+            controller.abort()
+            return { received }
+          }),
+          fetchReceived: vi.fn(async () => ({ received: 0 })),
+          completeUpload,
+          deleteUpload,
+        },
+      }),
+    ).rejects.toMatchObject({ name: 'AbortError' })
+
+    expect(completeUpload).not.toHaveBeenCalled()
+    expect(deleteUpload).toHaveBeenCalledWith('up-abort')
+  })
 })

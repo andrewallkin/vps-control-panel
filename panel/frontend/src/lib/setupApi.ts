@@ -56,10 +56,12 @@ export async function putSetupUploadChunk(
   uploadId: string,
   offset: number,
   body: Blob,
+  options: { signal?: AbortSignal } = {},
 ): Promise<{ received: number }> {
   return apiJson(`/api/setup/uploads/${uploadId}?offset=${offset}`, {
     method: 'PUT',
     body,
+    signal: options.signal,
   })
 }
 

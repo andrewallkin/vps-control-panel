@@ -1,5 +1,33 @@
-import { useState } from 'react'
+import { CheckCircle, Warning, XCircle } from '@phosphor-icons/react'
+import { useState, type ReactNode } from 'react'
 import type { JobEndPayload } from '../../lib/setupApi'
+
+function restoreStatusDisplay(status: string): {
+  className: string
+  icon: ReactNode
+  label: string
+} {
+  const label = `Restore ${status}`
+  if (status === 'succeeded') {
+    return {
+      className: 'text-accent',
+      icon: <CheckCircle weight="regular" aria-hidden className="size-4" />,
+      label,
+    }
+  }
+  if (status === 'failed') {
+    return {
+      className: 'text-destructive',
+      icon: <XCircle weight="regular" aria-hidden className="size-4" />,
+      label,
+    }
+  }
+  return {
+    className: 'text-warning',
+    icon: <Warning weight="regular" aria-hidden className="size-4" />,
+    label,
+  }
+}
 
 export interface RestoreResultSummaryProps {
   end: JobEndPayload
@@ -21,9 +49,19 @@ export function RestoreResultSummary({ end }: RestoreResultSummaryProps) {
         : JSON.stringify(entry),
   )
 
+  const statusUi = restoreStatusDisplay(end.status)
+
   return (
     <div role="status" className="rounded-lg border border-border bg-muted/40 p-4 space-y-2">
-      <h3 className="text-sm font-semibold">Restore {end.status}</h3>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <h3 className="text-sm font-semibold">Restore result</h3>
+        <span
+          className={`inline-flex items-center gap-1.5 text-sm font-medium ${statusUi.className}`}
+        >
+          {statusUi.icon}
+          {statusUi.label}
+        </span>
+      </div>
       {end.error ? (
         <p className="text-sm text-destructive">{end.error}</p>
       ) : null}

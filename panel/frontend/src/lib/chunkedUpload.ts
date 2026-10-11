@@ -61,6 +61,12 @@ async function refreshServerOffset(
   return meta.received
 }
 
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException('Upload aborted', 'AbortError')
+  }
+}
+
 async function putChunkWithRetries(
   uploadId: string,
   file: File,
@@ -68,17 +74,25 @@ async function putChunkWithRetries(
   putChunk: ChunkedUploadDeps['putChunk'],
   fetchReceived: ChunkedUploadDeps['fetchReceived'],
   initialOffset: number,
+  signal?: AbortSignal,
 ): Promise<number> {
   let serverOffset = initialOffset
   for (let attempt = 0; attempt < MAX_CHUNK_RETRIES; attempt += 1) {
+    throwIfAborted(signal)
     try {
       const blob = file.slice(serverOffset, chunkEnd)
-      const result = await putChunk(uploadId, serverOffset, blob)
+      const result = await putChunk(uploadId, serverOffset, blob, { signal })
       return result.received
-    } catch {
+    } catch (error) {
+      if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          throw error
+        }
+        throw new DOMException('Upload aborted', 'AbortError')
+      }
       serverOffset = await refreshServerOffset(uploadId, fetchReceived)
       if (attempt === MAX_CHUNK_RETRIES - 1) {
-        throw new Error('chunk upload failed')
+        throw new Error('chunk upload failed', { cause: error })
       }
     }
   }
@@ -102,9 +116,7 @@ export async function uploadDumpFile(
 
   try {
     while (serverOffset < file.size) {
-      if (options.signal?.aborted) {
-        throw new DOMException('Upload aborted', 'AbortError')
-      }
+      throwIfAborted(options.signal)
 
       const chunkStart = serverOffset
       const chunkEnd = Math.min(serverOffset + CHUNK_SIZE, file.size)
@@ -123,7 +135,10 @@ export async function uploadDumpFile(
         deps.putChunk,
         deps.fetchReceived,
         chunkStart,
+        options.signal,
       )
+
+      throwIfAborted(options.signal)
 
       const elapsedSec = Math.max((performance.now() - startedAt) / 1000, 0.001)
       const bytesPerSec = serverOffset / elapsedSec
@@ -136,6 +151,8 @@ export async function uploadDumpFile(
         etaSec,
       })
     }
+
+    throwIfAborted(options.signal)
 
     const sha256 = hasher.digest('hex')
     const info = await deps.completeUpload(uploadId, sha256)
