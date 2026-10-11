@@ -14,7 +14,7 @@ import { PanelHostnameSetupStep } from '../components/setup/PanelHostnameSetupSt
 import { ProgressBar } from '../components/setup/ProgressBar'
 import { RestoreConfirmDialog } from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
-import { SetupStepper, type WizardStepId } from '../components/setup/SetupStepper'
+import { SetupStepper } from '../components/setup/SetupStepper'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
@@ -28,6 +28,7 @@ import {
   type SetupStep,
   type UploadCompleteInfo,
 } from '../lib/setupApi'
+import { resolveActiveStep } from '../lib/setupWizard'
 
 const ACCEPT = '.sql,.sql.gz'
 
@@ -38,29 +39,6 @@ function isAcceptedDump(file: File): boolean {
 
 function stepStatus(steps: SetupStep[], id: SetupStep['id']): string {
   return steps.find((step) => step.id === id)?.status ?? 'pending'
-}
-
-function resolveActiveStep(
-  steps: SetupStep[],
-  hasValidCert: boolean,
-  restoreJobId: string | null,
-  uploading: boolean,
-  uploadInfo: UploadCompleteInfo | null,
-): WizardStepId {
-  const databaseStatus = stepStatus(steps, 'database')
-  if (databaseStatus === 'pending' || uploading || uploadInfo || restoreJobId) {
-    return 'database'
-  }
-  if (stepStatus(steps, 'cloudflare') !== 'done') {
-    return 'cloudflare'
-  }
-  if (!hasValidCert) {
-    return 'domains'
-  }
-  if (stepStatus(steps, 'panel_hostname') !== 'done') {
-    return 'panel_hostname'
-  }
-  return 'finish'
 }
 
 export function SetupPage() {
@@ -75,10 +53,16 @@ export function SetupPage() {
     refetchIntervalInBackground: false,
   })
 
+  const [cloudflareZonesRequested, setCloudflareZonesRequested] = useState(false)
+  const [awaitingCloudflareContinue, setAwaitingCloudflareContinue] = useState(false)
+  const [awaitingPanelHostnameContinue, setAwaitingPanelHostnameContinue] = useState(false)
+
   const zonesQuery = useQuery({
     queryKey: ['cloudflare', 'zones'],
     queryFn: fetchCloudflareZones,
-    enabled: stepStatus(setupQuery.data?.steps ?? [], 'cloudflare') === 'done',
+    enabled:
+      cloudflareZonesRequested ||
+      stepStatus(setupQuery.data?.steps ?? [], 'cloudflare') === 'done',
     refetchIntervalInBackground: false,
   })
 
@@ -106,10 +90,26 @@ export function SetupPage() {
   const steps = useMemo(() => setupQuery.data?.steps ?? [], [setupQuery.data?.steps])
   const databaseStatus = stepStatus(steps, 'database')
 
+  const cloudflareDone = stepStatus(steps, 'cloudflare') === 'done'
+  const panelHostnameDone = stepStatus(steps, 'panel_hostname') === 'done'
+  const cloudflareAcknowledged = cloudflareDone && !awaitingCloudflareContinue
+  const panelHostnameAcknowledged = panelHostnameDone && !awaitingPanelHostnameContinue
+
   const activeStep = useMemo(
     () =>
-      resolveActiveStep(steps, hasValidCert, restoreJobId, uploading, uploadInfo),
-    [steps, hasValidCert, restoreJobId, uploading, uploadInfo],
+      resolveActiveStep(steps, hasValidCert, restoreJobId, uploading, uploadInfo, {
+        cloudflareAcknowledged,
+        panelHostnameAcknowledged,
+      }),
+    [
+      steps,
+      hasValidCert,
+      restoreJobId,
+      uploading,
+      uploadInfo,
+      cloudflareAcknowledged,
+      panelHostnameAcknowledged,
+    ],
   )
 
   const emptyMutation = useMutation({
@@ -211,7 +211,7 @@ export function SetupPage() {
         </p>
       </div>
 
-      <SetupStepper active={activeStep} steps={steps} />
+      <SetupStepper active={activeStep} steps={steps} hasValidCert={hasValidCert} />
 
       {setupQuery.isError ? (
         <p className="text-sm text-destructive">Could not load setup status.</p>
@@ -327,7 +327,13 @@ export function SetupPage() {
         <CloudflareSetupStep
           configured={cloudflareConfigured}
           zones={zonesQuery.data?.zones ?? []}
-          onConfigured={refreshSetup}
+          zonesLoading={zonesQuery.isFetching && (zonesQuery.data?.zones ?? []).length === 0}
+          onTokenSaved={() => {
+            setCloudflareZonesRequested(true)
+            setAwaitingCloudflareContinue(true)
+            refreshSetup()
+          }}
+          onContinue={() => setAwaitingCloudflareContinue(false)}
         />
       ) : null}
 
@@ -336,7 +342,13 @@ export function SetupPage() {
       ) : null}
 
       {activeStep === 'panel_hostname' && !restoreJobId ? (
-        <PanelHostnameSetupStep onSaved={refreshSetup} />
+        <PanelHostnameSetupStep
+          onSaved={() => {
+            setAwaitingPanelHostnameContinue(true)
+            refreshSetup()
+          }}
+          onContinue={() => setAwaitingPanelHostnameContinue(false)}
+        />
       ) : null}
 
       {activeStep === 'finish' && !restoreJobId ? (

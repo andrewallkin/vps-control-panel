@@ -6,6 +6,7 @@ export type WizardStepId = SetupStepId | 'finish'
 export interface SetupStepperProps {
   active: WizardStepId
   steps: SetupStep[]
+  hasValidCert?: boolean
 }
 
 const stepOrder: WizardStepId[] = [
@@ -34,6 +35,7 @@ function stepState(
   stepId: WizardStepId,
   active: WizardStepId,
   steps: SetupStep[],
+  hasValidCert: boolean,
 ): 'done' | 'current' | 'upcoming' {
   const activeIndex = stepOrder.indexOf(active)
   const stepIndex = stepOrder.indexOf(stepId)
@@ -55,7 +57,9 @@ function stepState(
   const done =
     id === 'database'
       ? status !== 'pending'
-      : status === 'done'
+      : id === 'domains'
+        ? status === 'done' && hasValidCert
+        : status === 'done'
 
   if (done) {
     return 'done'
@@ -63,11 +67,11 @@ function stepState(
   return stepIndex === activeIndex ? 'current' : stepIndex < activeIndex ? 'current' : 'upcoming'
 }
 
-export function SetupStepper({ active, steps }: SetupStepperProps) {
+export function SetupStepper({ active, steps, hasValidCert = false }: SetupStepperProps) {
   return (
     <ol className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
       {stepOrder.map((stepId, index) => {
-        const state = stepState(stepId, active, steps)
+        const state = stepState(stepId, active, steps, hasValidCert)
         const icon =
           state === 'done' ? (
             <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />

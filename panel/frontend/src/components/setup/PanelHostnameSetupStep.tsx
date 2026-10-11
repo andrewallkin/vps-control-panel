@@ -5,10 +5,11 @@ import { fetchDomains, setPanelHostname } from '../../lib/domainsApi'
 import { buildFqdn, validateSubdomain } from '../../lib/subdomainValidation'
 
 export interface PanelHostnameSetupStepProps {
-  onSaved: (hostname: string) => void
+  onSaved: () => void
+  onContinue: () => void
 }
 
-export function PanelHostnameSetupStep({ onSaved }: PanelHostnameSetupStepProps) {
+export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSetupStepProps) {
   const queryClient = useQueryClient()
   const domainsQuery = useQuery({
     queryKey: ['domains'],
@@ -49,7 +50,7 @@ export function PanelHostnameSetupStep({ onSaved }: PanelHostnameSetupStepProps)
       setSavedHostname(result.panel_hostname)
       setError(null)
       await queryClient.invalidateQueries({ queryKey: ['setup', 'state'] })
-      onSaved(result.panel_hostname)
+      onSaved()
     },
     onError: (err: unknown) => {
       if (err instanceof Error && err.message) {
@@ -81,6 +82,13 @@ export function PanelHostnameSetupStep({ onSaved }: PanelHostnameSetupStepProps)
           <p className="text-sm text-muted-foreground">
             Add Cloudflare Access on this hostname to restrict who can reach the panel.
           </p>
+          <button
+            type="button"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
+            onClick={onContinue}
+          >
+            Continue
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
