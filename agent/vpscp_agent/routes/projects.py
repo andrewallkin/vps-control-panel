@@ -5,10 +5,15 @@ from pydantic import BaseModel, model_validator
 
 from vpscp_agent import audit
 from vpscp_agent.deploy_keys import ensure_deploy_key
+from vpscp_agent.jobs import JobLockedError
 from vpscp_agent.projects import (
+    DeleteProjectResult,
     ProjectRecord,
+    clone_project,
+    delete_project,
     get_project,
     list_projects,
+    pull_project,
     register_project,
     test_repo_access,
     update_project,
@@ -32,10 +37,10 @@ class RegisterProjectBody(BaseModel):
     compose_file: str
     deploy_mode: Literal["image", "build"]
 
-    def validated(self) -> dict[str, str]:
+    def validated(self, *, allow_file_repos: bool = False) -> dict[str, str]:
         return {
             "slug": validate_project_slug(self.slug),
-            "repo_url": validate_repo_url(self.repo_url),
+            "repo_url": validate_repo_url(self.repo_url, allow_file_repos=allow_file_repos),
             "branch": validate_branch(self.branch),
             "compose_file": validate_compose_file(self.compose_file),
             "deploy_mode": validate_deploy_mode(self.deploy_mode),
@@ -59,10 +64,10 @@ class UpdateProjectBody(BaseModel):
             raise ValueError("at least one field is required")
         return self
 
-    def validated_updates(self) -> dict[str, str]:
+    def validated_updates(self, *, allow_file_repos: bool = False) -> dict[str, str]:
         out: dict[str, str] = {}
         if self.repo_url is not None:
-            out["repo_url"] = validate_repo_url(self.repo_url)
+            out["repo_url"] = validate_repo_url(self.repo_url, allow_file_repos=allow_file_repos)
         if self.branch is not None:
             out["branch"] = validate_branch(self.branch)
         if self.compose_file is not None:
@@ -85,7 +90,7 @@ class TestAccessResponse(BaseModel):
 def post_register(body: RegisterProjectBody, request: Request) -> ProjectRecord:
     db = request.app.state.db
     settings = request.app.state.settings
-    fields = body.validated()
+    fields = body.validated(allow_file_repos=settings.allow_file_repos)
     params = {
         key: fields[key] for key in ("slug", "repo_url", "branch", "compose_file", "deploy_mode")
     }
@@ -98,7 +103,7 @@ def patch_project(slug: Slug, body: UpdateProjectBody, request: Request) -> Proj
     db = request.app.state.db
     settings = request.app.state.settings
     validate_project_slug(slug)
-    updates = body.validated_updates()
+    updates = body.validated_updates(allow_file_repos=settings.allow_file_repos)
     params = {"slug": slug, **updates}
     with audit.audited(db, "project.update", params):
         return update_project(db, settings, slug, **updates)
@@ -137,3 +142,60 @@ def post_test_access(slug: Slug, request: Request) -> TestAccessResponse:
     runner = request.app.state.runner
     validate_project_slug(slug)
     return test_repo_access(settings, db, runner, slug=slug)
+
+
+@router.post("/{slug}/clone", status_code=202)
+def post_clone(slug: Slug, request: Request) -> dict[str, str]:
+    db = request.app.state.db
+    settings = request.app.state.settings
+    runner = request.app.state.runner
+    jobs = request.app.state.jobs
+    validate_project_slug(slug)
+    get_project(settings, db, slug)
+
+    def body_fn(ctx):
+        return clone_project(ctx, settings, db, runner, slug)
+
+    job = jobs.start(
+        "project.clone",
+        {"slug": slug},
+        body_fn,
+        lock_key=f"deploy:{slug}",
+    )
+    return {"job_id": job.id}
+
+
+@router.post("/{slug}/pull")
+def post_pull(slug: Slug, request: Request) -> dict[str, str]:
+    db = request.app.state.db
+    settings = request.app.state.settings
+    runner = request.app.state.runner
+    jobs = request.app.state.jobs
+    validate_project_slug(slug)
+    lock_key = f"deploy:{slug}"
+    if jobs.is_locked(lock_key):
+        raise JobLockedError(lock_key)
+    params = {"slug": slug}
+    with audit.audited(db, "project.pull", params):
+        return pull_project(settings, db, runner, slug)
+
+
+class DeleteProjectBody(BaseModel):
+    confirm: str
+
+
+@router.delete("/{slug}", response_model=DeleteProjectResult)
+def delete_project_route(
+    slug: Slug, body: DeleteProjectBody, request: Request
+) -> DeleteProjectResult:
+    db = request.app.state.db
+    settings = request.app.state.settings
+    runner = request.app.state.runner
+    jobs = request.app.state.jobs
+    validate_project_slug(slug)
+    lock_key = f"deploy:{slug}"
+    if jobs.is_locked(lock_key):
+        raise JobLockedError(lock_key)
+    params = {"slug": slug}
+    with audit.audited(db, "project.delete", params):
+        return delete_project(settings, db, runner, slug=slug, confirm=body.confirm)

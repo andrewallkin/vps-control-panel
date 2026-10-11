@@ -47,10 +47,31 @@ def validate_project_slug(value: str) -> str:
     return value
 
 
-def validate_repo_url(value: str) -> str:
-    if not _REPO_URL_SSH_RE.fullmatch(value) and not _REPO_URL_HTTPS_RE.fullmatch(value):
+def _validate_file_repo_url(value: str) -> str:
+    prefix = "file://"
+    if not value.startswith(prefix):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    path = value[len(prefix) :]
+    if not path.startswith("/"):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    if path.endswith("/") or "//" in path:
+        raise ValueError(f"invalid repo_url: {value!r}")
+    if any(ch in value for ch in ("\n", "\r", "\x00")):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    segments = path.split("/")
+    if any(segment == ".." for segment in segments):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    if any(segment == "" for segment in segments[1:]):
         raise ValueError(f"invalid repo_url: {value!r}")
     return value
+
+
+def validate_repo_url(value: str, *, allow_file_repos: bool = False) -> str:
+    if _REPO_URL_SSH_RE.fullmatch(value) or _REPO_URL_HTTPS_RE.fullmatch(value):
+        return value
+    if allow_file_repos:
+        return _validate_file_repo_url(value)
+    raise ValueError(f"invalid repo_url: {value!r}")
 
 
 def _reject_path_segments(value: str, kind: str) -> None:
