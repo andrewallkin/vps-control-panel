@@ -49,7 +49,11 @@ class FakeRunner:
             needle = match
 
             def predicate(args: list[str]) -> bool:
-                return needle in " ".join(args)
+                if needle in " ".join(args):
+                    return True
+                call = self.calls[-1]
+                input_data = call.get("input_data")
+                return isinstance(input_data, str) and needle in input_data
 
         else:
             predicate = match
