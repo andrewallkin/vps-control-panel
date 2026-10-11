@@ -19,6 +19,7 @@ from vpscp_agent.jobs import JobLockedError, JobManager
 from vpscp_agent.nginx_apply import NginxTestError
 from vpscp_agent.pg import Psql
 from vpscp_agent.routes import backup as backup_routes
+from vpscp_agent.routes import compose as compose_routes
 from vpscp_agent.routes import database as database_routes
 from vpscp_agent.routes import dns as dns_routes
 from vpscp_agent.routes import docker as docker_routes
@@ -128,6 +129,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(tls_routes.router)
     app.include_router(nginx_routes.router)
     app.include_router(projects_routes.router)
+    app.include_router(compose_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
