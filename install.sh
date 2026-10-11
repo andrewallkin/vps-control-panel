@@ -4,6 +4,7 @@ set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STACK_DIR=/srv/vpscp/stack
+PANEL_DIR=/srv/vpscp/panel
 AGENT_DIR=/opt/vpscp/agent
 APPS_DIR=/srv/apps
 STATE_DIR=/var/lib/vpscp
@@ -150,10 +151,42 @@ install_agent() {
   systemctl restart vpscp-agent
 }
 
+refresh_vpscp_gid() {
+  local gid env_file tmp
+  gid="$(getent group vpscp | cut -d: -f3)"
+  env_file="${STACK_DIR}/.env"
+  tmp="$(mktemp "${env_file}.XXXXXX")"
+  if grep -q '^VPSCP_GID=' "${env_file}"; then
+    sed "s/^VPSCP_GID=.*/VPSCP_GID=${gid}/" "${env_file}" > "${tmp}"
+  else
+    cat "${env_file}" > "${tmp}"
+    printf 'VPSCP_GID=%s\n' "${gid}" >> "${tmp}"
+  fi
+  chown root:root "${tmp}"
+  chmod 600 "${tmp}"
+  mv "${tmp}" "${env_file}"
+}
+
+bootstrap_panel_admin() {
+  if (cd "${STACK_DIR}" && docker compose exec -T panel python -m vpscp_panel.cli has-admin); then
+    return
+  fi
+  if [[ -n "${VPSCP_ADMIN_USER:-}" && -n "${VPSCP_ADMIN_PASSWORD:-}" ]]; then
+    (cd "${STACK_DIR}" && docker compose exec -T panel env VPSCP_ADMIN_PASSWORD="${VPSCP_ADMIN_PASSWORD}" \
+      python -m vpscp_panel.cli create-admin --username "${VPSCP_ADMIN_USER}")
+  elif [[ -t 0 ]]; then
+    local username
+    read -r -p "Panel admin username: " username
+    (cd "${STACK_DIR}" && docker compose exec panel python -m vpscp_panel.cli create-admin --username "${username}")
+  else
+    echo "No panel admin was created; re-run install with a TTY or set VPSCP_ADMIN_USER and VPSCP_ADMIN_PASSWORD." >&2
+  fi
+}
+
 setup_stack() {
-  log "Starting central Postgres and backup stack"
+  log "Starting central Postgres, backup, and panel stack"
   install -d -m 0750 "${STACK_DIR}"
-  rsync -a --delete --exclude '.env' "${REPO_DIR}/stack/" "${STACK_DIR}/"
+  rsync -a --delete --exclude '.env' --exclude 'panel.env' "${REPO_DIR}/stack/" "${STACK_DIR}/"
   if [[ ! -f "${STACK_DIR}/.env" ]]; then
     local password
     password="$(openssl rand -base64 48 | tr -d '/+=\n' | cut -c1-40)"
@@ -168,9 +201,28 @@ setup_stack() {
       printf '%s\n' "${example_line}" >> "${STACK_DIR}/.env"
     fi
   done < <(grep -E '^[A-Z_]+=' "${STACK_DIR}/.env.example")
+  refresh_vpscp_gid
   chown root:root "${STACK_DIR}/.env"
   chmod 600 "${STACK_DIR}/.env"
+  if [[ ! -f "${STACK_DIR}/panel.env" ]]; then
+    local panel_env_file tmp secret
+    panel_env_file="${STACK_DIR}/panel.env"
+    secret="$(openssl rand -hex 32)"
+    tmp="$(mktemp "${panel_env_file}.XXXXXX")"
+    printf 'PANEL_SECRET_KEY=%s\n' "${secret}" > "${tmp}"
+    chown root:root "${tmp}"
+    chmod 600 "${tmp}"
+    mv "${tmp}" "${panel_env_file}"
+    echo "generated ${STACK_DIR}/panel.env"
+  fi
+  chown root:root "${STACK_DIR}/panel.env"
+  chmod 600 "${STACK_DIR}/panel.env"
+  install -d -m 0755 "${PANEL_DIR}"
+  rsync -a --delete \
+    --exclude 'node_modules' --exclude 'dist' --exclude '.venv' --exclude '__pycache__' \
+    "${REPO_DIR}/panel/" "${PANEL_DIR}/"
   (cd "${STACK_DIR}" && docker compose up -d --build)
+  bootstrap_panel_admin
 }
 
 verify() {
@@ -201,8 +253,14 @@ main() {
   verify
   log "Done"
   echo "Agent socket: ${AGENT_SOCKET}"
-  echo "Next: the panel arrives in a later release; for now query the agent with"
-  echo "  sudo curl --unix-socket ${AGENT_SOCKET} http://agent/v1/metrics/current"
+  local panel_user server_ip
+  panel_user="${SUDO_USER:-${USER:-root}}"
+  server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [[ -z "${server_ip}" ]]; then
+    server_ip="<server-ip>"
+  fi
+  echo "Panel: ssh -L 8080:localhost:8080 ${panel_user}@${server_ip}"
+  echo "  then open http://localhost:8080"
 }
 
 main "$@"

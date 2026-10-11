@@ -63,9 +63,77 @@ jobs:
       - name: Validate compose file
         run: |
           cp stack/.env.example stack/.env
+          cp stack/panel.env.example stack/panel.env
           docker compose -f stack/docker-compose.yml config -q
       - name: Build backup image
         run: docker build -t vpscp-backup stack/backup
       - name: Backup image uses PostgreSQL 16 client
         shell: bash
         run: docker run --rm --entrypoint pg_dumpall vpscp-backup --version | grep -E 'PostgreSQL\) 16\.'
+
+  panel-backend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: panel/backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run pytest -v
+
+  panel-frontend:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: panel/frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npx vitest --run
+      - run: npm run build
+
+  panel-image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build panel image
+        run: docker build -t vpscp-panel:local panel
+      - id: dockerhub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "short=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-qemu-action@v3
+        if: steps.dockerhub.outputs.push == 'true'
+      - uses: docker/setup-buildx-action@v3
+        if: steps.dockerhub.outputs.push == 'true'
+      - uses: docker/login-action@v3
+        if: steps.dockerhub.outputs.push == 'true'
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        if: steps.dockerhub.outputs.push == 'true'
+        with:
+          context: panel
+          file: panel/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/vps-control-panel:main-${{ steps.dockerhub.outputs.short }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/vps-control-panel:latest

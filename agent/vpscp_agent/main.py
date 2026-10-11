@@ -18,6 +18,7 @@ from vpscp_agent.jobs import JobLockedError, JobManager
 from vpscp_agent.pg import Psql
 from vpscp_agent.routes import backup as backup_routes
 from vpscp_agent.routes import database as database_routes
+from vpscp_agent.routes import docker as docker_routes
 from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.routes import restore as restore_routes
 from vpscp_agent.state import StateDB
@@ -90,6 +91,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(database_routes.router)
     app.include_router(restore_routes.router)
     app.include_router(backup_routes.router)
+    app.include_router(docker_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
