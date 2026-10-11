@@ -24,6 +24,7 @@ from vpscp_agent.routes import docker as docker_routes
 from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.routes import restore as restore_routes
 from vpscp_agent.routes import server as server_routes
+from vpscp_agent.routes import tls as tls_routes
 from vpscp_agent.state import StateDB
 
 
@@ -86,7 +87,15 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
         if request.url.path.startswith(
-            ("/v1/db", "/v1/restore", "/v1/backup", "/v1/domains", "/v1/server", "/v1/dns")
+            (
+                "/v1/db",
+                "/v1/restore",
+                "/v1/backup",
+                "/v1/domains",
+                "/v1/server",
+                "/v1/dns",
+                "/v1/tls",
+            )
         ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
         raise exc
@@ -107,6 +116,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(docker_routes.router)
     app.include_router(server_routes.router)
     app.include_router(dns_routes.router)
+    app.include_router(tls_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:

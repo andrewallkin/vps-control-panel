@@ -17,6 +17,7 @@ class Settings:
     pg_container: str
     backup_image: str
     max_upload_bytes: int
+    letsencrypt_dir: Path
 
     @property
     def state_db_path(self) -> Path:
@@ -55,4 +56,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         pg_container=env.get("VPSCP_PG_CONTAINER", "postgres-central"),
         backup_image=env.get("VPSCP_BACKUP_IMAGE", "vpscp-backup:local"),
         max_upload_bytes=int(env.get("VPSCP_MAX_UPLOAD_BYTES", "10737418240")),
+        letsencrypt_dir=Path(env.get("VPSCP_LETSENCRYPT_DIR", "/etc/letsencrypt")),
     )

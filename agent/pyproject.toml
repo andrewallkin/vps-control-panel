@@ -9,6 +9,7 @@ dependencies = [
     "uvicorn>=0.32",
     "pydantic>=2.9",
     "psutil>=6.1",
+    "cryptography>=43.0",
 ]
 
 [project.scripts]
