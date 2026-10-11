@@ -212,7 +212,16 @@ def remove_site(
             _ensure_symlink(enabled_path, conf_path)
         raise NginxTestError(_nginx_test_output(result))
 
-    runner(["systemctl", "reload", "nginx"])
+    try:
+        runner(["systemctl", "reload", "nginx"])
+    except Exception:
+        if saved_conf is not None:
+            conf_path.write_bytes(saved_conf)
+        if saved_link_target is not None:
+            _ensure_symlink(enabled_path, saved_link_target)
+        elif saved_conf is not None:
+            _ensure_symlink(enabled_path, conf_path)
+        raise
     release_site(db, site_id)
 
 
@@ -295,7 +304,14 @@ def ensure_base_config(
         _restore_path(default_enabled, default_enabled_prev)
         _restore_path(stock_default, stock_default_prev)
         raise NginxTestError(_nginx_test_output(result))
-    runner(["systemctl", "reload", "nginx"])
+    try:
+        runner(["systemctl", "reload", "nginx"])
+    except Exception:
+        _restore_path(realip_path, realip_prev)
+        _restore_path(default_available, default_avail_prev)
+        _restore_path(default_enabled, default_enabled_prev)
+        _restore_path(stock_default, stock_default_prev)
+        raise
 
 
 def list_nginx_sites(db: StateDB) -> list[dict[str, list[str] | str]]:

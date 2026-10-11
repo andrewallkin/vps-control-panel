@@ -149,6 +149,64 @@ def test_remove_site_nginx_failure_restores(nginx_env):
     assert site_enabled_path(settings.nginx_dir, "budget").exists()
 
 
+def test_remove_site_reload_failure_restores_and_keeps_hostnames(nginx_env):
+    settings, runner, db, letsencrypt = nginx_env
+    _touch_cert(letsencrypt, "example.com")
+    content = render_site(_site_spec())
+    apply_site("budget", content, settings=settings, runner=runner)
+    claim_hostnames(db, "budget", ["budget.example.com"])
+    conf = site_conf_path(settings.nginx_dir, "budget")
+    enabled = site_enabled_path(settings.nginx_dir, "budget")
+    saved = conf.read_bytes()
+
+    runner.responses.clear()
+    runner.on("nginx -t", stdout="syntax ok\n")
+    runner.on("systemctl reload nginx", returncode=1, stderr="reload failed\n")
+    with pytest.raises(CommandError):
+        remove_site("budget", settings=settings, runner=runner, db=db)
+    assert conf.read_bytes() == saved
+    assert enabled.is_symlink() and enabled.resolve() == conf.resolve()
+    with db.connect() as conn:
+        assert (
+            conn.execute("SELECT 1 FROM hostname WHERE site = ?", ("budget",)).fetchone()
+            is not None
+        )
+
+
+def test_ensure_base_config_reload_failure_restores_previous(nginx_env):
+    settings, runner, db, _letsencrypt = nginx_env
+
+    def fake_fetch():
+        return ["203.0.113.0/24"], ["2001:db8::/32"]
+
+    realip = settings.nginx_dir / "conf.d" / "vpscp-realip.conf"
+    default_conf = settings.nginx_dir / "sites-available" / "vpscp-default.conf"
+    default_link = settings.nginx_dir / "sites-enabled" / "vpscp-default.conf"
+    stock_default = settings.nginx_dir / "sites-enabled" / "default"
+    stock_target = settings.nginx_dir / "sites-available" / "default"
+
+    realip.parent.mkdir(parents=True)
+    realip.write_bytes(b"old realip\n")
+    default_conf.parent.mkdir(parents=True)
+    default_conf.write_bytes(b"old default server\n")
+    default_link.parent.mkdir(parents=True)
+    default_link.symlink_to(default_conf)
+    stock_target.write_bytes(b"stock default\n")
+    stock_default.parent.mkdir(parents=True, exist_ok=True)
+    stock_default.symlink_to(stock_target)
+
+    runner.responses.clear()
+    runner.on("nginx -t", stdout="syntax ok\n")
+    runner.on("systemctl reload nginx", returncode=1, stderr="reload failed\n")
+    with pytest.raises(CommandError, match="reload failed"):
+        ensure_base_config(settings=settings, runner=runner, db=db, fetch=fake_fetch)
+
+    assert realip.read_bytes() == b"old realip\n"
+    assert default_conf.read_bytes() == b"old default server\n"
+    assert default_link.is_symlink() and default_link.resolve() == default_conf.resolve()
+    assert stock_default.is_symlink() and stock_default.resolve() == stock_target.resolve()
+
+
 def test_ensure_base_config_nginx_test_failure_restores_previous(nginx_env):
     settings, runner, db, _letsencrypt = nginx_env
 
