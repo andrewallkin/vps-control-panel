@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import quote
@@ -10,6 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, field_validator, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
+from starlette.responses import StreamingResponse
 
 import vpscp_panel.db as db_module
 from vpscp_panel.agent_client import AgentClient
@@ -124,6 +126,12 @@ class DeleteProjectBody(BaseModel):
     remove_dns: bool = False
 
 
+class PatchProjectBody(BaseModel):
+    migration_command: str | None = None
+    migration_service: str | None = None
+    health_check_url: str | None = None
+
+
 class TestAccessBody(BaseModel):
     slug: Slug
 
@@ -187,6 +195,57 @@ def _project_payload(project: Project) -> dict[str, Any]:
         "creation_state": json.loads(project.creation_state),
         "created_at": project.created_at.isoformat(),
     }
+
+
+def _project_detail_payload(db: DbSession, project: Project) -> dict[str, Any]:
+    payload = _project_payload(project)
+    hostnames = db.scalars(
+        select(ProjectHostname).where(ProjectHostname.project_slug == project.slug)
+    ).all()
+    routes = db.scalars(select(ProjectRoute).where(ProjectRoute.project_slug == project.slug)).all()
+    services = db.scalars(
+        select(ProjectService).where(ProjectService.project_slug == project.slug)
+    ).all()
+    payload["hostnames"] = [
+        {
+            "domain": row.domain,
+            "subdomain": row.subdomain,
+            "kind": row.kind,
+        }
+        for row in hostnames
+    ]
+    payload["routes"] = [
+        {
+            "path_prefix": row.path_prefix,
+            "port_env_var": row.port_env_var,
+            "max_body_mb": row.max_body_mb,
+            "read_timeout_s": row.read_timeout_s,
+            "send_timeout_s": row.send_timeout_s,
+            "streaming": row.streaming,
+            "websocket": row.websocket,
+            "pass_authorization": row.pass_authorization,
+        }
+        for row in routes
+    ]
+    payload["services"] = [
+        {
+            "service_name": row.service_name,
+            "image_env_var": row.image_env_var,
+            "tag_prefix": row.tag_prefix,
+            "current_tag": row.current_tag,
+        }
+        for row in services
+    ]
+    return payload
+
+
+async def _relay_agent_sse(
+    agent: AgentClient,
+    path: str,
+    params: dict[str, Any] | None = None,
+) -> AsyncIterator[bytes]:
+    async for chunk in agent.stream(path, params=params):
+        yield chunk
 
 
 def _validate_db_fields(body: CreateProjectBody) -> None:
@@ -322,7 +381,88 @@ async def get_project(
     project = db.get(Project, slug)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
-    return _project_payload(project)
+    return _project_detail_payload(db, project)
+
+
+@router.patch("/{slug}")
+async def patch_project(
+    slug: str,
+    body: PatchProjectBody,
+    db: Annotated[DbSession, Depends(get_db)],
+    _session: Annotated[Session, Depends(require_csrf)],
+) -> dict[str, Any]:
+    project = db.get(Project, slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    updates = body.model_dump(exclude_unset=True)
+    for key, value in updates.items():
+        setattr(project, key, value)
+    db.commit()
+    db.refresh(project)
+    return _project_detail_payload(db, project)
+
+
+@router.get("/{slug}/compose/ps")
+async def get_compose_ps(
+    slug: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(current_session)],
+) -> Any:
+    if db.get(Project, slug) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return await agent.get(f"/v1/projects/{slug}/compose/ps")
+
+
+@router.get("/{slug}/logs")
+async def stream_project_logs(
+    slug: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(current_session)],
+    service: str | None = None,
+    tail: int = Query(200, ge=1, le=5000),
+    follow: int = Query(1, ge=0, le=1),
+) -> StreamingResponse:
+    if db.get(Project, slug) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    params: dict[str, Any] = {"tail": str(tail), "follow": str(follow)}
+    if service is not None:
+        params["service"] = service
+    return StreamingResponse(
+        _relay_agent_sse(agent, f"/v1/projects/{slug}/compose/logs", params=params),
+        media_type="text/event-stream",
+        headers={"X-Accel-Buffering": "no", "Cache-Control": "no-cache"},
+    )
+
+
+@router.post("/{slug}/compose/restart")
+async def compose_restart(
+    slug: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(require_csrf)],
+) -> Any:
+    if db.get(Project, slug) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return await agent.post(f"/v1/projects/{slug}/compose/restart")
+
+
+@router.get("/{slug}/dumps/{name}")
+async def download_dump(
+    slug: str,
+    name: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(current_session)],
+) -> StreamingResponse:
+    if db.get(Project, slug) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return StreamingResponse(
+        _relay_agent_sse(agent, f"/v1/db/dumps/{slug}/{name}"),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{name}"'},
+    )
 
 
 @router.post("/{slug}/retry-create")

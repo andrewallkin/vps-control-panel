@@ -6,7 +6,7 @@ import { DashboardPage } from '../pages/DashboardPage'
 import { DomainsPage } from '../pages/DomainsPage'
 import { LoginPage } from '../pages/LoginPage'
 import { NewProjectWizardPage } from '../pages/NewProjectWizardPage'
-import { ProjectPlaceholderPage } from '../pages/ProjectPlaceholderPage'
+import { ProjectPage } from '../pages/ProjectPage'
 import { ProjectsListPage } from '../pages/ProjectsListPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { SetupPage } from '../pages/SetupPage'
@@ -83,7 +83,7 @@ function NewProjectEntry() {
 function ProjectSlugEntry() {
   return (
     <RequireSetupComplete>
-      <ProjectPlaceholderPage />
+      <ProjectPage />
     </RequireSetupComplete>
   )
 }

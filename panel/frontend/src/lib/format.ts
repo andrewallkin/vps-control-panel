@@ -56,3 +56,24 @@ export function formatLoad(load: number, cpuCount: number): string {
   }
   return `${load.toFixed(2)} / ${cpuCount}`
 }
+
+export function formatPushedAtRelative(pushedAtIso: string, nowMs: number): string {
+  const pushedMs = Date.parse(pushedAtIso)
+  if (!Number.isFinite(pushedMs)) {
+    return '—'
+  }
+  const seconds = Math.max(0, Math.floor((nowMs - pushedMs) / 1000))
+  if (seconds < 60) {
+    return 'just now'
+  }
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) {
+    return `${minutes} minute${minutes === 1 ? '' : 's'} ago`
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) {
+    return `${hours} hour${hours === 1 ? '' : 's'} ago`
+  }
+  const days = Math.floor(hours / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}

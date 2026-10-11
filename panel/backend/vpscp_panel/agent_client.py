@@ -102,11 +102,16 @@ class AgentClient:
             raise AgentError(response.status_code, _detail_from_response(response))
         return response.json()
 
-    async def stream(self, path: str) -> AsyncIterator[bytes]:
+    async def stream(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+    ) -> AsyncIterator[bytes]:
         try:
             async with self._client.stream(
                 "GET",
                 path,
+                params=params,
                 timeout=httpx.Timeout(30.0, read=None),
             ) as response:
                 if response.is_error:
