@@ -260,20 +260,22 @@ def run_backup():
             except Exception as exc:
                 logger.warning(f"Failed to remove local backup file: {exc}")
 
-        status_fields = {
-            "started_at": started_at,
-            "finished_at": _utc_now_iso(),
-            "success": success,
-            "object": object_name,
-            "size_bytes": size_bytes,
-            "archive_object": archive_object,
-            "archive_skipped_reason": archive_skipped_reason,
-            "error": error,
-        }
-        if archive_error is not None:
-            status_fields["archive_error"] = archive_error
-        status.write_status(**status_fields)
-        _backup_lock.release()
+        try:
+            status_fields = {
+                "started_at": started_at,
+                "finished_at": _utc_now_iso(),
+                "success": success,
+                "object": object_name,
+                "size_bytes": size_bytes,
+                "archive_object": archive_object,
+                "archive_skipped_reason": archive_skipped_reason,
+                "error": error,
+            }
+            if archive_error is not None:
+                status_fields["archive_error"] = archive_error
+            status.write_status(**status_fields)
+        finally:
+            _backup_lock.release()
 
     logger.info("=" * 60)
     logger.info("Backup process completed")
