@@ -16,6 +16,9 @@ COPY backend/alembic ./alembic
 COPY backend/alembic.ini ./
 RUN uv sync --frozen --no-dev
 
+ENV UV_CACHE_DIR=/tmp/uv-cache
+ENV PATH="/app/.venv/bin:$PATH"
+
 COPY --from=frontend-build /build/dist ./static
 
 RUN useradd -u 10001 panel && chown -R panel:panel /app
