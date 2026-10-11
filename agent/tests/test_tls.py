@@ -106,6 +106,23 @@ def test_load_settings_letsencrypt_dir_default():
     assert settings.letsencrypt_dir == Path("/etc/letsencrypt")
 
 
+def test_load_settings_cloudflare_api_base_default():
+    settings = load_settings({})
+    assert settings.cloudflare_api_base == "https://api.cloudflare.com/client/v4"
+    assert settings.tls_self_signed is False
+
+
+def test_load_settings_tls_self_signed_and_cloudflare_api():
+    settings = load_settings(
+        {
+            "VPSCP_TLS_SELF_SIGNED": "1",
+            "VPSCP_CLOUDFLARE_API": "http://127.0.0.1:8787/client/v4",
+        }
+    )
+    assert settings.tls_self_signed is True
+    assert settings.cloudflare_api_base == "http://127.0.0.1:8787/client/v4"
+
+
 def test_status_reads_self_signed_cert(tls_env):
     settings, _runner, db = tls_env
     register_domain(db, "example.com", "zone-1")
@@ -138,6 +155,43 @@ def test_status_missing_cert(tls_env):
             "sans": [],
         }
     ]
+
+
+def test_issue_self_signed_skips_certbot(tmp_path):
+    settings = load_settings(
+        {
+            "VPSCP_STATE_DIR": str(tmp_path / "state"),
+            "VPSCP_SOCKET_PATH": str(tmp_path / "agent.sock"),
+            "VPSCP_APPS_DIR": str(tmp_path / "apps"),
+            "VPSCP_STACK_DIR": str(tmp_path / "stack"),
+            "VPSCP_DISK_PATHS": str(tmp_path),
+            "VPSCP_METRICS_INTERVAL": "3600",
+            "VPSCP_LETSENCRYPT_DIR": str(tmp_path / "letsencrypt"),
+            "VPSCP_TLS_SELF_SIGNED": "1",
+        }
+    )
+    settings.state_dir.mkdir(parents=True, exist_ok=True)
+    runner = FakeRunner()
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    register_domain(db, "example.com", "zone-1")
+    write_cloudflare_ini(settings, "cf-token-secret")
+    ctx = _ctx(db)
+
+    tls.issue(
+        ctx, settings=settings, runner=runner, domain="example.com", email="admin@example.com"
+    )
+
+    assert runner.calls == []
+    hook = settings.letsencrypt_dir / "renewal-hooks/deploy/vpscp-reload-nginx.sh"
+    assert hook.is_file()
+    paths = tls.cert_paths(settings, "example.com")
+    assert paths["fullchain"].is_file()
+    assert paths["privkey"].is_file()
+    not_after, _days_left, sans = tls._parse_cert(paths["fullchain"])
+    assert sans == ["*.example.com", "example.com"]
+    assert not_after is not None
+    assert any("test-only" in line.lower() for line in ctx._job.lines)
 
 
 def test_issue_installs_hook_and_runs_certbot(tls_env):

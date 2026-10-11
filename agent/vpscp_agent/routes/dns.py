@@ -53,7 +53,11 @@ def _client_factory(request: Request) -> CloudflareClientFactory:
     factory = getattr(request.app.state, "cloudflare_client_factory", None)
     if factory is not None:
         return factory
-    return lambda token, transport=None: CloudflareClient(token, transport=transport)
+    settings = request.app.state.settings
+    base_url = settings.cloudflare_api_base
+    return lambda token, transport=None: CloudflareClient(
+        token, base_url=base_url, transport=transport
+    )
 
 
 def _client_from_token(request: Request, token: str) -> CloudflareClient:

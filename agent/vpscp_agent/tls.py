@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from cryptography import x509
-from cryptography.x509.oid import ExtensionOID
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.x509.oid import ExtensionOID, NameOID
 
 from vpscp_agent.commands import CommandResult
 from vpscp_agent.config import Settings
@@ -20,6 +23,7 @@ if TYPE_CHECKING:
 
 _HOOK_REL = Path("renewal-hooks/deploy/vpscp-reload-nginx.sh")
 _HOOK_CONTENT = "#!/bin/sh\nsystemctl reload nginx\n"
+_LOG = logging.getLogger(__name__)
 
 
 def cert_paths(settings: Settings, domain: str) -> dict[str, Path]:
@@ -77,6 +81,35 @@ def _log_command_output(ctx: JobContext, result: CommandResult) -> None:
         ctx.log(line)
 
 
+def _write_self_signed_wildcard(settings: Settings, domain: str) -> None:
+    paths = cert_paths(settings, domain)
+    paths["fullchain"].parent.mkdir(parents=True, exist_ok=True)
+    key = ec.generate_private_key(ec.SECP256R1())
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, domain)])
+    not_before = datetime.now(UTC)
+    not_after = not_before + timedelta(days=90)
+    san = x509.SubjectAlternativeName([x509.DNSName(domain), x509.DNSName(f"*.{domain}")])
+    cert = (
+        x509.CertificateBuilder()
+        .subject_name(subject)
+        .issuer_name(issuer)
+        .public_key(key.public_key())
+        .serial_number(x509.random_serial_number())
+        .not_valid_before(not_before)
+        .not_valid_after(not_after)
+        .add_extension(san, critical=False)
+        .sign(key, hashes.SHA256())
+    )
+    paths["fullchain"].write_bytes(cert.public_bytes(serialization.Encoding.PEM))
+    privkey_pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+    paths["privkey"].write_bytes(privkey_pem)
+    os.chmod(paths["privkey"], 0o600)
+
+
 def require_issue_preconditions(
     settings: Settings, db: StateDB, domain: str, email: str | None
 ) -> None:
@@ -99,6 +132,17 @@ def issue(
     email: str,
 ) -> None:
     _ensure_deploy_hook(settings)
+    if settings.tls_self_signed:
+        _LOG.warning(
+            "VPSCP_TLS_SELF_SIGNED=1: issuing test-only self-signed certificate for %s "
+            "(not Let's Encrypt)",
+            domain,
+        )
+        ctx.log(
+            "WARNING: VPSCP_TLS_SELF_SIGNED is enabled; issuing test-only self-signed certificate"
+        )
+        _write_self_signed_wildcard(settings, domain)
+        return
     result = runner(_certbot_issue_argv(settings, domain, email))
     _log_command_output(ctx, result)
 
