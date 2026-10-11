@@ -15,7 +15,7 @@ import { fetchContainerMetrics } from '../lib/dashboardApi'
 import { fetchDomains } from '../lib/domainsApi'
 import type { EnvRow } from '../lib/envEditorUtils'
 import { formatBytes } from '../lib/format'
-import { entriesToEnvRows, envRowsToPatchSet } from '../lib/projectEnv'
+import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
 import type { RegistryTagOption } from '../lib/projectDeployTypes'
 import {
   deleteProject,
@@ -99,6 +99,7 @@ export function ProjectPage() {
   const [selectedTags, setSelectedTags] = useState<Record<string, string>>({})
   const [activeDeployId, setActiveDeployId] = useState<number | null>(null)
   const [envRows, setEnvRows] = useState<EnvRow[]>([])
+  const [loadedEnvKeys, setLoadedEnvKeys] = useState<string[]>([])
   const [envDirty, setEnvDirty] = useState(false)
   const [restartPrompt, setRestartPrompt] = useState(false)
   const [hostnamesDraft, setHostnamesDraft] = useState<ProjectHostname[]>([])
@@ -239,6 +240,7 @@ export function ProjectPage() {
     if (!envQuery.data) {
       return
     }
+    setLoadedEnvKeys(envQuery.data.entries.map((entry) => entry.key))
     setEnvRows(entriesToEnvRows(envQuery.data.entries, routePortEnvVars))
     setEnvDirty(false)
   }, [envQuery.data, routePortEnvVars])
@@ -285,9 +287,16 @@ export function ProjectPage() {
   })
 
   const envSaveMutation = useMutation({
-    mutationFn: async (rows: EnvRow[]) => {
+    mutationFn: async ({
+      rows,
+      loadedKeys,
+    }: {
+      rows: EnvRow[]
+      loadedKeys: string[]
+    }) => {
       const set = envRowsToPatchSet(rows)
-      await patchProjectEnv(slug, set)
+      const unset = envKeysToPatchUnset(loadedKeys, rows, routePortEnvVars)
+      await patchProjectEnv(slug, set, unset)
     },
     onSuccess: () => {
       setEnvDirty(false)
@@ -626,7 +635,9 @@ export function ProjectPage() {
                 type="button"
                 disabled={!envDirty || envSaveMutation.isPending}
                 className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                onClick={() => envSaveMutation.mutate(envRows)}
+                onClick={() =>
+                  envSaveMutation.mutate({ rows: envRows, loadedKeys: loadedEnvKeys })
+                }
               >
                 Save
               </button>

@@ -24,3 +24,22 @@ export function envRowsToPatchSet(rows: EnvRow[]): Record<string, string> {
   }
   return set
 }
+
+export function envKeysToPatchUnset(
+  loadedKeys: string[],
+  rows: EnvRow[],
+  routePortEnvVars: string[],
+): string[] {
+  const currentKeys = new Set(rows.map((row) => row.key).filter((key) => key.trim() !== ''))
+  const unset: string[] = []
+  for (const key of loadedKeys) {
+    if (currentKeys.has(key)) {
+      continue
+    }
+    if (isEnvKeyLocked(key, routePortEnvVars)) {
+      continue
+    }
+    unset.push(key)
+  }
+  return unset
+}
