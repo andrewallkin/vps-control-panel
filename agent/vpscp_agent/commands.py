@@ -1,3 +1,4 @@
+import gzip
 import os
 import subprocess
 import threading
@@ -36,6 +37,13 @@ class Runner(Protocol):
     ) -> CommandResult: ...
 
     def stream_to_file(
+        self,
+        args: list[str],
+        path: Path,
+        timeout: float | None = 120,
+    ) -> None: ...
+
+    def stream_to_gzip_file(
         self,
         args: list[str],
         path: Path,
@@ -138,6 +146,39 @@ def stream_to_file(
         raise
 
 
+def stream_to_gzip_file(
+    args: list[str],
+    path: Path,
+    timeout: float | None = 120,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with gzip.open(path, "wb") as stdout_file:
+            proc = subprocess.Popen(
+                args,
+                stdout=stdout_file,
+                stderr=subprocess.PIPE,
+                env=os.environ,
+            )
+            try:
+                _, stderr_bytes = proc.communicate(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                path.unlink(missing_ok=True)
+                raise
+        stderr = (stderr_bytes or b"").decode(errors="replace")
+        result = CommandResult(proc.returncode or 0, "", stderr)
+        if result.returncode != 0:
+            path.unlink(missing_ok=True)
+            raise CommandError(result)
+    except CommandError:
+        raise
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+
+
 def pipe_through(
     args: list[str],
     source: Iterator[bytes],
@@ -182,4 +223,5 @@ def pipe_through(
 
 
 run_command.stream_to_file = stream_to_file  # type: ignore[attr-defined]
+run_command.stream_to_gzip_file = stream_to_gzip_file  # type: ignore[attr-defined]
 run_command.pipe_through = pipe_through  # type: ignore[attr-defined]

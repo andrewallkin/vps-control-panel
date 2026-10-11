@@ -330,7 +330,6 @@ def _write_safety_dump(
     restore_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     path = _safety_dump_path(restore_dir)
     admin = psql.admin_user()
-    plain = path.with_suffix("")
     args = [
         "docker",
         "exec",
@@ -339,14 +338,7 @@ def _write_safety_dump(
         "-U",
         admin,
     ]
-    runner.stream_to_file(args, plain, 120)
-    with plain.open("rb") as src, gzip.open(path, "wb") as dst:
-        while True:
-            chunk = src.read(1024 * 1024)
-            if not chunk:
-                break
-            dst.write(chunk)
-    plain.unlink(missing_ok=True)
+    runner.stream_to_gzip_file(args, path, 120)
     os.chmod(path, 0o600)
     return path
 

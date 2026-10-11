@@ -76,6 +76,7 @@ def test_empty_cluster_skips_stop_and_safety_dump(restore_job_env):
     assert result["safety_dump"] is None
     assert not any(c["args"][1:3] == ["compose", "-p"] for c in runner.calls)
     assert runner.stream_calls == []
+    assert runner.stream_gzip_calls == []
     assert runner.pipe_through_calls
     assert result["error_count"] == 0
 
@@ -107,11 +108,11 @@ def test_nonempty_cluster_stop_safety_load_reset_start(restore_job_env):
         upload_id=upload_id,
     )
 
-    dump_args = runner.stream_calls[0]["args"]
+    dump_args = runner.stream_gzip_calls[0]["args"]
     assert dump_args[:3] == ["docker", "exec", settings.pg_container]
     assert "pg_dumpall" in dump_args
-    safety_plain = runner.stream_calls[0]["path"]
-    assert safety_plain.name.startswith("safety-") and safety_plain.name.endswith(".sql")
+    safety_path = runner.stream_gzip_calls[0]["path"]
+    assert safety_path.name.startswith("safety-") and safety_path.name.endswith(".sql.gz")
     assert result["safety_dump"] is not None
     assert result["safety_dump"].endswith(".sql.gz")
     assert result["error_count"] == 2
@@ -145,7 +146,7 @@ def test_nonempty_cluster_stop_safety_load_reset_start(restore_job_env):
         )
     )
     assert stop_i < reset_i < start_i
-    assert runner.stream_calls and runner.pipe_through_calls
+    assert runner.stream_gzip_calls and runner.pipe_through_calls
 
 
 def test_wrong_confirm_returns_400(settings):

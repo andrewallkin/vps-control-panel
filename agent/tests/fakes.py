@@ -1,3 +1,4 @@
+import gzip
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -8,6 +9,7 @@ class FakeRunner:
     def __init__(self) -> None:
         self.calls: list[dict] = []
         self.stream_calls: list[dict] = []
+        self.stream_gzip_calls: list[dict] = []
         self.pipe_through_calls: list[dict] = []
         self.pipe_through_lines: list[str] = []
         self.pipe_through_returncode: int = 0
@@ -78,6 +80,17 @@ class FakeRunner:
         self.stream_calls.append({"args": args, "path": path, "timeout": timeout})
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(self.stream_payload)
+
+    def stream_to_gzip_file(
+        self,
+        args: list[str],
+        path: Path,
+        timeout: float | None = 120,
+    ) -> None:
+        self.stream_gzip_calls.append({"args": args, "path": path, "timeout": timeout})
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with gzip.open(path, "wb") as handle:
+            handle.write(self.stream_payload)
 
     def pipe_through(
         self,
