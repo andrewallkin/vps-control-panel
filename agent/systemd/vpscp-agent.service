@@ -1,0 +1,22 @@
+[Unit]
+Description=vps-control-panel privileged agent
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=vpscp
+ExecStart=/opt/vpscp/agent/.venv/bin/vpscp-agent
+Environment=VPSCP_DISK_PATHS=/
+RuntimeDirectory=vpscp
+RuntimeDirectoryMode=0750
+StateDirectory=vpscp
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

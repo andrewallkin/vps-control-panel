@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  agent:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen
+      - run: uv run ruff format --check .
+      - run: uv run ruff check .
+      - run: uv run pytest -v
+
+  shell:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - run: shellcheck install.sh
+
+  stack:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Validate compose file
+        run: |
+          cp stack/.env.example stack/.env
+          docker compose -f stack/docker-compose.yml config -q
+      - name: Build backup image
+        run: docker build -t vpscp-backup stack/backup
+      - name: Backup image uses PostgreSQL 16 client
+        shell: bash
+        run: docker run --rm --entrypoint pg_dumpall vpscp-backup --version | grep -E 'PostgreSQL\) 16\.'
