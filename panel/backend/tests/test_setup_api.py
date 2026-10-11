@@ -22,8 +22,16 @@ def _setup_transport(agent_requests, job_status="running"):
         path = request.url.path
         if path == "/v1/restore/uploads" and request.method == "POST":
             return httpx.Response(200, json={"upload_id": "up-1"})
+        if (
+            path.startswith("/v1/restore/uploads/")
+            and request.method == "GET"
+            and "/complete" not in path
+        ):
+            return httpx.Response(200, json={"received": 0})
         if path.startswith("/v1/restore/uploads/") and request.method == "PUT":
             return httpx.Response(200, json={"received": len(request.content)})
+        if path.startswith("/v1/restore/uploads/") and request.method == "DELETE":
+            return httpx.Response(204)
         if path.endswith("/complete") and request.method == "POST":
             return httpx.Response(
                 200,
@@ -222,6 +230,16 @@ def test_upload_requires_step_up_after_completed(setup_client, auth, agent_reque
     assert response.status_code == 403
     assert response.json() == {"detail": "step_up_required"}
     assert len(agent_requests) == 0
+
+
+def test_delete_upload_proxies(setup_client, auth, agent_requests):
+    response = setup_client.delete(
+        "/api/setup/uploads/up-1",
+        headers=csrf_headers(auth),
+    )
+    assert response.status_code == 204
+    assert agent_requests[-1].method == "DELETE"
+    assert agent_requests[-1].url.path == "/v1/restore/uploads/up-1"
 
 
 def test_upload_allowed_during_first_run_without_step_up(setup_client, auth, agent_requests):

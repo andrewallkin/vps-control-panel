@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DbSession
 
@@ -171,6 +171,28 @@ async def upload_chunk(
         body,
         params={"offset": offset},
     )
+
+
+@router.get("/api/setup/uploads/{upload_id}")
+async def get_upload(
+    upload_id: str,
+    request: Request,
+    db: Annotated[DbSession, Depends(get_db)],
+    session: Annotated[Session, Depends(current_session)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+) -> Any:
+    _require_step_up_if_completed(request, db, session)
+    return await agent.get(f"/v1/restore/uploads/{upload_id}")
+
+
+@router.delete("/api/setup/uploads/{upload_id}", status_code=204)
+async def delete_upload(
+    upload_id: str,
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(require_setup_mutate)],
+) -> Response:
+    await agent.delete(f"/v1/restore/uploads/{upload_id}")
+    return Response(status_code=204)
 
 
 @router.post("/api/setup/uploads/{upload_id}/complete")
