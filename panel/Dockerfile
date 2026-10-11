@@ -21,7 +21,8 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 COPY --from=frontend-build /build/dist ./static
 
-RUN useradd -u 10001 panel && chown -R panel:panel /app
+RUN useradd -u 10001 panel && chown -R panel:panel /app \
+    && mkdir -p /data && chown panel:panel /data && chmod 0750 /data
 
 USER 10001
 
