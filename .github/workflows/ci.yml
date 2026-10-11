@@ -19,6 +19,43 @@ jobs:
       - run: uv run ruff check .
       - run: uv run pytest -v
 
+  nginx-golden:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: nginx -t on golden site configs
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          mkdir -p "$work/conf.d" "$work/certs/example.com" "$work/certs/example.org"
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+            -keyout "$work/certs/example.com/privkey.pem" \
+            -out "$work/certs/example.com/fullchain.pem" \
+            -subj "/CN=example.com" 2>/dev/null
+          openssl req -x509 -nodes -newkey rsa:2048 -days 1 \
+            -keyout "$work/certs/example.org/privkey.pem" \
+            -out "$work/certs/example.org/fullchain.pem" \
+            -subj "/CN=example.org" 2>/dev/null
+          for name in spa strava root_www panel; do
+            sed \
+              -e 's|/etc/letsencrypt/live/example.com/|/etc/certs/example.com/|g' \
+              -e 's|/etc/letsencrypt/live/example.org/|/etc/certs/example.org/|g' \
+              "agent/tests/golden/${name}.conf" > "$work/conf.d/${name}.conf"
+          done
+          cat > "$work/nginx.conf" <<'EOF'
+          events {}
+          http {
+            include /etc/nginx/conf.d/*.conf;
+          }
+          EOF
+          docker run --rm \
+            -v "$work/nginx.conf:/etc/nginx/nginx.conf:ro" \
+            -v "$work/conf.d:/etc/nginx/conf.d:ro" \
+            -v "$work/certs:/etc/certs:ro" \
+            nginx:1.24 nginx -t
+
   agent-integration:
     runs-on: ubuntu-24.04
     defaults:

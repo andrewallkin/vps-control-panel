@@ -1,8 +1,11 @@
+import type { ReactNode } from 'react'
 import { Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { isAuthenticated, useAuthMe } from '../hooks/useAuthMe'
 import { DashboardPage } from '../pages/DashboardPage'
+import { DomainsPage } from '../pages/DomainsPage'
 import { LoginPage } from '../pages/LoginPage'
+import { SettingsPage } from '../pages/SettingsPage'
 import { SetupPage } from '../pages/SetupPage'
 
 function AuthLoading() {
@@ -26,7 +29,7 @@ function RequireAuth() {
   return <Outlet />
 }
 
-function DashboardEntry() {
+function RequireSetupComplete({ children }: { children: ReactNode }) {
   const { data: me, error, isPending } = useAuthMe()
   const auth = isAuthenticated(me, error, isPending)
 
@@ -39,7 +42,31 @@ function DashboardEntry() {
   if (!me.setup_complete) {
     return <Navigate to="/setup" replace />
   }
-  return <DashboardPage />
+  return children
+}
+
+function DashboardEntry() {
+  return (
+    <RequireSetupComplete>
+      <DashboardPage />
+    </RequireSetupComplete>
+  )
+}
+
+function DomainsEntry() {
+  return (
+    <RequireSetupComplete>
+      <DomainsPage />
+    </RequireSetupComplete>
+  )
+}
+
+function SettingsEntry() {
+  return (
+    <RequireSetupComplete>
+      <SettingsPage />
+    </RequireSetupComplete>
+  )
 }
 
 function SetupEntry() {
@@ -65,6 +92,8 @@ export function AppRoutes() {
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
           <Route index element={<DashboardEntry />} />
+          <Route path="domains" element={<DomainsEntry />} />
+          <Route path="settings" element={<SettingsEntry />} />
         </Route>
         <Route path="setup" element={<SetupEntry />} />
       </Route>

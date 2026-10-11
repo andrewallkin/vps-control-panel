@@ -13,6 +13,7 @@ from vpscp_panel.auth import router as auth_router
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.db import init_db, run_migrations
 from vpscp_panel.routes.dashboard import router as dashboard_router
+from vpscp_panel.routes.domains_api import router as domains_api_router
 from vpscp_panel.routes.jobs import router as jobs_router
 from vpscp_panel.routes.metrics import router as metrics_router
 from vpscp_panel.routes.setup import router as setup_router
@@ -72,7 +73,7 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
 
     @app.exception_handler(AgentError)
     async def handle_agent_error(_request: Request, exc: AgentError) -> JSONResponse:
-        status = exc.status if exc.status in (400, 404, 409) else 502
+        status = exc.status if exc.status in (400, 404, 409, 422) else 502
         return JSONResponse(status_code=status, content={"detail": exc.detail})
 
     static_root = resolved_settings.panel_static_dir.resolve()
@@ -86,6 +87,7 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
     app.include_router(jobs_router)
     app.include_router(dashboard_router)
     app.include_router(setup_router)
+    app.include_router(domains_api_router)
 
     @app.get("/api")
     @app.get("/api/")

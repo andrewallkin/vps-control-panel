@@ -63,6 +63,15 @@ class AgentClient:
         if response.is_error:
             raise AgentError(response.status_code, _detail_from_response(response))
 
+    async def put(self, path: str, json: dict[str, Any] | None = None) -> Any:
+        try:
+            response = await self._client.put(path, json=json)
+        except (httpx.ConnectError, httpx.TimeoutException) as exc:
+            raise AgentError(503, "agent unavailable") from exc
+        if response.is_error:
+            raise AgentError(response.status_code, _detail_from_response(response))
+        return response.json()
+
     async def put_bytes(
         self,
         path: str,

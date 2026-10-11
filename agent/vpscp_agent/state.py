@@ -36,6 +36,13 @@ MIGRATIONS: list[str] = [
         attached_at TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE domain (name TEXT PRIMARY KEY, zone_id TEXT NOT NULL, created_at TEXT NOT NULL);
+    CREATE TABLE hostname (fqdn TEXT PRIMARY KEY, site TEXT NOT NULL, domain TEXT NOT NULL REFERENCES domain(name));
+    CREATE INDEX ix_hostname_site ON hostname(site);
+    CREATE TABLE port_allocation (port INTEGER PRIMARY KEY, owner TEXT NOT NULL, env_var TEXT NOT NULL, UNIQUE(owner, env_var));
+    CREATE TABLE agent_setting (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    """,
 ]
 
 

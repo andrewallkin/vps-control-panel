@@ -2,8 +2,15 @@ import { apiFetch, apiJson } from './api'
 
 export type DatabaseStatus = 'pending' | 'empty' | 'restored'
 
+export type SetupStepId =
+  | 'account'
+  | 'database'
+  | 'cloudflare'
+  | 'domains'
+  | 'panel_hostname'
+
 export interface SetupStep {
-  id: 'account' | 'database'
+  id: SetupStepId
   status: string
 }
 

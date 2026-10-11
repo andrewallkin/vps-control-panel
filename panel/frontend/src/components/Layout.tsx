@@ -1,4 +1,4 @@
-import { Gauge, List, X } from '@phosphor-icons/react'
+import { Gauge, Globe, Gear, List, X } from '@phosphor-icons/react'
 import { useEffect, useId, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 
@@ -27,11 +27,21 @@ export function Layout() {
         : 'text-muted-foreground hover:bg-muted hover:text-foreground',
     ].join(' ')
 
-  const dashboardNav = (
-    <NavLink to="/" end className={navLinkClass} onClick={() => setDrawerOpen(false)}>
-      <Gauge weight="regular" aria-hidden className="size-5 shrink-0" />
-      Dashboard
-    </NavLink>
+  const mainNav = (
+    <>
+      <NavLink to="/" end className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+        <Gauge weight="regular" aria-hidden className="size-5 shrink-0" />
+        Dashboard
+      </NavLink>
+      <NavLink to="/domains" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+        <Globe weight="regular" aria-hidden className="size-5 shrink-0" />
+        Domains
+      </NavLink>
+      <NavLink to="/settings" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+        <Gear weight="regular" aria-hidden className="size-5 shrink-0" />
+        Settings
+      </NavLink>
+    </>
   )
 
   return (
@@ -44,7 +54,7 @@ export function Layout() {
             </Link>
           </div>
           <nav className="flex flex-col gap-1 p-3" aria-label="Main">
-            {dashboardNav}
+            {mainNav}
           </nav>
         </aside>
 
@@ -92,7 +102,7 @@ export function Layout() {
                   </button>
                 </div>
                 <nav className="flex flex-col gap-1 p-3" aria-label="Main">
-                  {dashboardNav}
+                  {mainNav}
                 </nav>
               </div>
             </div>

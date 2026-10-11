@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
@@ -191,9 +191,35 @@ async def dashboard_summary(
             }
         )
 
+    nearest_cert_expiry: str | None = None
+    try:
+        tls_rows = await agent.get("/v1/tls/status")
+    except AgentError:
+        tls_rows = None
+    if isinstance(tls_rows, list):
+        nearest_dt: datetime | None = None
+        for row in tls_rows:
+            if not isinstance(row, dict) or not row.get("exists"):
+                continue
+            not_after = _parse_finished_at(row.get("not_after"))
+            if not_after is None:
+                continue
+            if nearest_dt is None or not_after < nearest_dt:
+                nearest_dt = not_after
+        if nearest_dt is not None:
+            nearest_cert_expiry = nearest_dt.isoformat()
+            if nearest_dt - now < timedelta(days=14):
+                warnings.append(
+                    {
+                        "level": "warning",
+                        "code": "cert_expiring_soon",
+                        "message": "A TLS certificate expires in under 14 days",
+                    }
+                )
+
     return {
         "backup": backup,
         "warnings": warnings,
         "projects": {"total": 0, "up": 0, "unhealthy": 0},
-        "nearest_cert_expiry": None,
+        "nearest_cert_expiry": nearest_cert_expiry,
     }

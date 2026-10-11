@@ -14,6 +14,10 @@ class ConflictError(Exception):
     pass
 
 
+class NotFoundError(Exception):
+    pass
+
+
 RESERVED_DATABASES = frozenset({"postgres", "template0", "template1"})
 
 _LIST_DATABASES_SQL = """

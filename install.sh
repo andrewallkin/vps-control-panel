@@ -225,6 +225,44 @@ setup_stack() {
   bootstrap_panel_admin
 }
 
+agent_curl() {
+  curl -fsS --unix-socket "${AGENT_SOCKET}" "$@"
+}
+
+install_certbot_deploy_hook() {
+  local hook=/etc/letsencrypt/renewal-hooks/deploy/vpscp-reload-nginx.sh
+  local desired='#!/bin/sh
+systemctl reload nginx
+'
+  if [[ -f "${hook}" && "$(stat -c '%a' "${hook}")" == "755" && "$(cat "${hook}")" == "${desired}" ]]; then
+    return
+  fi
+  install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy
+  printf '%s' "${desired}" > "${hook}"
+  chmod 755 "${hook}"
+}
+
+bootstrap_public_ip_and_nginx() {
+  log "Server public IP and nginx base config"
+  local settings_json public_ipv4 trace
+  settings_json="$(agent_curl http://agent/v1/server/settings)"
+  public_ipv4="$(jq -r '.public_ipv4 // empty' <<<"${settings_json}")"
+  if [[ -z "${public_ipv4}" ]]; then
+    trace="$(curl -4 -fsS https://1.1.1.1/cdn-cgi/trace)" || die "failed to detect public IPv4 (Cloudflare trace request failed)"
+    public_ipv4="$(grep '^ip=' <<<"${trace}" | cut -d= -f2- | head -n1)"
+    [[ -n "${public_ipv4}" ]] || die "failed to detect public IPv4 (no ip= line in Cloudflare trace)"
+    agent_curl -X PUT -H 'Content-Type: application/json' \
+      -d "$(jq -nc --arg ip "${public_ipv4}" '{public_ipv4: $ip}')" \
+      http://agent/v1/server/settings \
+      || die "failed to store detected public IPv4 in agent settings"
+  fi
+  agent_curl -X POST http://agent/v1/nginx/refresh-cloudflare-ips \
+    || die "agent nginx refresh-cloudflare-ips failed"
+  agent_curl -X POST http://agent/v1/nginx/ensure-base \
+    || die "agent nginx ensure-base failed"
+  install_certbot_deploy_hook
+}
+
 verify() {
   log "Verifying"
   local attempt
@@ -236,6 +274,7 @@ verify() {
     [[ "${attempt}" == 30 ]] && die "agent did not become healthy; see: journalctl -u vpscp-agent"
     sleep 1
   done
+  bootstrap_public_ip_and_nginx
   (cd "${STACK_DIR}" && docker compose ps)
 }
 
