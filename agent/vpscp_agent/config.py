@@ -18,6 +18,7 @@ class Settings:
     backup_image: str
     max_upload_bytes: int
     letsencrypt_dir: Path
+    nginx_dir: Path
 
     @property
     def state_db_path(self) -> Path:
@@ -57,4 +58,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         backup_image=env.get("VPSCP_BACKUP_IMAGE", "vpscp-backup:local"),
         max_upload_bytes=int(env.get("VPSCP_MAX_UPLOAD_BYTES", "10737418240")),
         letsencrypt_dir=Path(env.get("VPSCP_LETSENCRYPT_DIR", "/etc/letsencrypt")),
+        nginx_dir=Path(env.get("VPSCP_NGINX_DIR", "/etc/nginx")),
     )

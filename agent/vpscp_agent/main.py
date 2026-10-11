@@ -16,12 +16,14 @@ from vpscp_agent.commands import CommandError, run_command
 from vpscp_agent.config import Settings
 from vpscp_agent.db_ops import ConflictError, NotFoundError
 from vpscp_agent.jobs import JobLockedError, JobManager
+from vpscp_agent.nginx_apply import NginxTestError
 from vpscp_agent.pg import Psql
 from vpscp_agent.routes import backup as backup_routes
 from vpscp_agent.routes import database as database_routes
 from vpscp_agent.routes import dns as dns_routes
 from vpscp_agent.routes import docker as docker_routes
 from vpscp_agent.routes import jobs as jobs_routes
+from vpscp_agent.routes import nginx as nginx_routes
 from vpscp_agent.routes import restore as restore_routes
 from vpscp_agent.routes import server as server_routes
 from vpscp_agent.routes import tls as tls_routes
@@ -84,6 +86,10 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     async def cloudflare_error_handler(_request: Request, exc: CloudflareError) -> JSONResponse:
         return JSONResponse(status_code=502, content={"detail": str(exc)})
 
+    @app.exception_handler(NginxTestError)
+    async def nginx_test_error_handler(_request: Request, exc: NginxTestError) -> JSONResponse:
+        return JSONResponse(status_code=422, content={"detail": exc.output})
+
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
         if request.url.path.startswith(
@@ -95,6 +101,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
                 "/v1/server",
                 "/v1/dns",
                 "/v1/tls",
+                "/v1/nginx",
             )
         ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -117,6 +124,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(server_routes.router)
     app.include_router(dns_routes.router)
     app.include_router(tls_routes.router)
+    app.include_router(nginx_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
