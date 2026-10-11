@@ -116,3 +116,133 @@ def test_verify_password_route_masks_audit(db_client):
         "db_name": "appdb",
         "password": "***",
     }
+
+
+def test_adopt_route_rotate_and_audit(db_client, monkeypatch):
+    client, runner = db_client
+    runner.on("pg_database", stdout="1\n")
+    runner.on("pg_roles", stdout="1\n")
+    runner.on("docker", stdout="")
+    fixed = "abcdefghijklmnopqrstuvwxyz012345"
+    monkeypatch.setattr("vpscp_agent.db_ops.generate_password", lambda: fixed)
+
+    response = client.post(
+        "/v1/db/adopt",
+        json={
+            "slug": "legacy-app",
+            "db_name": "legacyapp",
+            "db_user": "legacyapp_user",
+            "password_mode": "rotate",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"password": fixed}
+    [event] = audit.list_events(client.app.state.db)
+    assert event.operation == "db.adopt"
+    assert event.params == {
+        "slug": "legacy-app",
+        "db_name": "legacyapp",
+        "db_user": "legacyapp_user",
+        "password_mode": "rotate",
+    }
+
+
+def test_adopt_keep_verification_failed_400(db_client):
+    client, runner = db_client
+    runner.on("pg_database", stdout="1\n")
+    runner.on("pg_roles", stdout="1\n")
+    runner.on("SELECT 1", stdout="", returncode=1)
+
+    response = client.post(
+        "/v1/db/adopt",
+        json={
+            "slug": "legacy-app",
+            "db_name": "legacyapp",
+            "db_user": "legacyapp_user",
+            "password_mode": "keep",
+            "password": "wrong",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "password verification failed"
+
+
+def test_drop_route_204_and_audit(db_client):
+    client, runner = db_client
+    runner.on("docker", stdout="")
+    db = client.app.state.db
+    with db.connect() as conn:
+        from datetime import UTC, datetime
+
+        conn.execute(
+            "INSERT INTO db_attachment (db_name, db_user, slug, attached_at) VALUES (?, ?, ?, ?)",
+            (
+                "legacyapp",
+                "legacyapp_user",
+                "legacy-app",
+                datetime.now(UTC).isoformat(timespec="seconds"),
+            ),
+        )
+
+    response = client.post(
+        "/v1/db/drop",
+        json={"db_name": "legacyapp", "confirm": "legacyapp", "drop_role": False},
+    )
+
+    assert response.status_code == 204
+    assert response.content == b""
+    [event] = audit.list_events(db)
+    assert event.operation == "db.drop"
+    assert event.params == {
+        "db_name": "legacyapp",
+        "confirm": "legacyapp",
+        "drop_role": False,
+    }
+
+
+def test_drop_confirm_mismatch_400(db_client):
+    client, _runner = db_client
+
+    response = client.post(
+        "/v1/db/drop",
+        json={"db_name": "legacyapp", "confirm": "typo", "drop_role": False},
+    )
+
+    assert response.status_code == 400
+
+
+def test_drop_reserved_400(db_client):
+    client, _runner = db_client
+
+    response = client.post(
+        "/v1/db/drop",
+        json={"db_name": "postgres", "confirm": "postgres", "drop_role": False},
+    )
+
+    assert response.status_code == 400
+
+
+def test_detach_route_204(db_client):
+    client, _runner = db_client
+    db = client.app.state.db
+    with db.connect() as conn:
+        from datetime import UTC, datetime
+
+        conn.execute(
+            "INSERT INTO db_attachment (db_name, db_user, slug, attached_at) VALUES (?, ?, ?, ?)",
+            (
+                "legacyapp",
+                "legacyapp_user",
+                "legacy-app",
+                datetime.now(UTC).isoformat(timespec="seconds"),
+            ),
+        )
+
+    response = client.post("/v1/db/detach", json={"slug": "legacy-app"})
+
+    assert response.status_code == 204
+    [event] = audit.list_events(db)
+    assert event.operation == "db.detach"
+    assert event.params == {"slug": "legacy-app"}

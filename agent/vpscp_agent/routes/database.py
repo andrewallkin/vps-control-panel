@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Request
+from typing import Literal
+
+from fastapi import APIRouter, Request, Response
 from pydantic import BaseModel
 
 from vpscp_agent import audit
 from vpscp_agent.db_ops import (
     DatabaseInfo,
+    adopt_database,
     create_database,
+    detach,
+    drop_database,
     list_databases,
     list_roles,
     rotate_password,
@@ -29,6 +34,24 @@ class VerifyPasswordBody(BaseModel):
     db_user: SqlIdent
     db_name: SqlIdent
     password: str
+
+
+class AdoptDatabaseBody(BaseModel):
+    slug: Slug
+    db_name: SqlIdent
+    db_user: SqlIdent
+    password_mode: Literal["rotate", "keep"]
+    password: str | None = None
+
+
+class DropDatabaseBody(BaseModel):
+    db_name: SqlIdent
+    confirm: str
+    drop_role: bool = False
+
+
+class DetachDatabaseBody(BaseModel):
+    slug: Slug
 
 
 @router.get("/databases")
@@ -85,3 +108,59 @@ def post_verify_password(body: VerifyPasswordBody, request: Request) -> dict[str
             db_name=body.db_name,
         )
     return {"ok": ok}
+
+
+@router.post("/adopt")
+def post_adopt(body: AdoptDatabaseBody, request: Request) -> dict[str, str | None]:
+    if body.password is not None:
+        validate_env_value(body.password)
+    db = request.app.state.db
+    psql = request.app.state.psql
+    params: dict[str, object] = {
+        "slug": body.slug,
+        "db_name": body.db_name,
+        "db_user": body.db_user,
+        "password_mode": body.password_mode,
+    }
+    if body.password is not None:
+        params["password"] = body.password
+    with audit.audited(db, "db.adopt", params):
+        password = adopt_database(
+            psql,
+            db,
+            slug=body.slug,
+            db_name=body.db_name,
+            db_user=body.db_user,
+            password_mode=body.password_mode,
+            password=body.password,
+        )
+    return {"password": password}
+
+
+@router.post("/drop", status_code=204)
+def post_drop(body: DropDatabaseBody, request: Request) -> Response:
+    db = request.app.state.db
+    psql = request.app.state.psql
+    params = {
+        "db_name": body.db_name,
+        "confirm": body.confirm,
+        "drop_role": body.drop_role,
+    }
+    with audit.audited(db, "db.drop", params):
+        drop_database(
+            psql,
+            db,
+            db_name=body.db_name,
+            confirm=body.confirm,
+            drop_role=body.drop_role,
+        )
+    return Response(status_code=204)
+
+
+@router.post("/detach", status_code=204)
+def post_detach(body: DetachDatabaseBody, request: Request) -> Response:
+    db = request.app.state.db
+    params = {"slug": body.slug}
+    with audit.audited(db, "db.detach", params):
+        detach(db, slug=body.slug)
+    return Response(status_code=204)

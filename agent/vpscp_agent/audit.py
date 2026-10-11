@@ -12,7 +12,7 @@ from vpscp_agent.state import StateDB
 
 MASK = "***"
 _SECRET_NAME = re.compile(
-    r"password|token|secret|credential|passphrase|private_key|api_key|apikey|"
+    r"\bpassword\b|token|secret|credential|passphrase|private_key|api_key|apikey|"
     r"credentials|secret_key|service_account",
     re.IGNORECASE,
 )
