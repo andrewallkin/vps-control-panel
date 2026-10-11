@@ -32,7 +32,6 @@ export function isAuthenticated(
     return null
   }
   if (error instanceof ApiError && error.status === 401) {
-    setCachedCsrfToken(null)
     return false
   }
   return Boolean(data)

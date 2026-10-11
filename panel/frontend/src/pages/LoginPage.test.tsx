@@ -11,8 +11,18 @@ function jsonResponse(body: unknown, status = 200): Response {
   })
 }
 
+function stubWindowLocation(pathname: string) {
+  const assign = vi.fn()
+  Object.defineProperty(window, 'location', {
+    configurable: true,
+    value: { ...window.location, pathname, assign },
+  })
+  return assign
+}
+
 describe('LoginPage', () => {
   beforeEach(() => {
+    stubWindowLocation('/login')
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
