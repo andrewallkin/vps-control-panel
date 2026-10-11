@@ -116,9 +116,11 @@ def post_dns_upsert(body: DnsUpsertBody, request: Request) -> dict[str, Any]:
         if not public_ipv4:
             raise ValueError("public_ipv4 is not configured")
         zone_id, client = _zone_records_for_fqdn(request, body.fqdn)
-        existing = client.find_a_record(zone_id, body.fqdn)
-        if existing is not None and existing.get("type") != "A":
-            raise ValueError(f"existing DNS record is not type A: {body.fqdn!r}")
+        at_name = client.find_dns_records_at_name(zone_id, body.fqdn)
+        for row in at_name:
+            if row.get("type") != "A":
+                raise ValueError(f"existing DNS record is not type A: {body.fqdn!r}")
+        existing = next((row for row in at_name if row.get("type") == "A"), None)
         if (
             existing is not None
             and existing.get("comment") != MANAGED_BY_COMMENT

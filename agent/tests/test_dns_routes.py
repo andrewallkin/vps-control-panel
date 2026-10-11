@@ -168,6 +168,41 @@ def test_upsert_create_and_update(dns_client):
     assert second.status_code == 200
 
 
+def test_upsert_refuses_non_a_record(dns_client):
+    client, transport_holder, settings = dns_client
+    _register_domain(client, "example.com", "zone-1")
+    _set_public_ipv4(client, "203.0.113.10")
+    write_cloudflare_ini(settings, SECRET_TOKEN)
+    mutate_calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/dns_records") and request.method == "GET":
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "result": [
+                        {
+                            "id": "rec-cname",
+                            "type": "CNAME",
+                            "name": "app.example.com",
+                            "content": "other.example.com",
+                        }
+                    ],
+                    "result_info": {"page": 1, "total_pages": 1},
+                },
+            )
+        if request.method in ("POST", "PATCH"):
+            mutate_calls.append(request.method)
+        raise AssertionError(f"{request.method} {request.url}")
+
+    transport_holder["transport"] = httpx.MockTransport(handler)
+    response = client.post("/v1/dns/records/upsert", json={"fqdn": "app.example.com"})
+    assert response.status_code == 400
+    assert "not type a" in response.json()["detail"].lower()
+    assert mutate_calls == []
+
+
 def test_upsert_refuses_unmanaged_without_adopt(dns_client):
     client, transport_holder, settings = dns_client
     _register_domain(client, "example.com", "zone-1")

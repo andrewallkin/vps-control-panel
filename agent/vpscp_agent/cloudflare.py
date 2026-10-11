@@ -146,14 +146,14 @@ class CloudflareClient:
             return str(result["value"])
         return None
 
-    def find_a_record(self, zone_id: str, fqdn: str) -> dict[str, Any] | None:
+    def find_dns_records_at_name(self, zone_id: str, fqdn: str) -> list[dict[str, Any]]:
         page = 1
+        records: list[dict[str, Any]] = []
         while True:
             with self._client() as client:
                 response = client.get(
                     f"/zones/{zone_id}/dns_records",
                     params={
-                        "type": "A",
                         "name": fqdn,
                         "per_page": _PER_PAGE,
                         "page": page,
@@ -165,13 +165,19 @@ class CloudflareClient:
             batch = body.get("result")
             if isinstance(batch, list):
                 for row in batch:
-                    if isinstance(row, dict) and row.get("type") == "A":
-                        return row
+                    if isinstance(row, dict):
+                        records.append(row)
             result_info = body.get("result_info") or {}
             total_pages = int(result_info.get("total_pages") or page)
             if page >= total_pages:
                 break
             page += 1
+        return records
+
+    def find_a_record(self, zone_id: str, fqdn: str) -> dict[str, Any] | None:
+        for row in self.find_dns_records_at_name(zone_id, fqdn):
+            if row.get("type") == "A":
+                return row
         return None
 
     def upsert_a_record(
