@@ -98,6 +98,8 @@ def patch_project_env(
     unset_keys: list[str],
 ) -> None:
     _require_project(db, slug)
+    if not set_values and not unset_keys:
+        raise ValueError("at least one set or unset is required")
     overlap = set(set_values) & set(unset_keys)
     if overlap:
         raise ValueError(f"key cannot be in both set and unset: {sorted(overlap)!r}")

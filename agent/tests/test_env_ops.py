@@ -158,3 +158,35 @@ def test_unset_many_missing_key_no_raise():
     env = EnvFile.parse("A=1\n")
     env.unset_many(["MISSING"])
     assert env.get("A") == "1"
+
+
+def test_patch_empty_set_and_unset_returns_400_unchanged(env_client):
+    client, settings = env_client
+    slug = "budget-hq"
+    env_path = safe_project_path(settings.apps_dir, slug, ".env")
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    original = "FOO=bar\n"
+    write_env_atomic(env_path, EnvFile.parse(original))
+
+    response = client.patch(
+        f"/v1/projects/{slug}/env",
+        json={"set": {}, "unset": []},
+    )
+    assert response.status_code == 400
+    assert env_path.read_text() == original
+
+
+def test_patch_overlap_set_unset_returns_400_unchanged(env_client):
+    client, settings = env_client
+    slug = "budget-hq"
+    env_path = safe_project_path(settings.apps_dir, slug, ".env")
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    original = "FOO=bar\n"
+    write_env_atomic(env_path, EnvFile.parse(original))
+
+    response = client.patch(
+        f"/v1/projects/{slug}/env",
+        json={"set": {"FOO": "new"}, "unset": ["FOO"]},
+    )
+    assert response.status_code == 400
+    assert env_path.read_text() == original

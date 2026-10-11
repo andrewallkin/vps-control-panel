@@ -194,15 +194,6 @@ class PatchEnvBody(BaseModel):
     set: dict[str, str] = {}
     unset: list[str] = []
 
-    @model_validator(mode="after")
-    def validate_patch_fields(self) -> "PatchEnvBody":
-        if not self.set and not self.unset:
-            raise ValueError("at least one set or unset is required")
-        overlap = set(self.set) & set(self.unset)
-        if overlap:
-            raise ValueError("key cannot be in both set and unset")
-        return self
-
 
 class DeleteProjectBody(BaseModel):
     confirm: str
