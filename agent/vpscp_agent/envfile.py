@@ -99,6 +99,17 @@ class EnvFile:
             if not updated:
                 self._appended.append((key, value))
 
+    def unset_many(self, keys: list[str]) -> None:
+        for key in keys:
+            validate_env_key(key)
+        remove = set(keys)
+        self._segments = [
+            segment
+            for segment in self._segments
+            if not (isinstance(segment, _KvSegment) and segment.key in remove)
+        ]
+        self._appended = [(key, value) for key, value in self._appended if key not in remove]
+
     def render(self) -> str:
         lines: list[str] = []
         for segment in self._segments:

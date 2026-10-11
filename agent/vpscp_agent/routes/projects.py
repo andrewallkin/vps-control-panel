@@ -6,6 +6,12 @@ from pydantic import BaseModel, model_validator
 from vpscp_agent import audit
 from vpscp_agent.deploy_keys import ensure_deploy_key
 from vpscp_agent.jobs import JobLockedError
+from vpscp_agent.project_env import (
+    EnvEntriesResponse,
+    patch_project_env,
+    read_project_env,
+    write_project_env,
+)
 from vpscp_agent.projects import (
     DeleteProjectResult,
     ProjectRecord,
@@ -180,8 +186,64 @@ def post_pull(slug: Slug, request: Request) -> dict[str, str]:
         return pull_project(settings, db, runner, slug)
 
 
+class PutEnvBody(BaseModel):
+    content: str
+
+
+class PatchEnvBody(BaseModel):
+    set: dict[str, str] = {}
+    unset: list[str] = []
+
+    @model_validator(mode="after")
+    def validate_patch_fields(self) -> "PatchEnvBody":
+        if not self.set and not self.unset:
+            raise ValueError("at least one set or unset is required")
+        overlap = set(self.set) & set(self.unset)
+        if overlap:
+            raise ValueError("key cannot be in both set and unset")
+        return self
+
+
 class DeleteProjectBody(BaseModel):
     confirm: str
+
+
+@router.get("/{slug}/env", response_model=EnvEntriesResponse)
+def get_project_env_route(slug: Slug, request: Request, reveal: bool = False) -> EnvEntriesResponse:
+    db = request.app.state.db
+    settings = request.app.state.settings
+    return read_project_env(settings, db, slug, reveal=reveal)
+
+
+@router.put("/{slug}/env")
+def put_project_env_route(slug: Slug, body: PutEnvBody, request: Request) -> dict[str, str]:
+    db = request.app.state.db
+    settings = request.app.state.settings
+    params = {"slug": slug, "keys": []}
+    with audit.audited(db, "env.write", params):
+        keys = write_project_env(settings, db, slug, body.content)
+        params["keys"] = keys
+    return {"ok": "true"}
+
+
+@router.patch("/{slug}/env")
+def patch_project_env_route(slug: Slug, body: PatchEnvBody, request: Request) -> dict[str, str]:
+    db = request.app.state.db
+    settings = request.app.state.settings
+    params = {
+        "slug": slug,
+        "set": list(body.set.keys()),
+        "unset": list(body.unset),
+    }
+    with audit.audited(db, "env.patch", params):
+        patch_project_env(
+            settings,
+            db,
+            slug,
+            set_values=body.set,
+            unset_keys=body.unset,
+        )
+    return {"ok": "true"}
 
 
 @router.delete("/{slug}", response_model=DeleteProjectResult)
