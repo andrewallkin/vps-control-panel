@@ -153,21 +153,43 @@ def stream_to_gzip_file(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with gzip.open(path, "wb") as stdout_file:
-            proc = subprocess.Popen(
-                args,
-                stdout=stdout_file,
-                stderr=subprocess.PIPE,
-                env=os.environ,
-            )
-            try:
-                _, stderr_bytes = proc.communicate(timeout=timeout)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.communicate()
-                path.unlink(missing_ok=True)
-                raise
-        stderr = (stderr_bytes or b"").decode(errors="replace")
+        proc = subprocess.Popen(
+            args,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=os.environ,
+        )
+        stderr_collected: list[bytes] = []
+
+        def drain_stderr() -> None:
+            assert proc.stderr is not None
+            while True:
+                chunk = proc.stderr.read(65536)
+                if not chunk:
+                    break
+                stderr_collected.append(chunk)
+
+        stderr_thread = threading.Thread(target=drain_stderr, daemon=True)
+        stderr_thread.start()
+
+        try:
+            assert proc.stdout is not None
+            with gzip.open(path, "wb") as gzip_file:
+                while True:
+                    chunk = proc.stdout.read(65536)
+                    if not chunk:
+                        break
+                    gzip_file.write(chunk)
+            proc.wait(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.communicate()
+            path.unlink(missing_ok=True)
+            raise
+        finally:
+            stderr_thread.join()
+
+        stderr = b"".join(stderr_collected).decode(errors="replace")
         result = CommandResult(proc.returncode or 0, "", stderr)
         if result.returncode != 0:
             path.unlink(missing_ok=True)

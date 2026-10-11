@@ -1,6 +1,9 @@
+import gzip
+from pathlib import Path
+
 import pytest
 
-from vpscp_agent.commands import CommandError, run_command
+from vpscp_agent.commands import CommandError, run_command, stream_to_gzip_file
 
 
 def test_run_command_ok():
@@ -21,3 +24,9 @@ def test_run_command_error_is_scrubbed():
 
 def test_run_command_bytes_input():
     assert run_command(["cat"], input_data=b"abc").stdout == "abc"
+
+
+def test_stream_to_gzip_file_compresses_stdout(tmp_path: Path) -> None:
+    out = tmp_path / "out.gz"
+    stream_to_gzip_file(["sh", "-c", "printf hello"], out)
+    assert gzip.decompress(out.read_bytes()) == b"hello"
