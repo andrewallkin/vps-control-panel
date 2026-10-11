@@ -169,9 +169,9 @@ async def run_creation(db: Session, agent: AgentClient, slug: str) -> None:
             await handler(db, agent, project, state, ctx)
             step["status"] = "done"
             step["error"] = None
-        except AgentError as exc:
+        except Exception as exc:  # noqa: BLE001
             step["status"] = "failed"
-            step["error"] = exc.detail
+            step["error"] = str(exc)
             state["status"] = "failed"
             _save_state(db, project, state)
             return

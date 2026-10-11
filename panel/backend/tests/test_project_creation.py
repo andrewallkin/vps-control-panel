@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import httpx
 import pytest
+from conftest import login
 from sqlalchemy import select
 
 import vpscp_panel.db as db_module
@@ -206,3 +207,41 @@ async def test_run_creation_retries_after_nginx_failure(db_session):
     assert state["status"] == "ready"
     assert len(register_posts) == 1
     assert nginx_attempts["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_run_creation_fails_when_clone_returns_no_job_id(db_session):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/projects" and request.method == "POST":
+            return httpx.Response(200, json={"slug": "myapp"})
+        if path == "/v1/projects/myapp/clone" and request.method == "POST":
+            return httpx.Response(200, json={})
+        return httpx.Response(404, json={"detail": f"unexpected {request.method} {path}"})
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(db_session)
+
+    await run_creation(db_session, agent, "myapp")
+
+    project = db_session.get(Project, "myapp")
+    assert project is not None
+    state = json.loads(project.creation_state)
+    assert state["status"] == "failed"
+    step_by_name = {s["name"]: s for s in state["steps"]}
+    assert step_by_name["clone"]["status"] == "failed"
+    assert step_by_name["clone"]["error"]
+
+
+def test_delete_project_requires_csrf(client, admin_user, frozen_time, db_session):
+    login(client, admin_user, frozen_time)
+    _make_project(db_session, slug="delme")
+
+    response = client.request(
+        "DELETE",
+        "/api/projects/delme",
+        json={"confirm": "delme"},
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"detail": "csrf_failed"}

@@ -404,7 +404,8 @@ async def delete_project(
     body: DeleteProjectBody,
     db: Annotated[DbSession, Depends(get_db)],
     agent: Annotated[AgentClient, Depends(_agent)],
-    _session: Annotated[Session, Depends(require_step_up)],
+    _session: Annotated[Session, Depends(require_csrf)],
+    _step_up: Annotated[Session, Depends(require_step_up)],
 ) -> Response:
     if body.confirm != slug:
         raise HTTPException(status_code=400, detail="confirm must match slug")
