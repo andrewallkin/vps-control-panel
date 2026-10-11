@@ -1,0 +1,24 @@
+:root {
+  --color-background: #0F172A;
+  --color-card: #1B2336;
+  --color-muted: #272F42;
+  --color-muted-foreground: #94A3B8;
+  --color-foreground: #F8FAFC;
+  --color-primary: #1E293B;
+  --color-secondary: #334155;
+  --color-border: #475569;
+  --color-accent: #22C55E;
+  --color-destructive: #EF4444;
+  --color-ring: #FFFFFF;
+  --color-warning: #F59E0B;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
