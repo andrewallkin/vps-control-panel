@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -7,6 +8,7 @@ from fastapi.responses import FileResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from vpscp_panel import __version__
+from vpscp_panel.auth import router as auth_router
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.db import init_db, run_migrations
 
@@ -53,6 +55,7 @@ def create_app(settings: PanelSettings | None = None, agent: Any = None) -> Fast
     app = FastAPI(lifespan=lifespan)
     app.state.settings = resolved_settings
     app.state.agent = agent
+    app.state.clock = lambda: datetime.now(UTC)
     app.add_middleware(SecurityHeadersMiddleware)
 
     static_root = resolved_settings.panel_static_dir.resolve()
@@ -60,6 +63,8 @@ def create_app(settings: PanelSettings | None = None, agent: Any = None) -> Fast
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    app.include_router(auth_router)
 
     @app.get("/api")
     @app.get("/api/")
