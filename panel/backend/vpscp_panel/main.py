@@ -61,6 +61,11 @@ def create_app(settings: PanelSettings | None = None, agent: Any = None) -> Fast
     def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
 
+    @app.get("/api")
+    @app.get("/api/")
+    async def api_root() -> None:
+        raise HTTPException(status_code=404, detail="Not Found")
+
     @app.api_route(
         "/api/{path:path}",
         methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
