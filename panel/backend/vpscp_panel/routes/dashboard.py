@@ -46,6 +46,8 @@ def _parse_finished_at(value: str | None) -> datetime | None:
 
 
 def _backup_overdue(last_run: Any, schedule_hours: str | None, now: datetime) -> bool:
+    if schedule_hours is None:
+        return False
     if last_run is None:
         return True
     if not isinstance(last_run, dict):
@@ -53,8 +55,6 @@ def _backup_overdue(last_run: Any, schedule_hours: str | None, now: datetime) ->
     finished_at = _parse_finished_at(last_run.get("finished_at"))
     if finished_at is None:
         return True
-    if schedule_hours is None:
-        return False
     try:
         threshold = _backup_threshold_hours(schedule_hours)
     except ValueError:
