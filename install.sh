@@ -55,6 +55,9 @@ configure_docker() {
   mkdir -p /etc/docker
   if [[ -s /etc/docker/daemon.json ]]; then
     current="$(cat /etc/docker/daemon.json)"
+    if ! jq -e . >/dev/null 2>&1 <<<"${current}"; then
+      die "/etc/docker/daemon.json is not valid JSON; fix it before re-running install"
+    fi
   fi
   local merged
   merged="$(jq -S -s '.[0] * .[1]' <(printf '%s' "${current}") <(printf '%s' "${desired}"))"
@@ -114,12 +117,18 @@ setup_swap() {
     echo "already present"
     return
   fi
-  fallocate -l "${SWAP_SIZE}" /swapfile
+  if [[ ! -f /swapfile ]]; then
+    fallocate -l "${SWAP_SIZE}" /swapfile
+  fi
   chmod 600 /swapfile
-  mkswap /swapfile
+  if ! blkid -o value -s TYPE /swapfile 2>/dev/null | grep -qx swap; then
+    if ! file -b /swapfile 2>/dev/null | grep -qi 'swap file'; then
+      mkswap /swapfile
+    fi
+  fi
   swapon /swapfile
   grep -q '^/swapfile ' /etc/fstab || echo '/swapfile none swap sw 0 0' >> /etc/fstab
-  echo "created ${SWAP_SIZE} /swapfile"
+  echo "swap active (/swapfile)"
 }
 
 setup_directories() {
@@ -149,9 +158,10 @@ setup_stack() {
     local password
     password="$(openssl rand -base64 48 | tr -d '/+=\n' | cut -c1-40)"
     sed "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${password}|" "${STACK_DIR}/.env.example" > "${STACK_DIR}/.env"
-    chmod 600 "${STACK_DIR}/.env"
     echo "generated ${STACK_DIR}/.env"
   fi
+  chown root:root "${STACK_DIR}/.env"
+  chmod 600 "${STACK_DIR}/.env"
   (cd "${STACK_DIR}" && docker compose up -d --build)
 }
 

@@ -36,4 +36,5 @@ jobs:
       - name: Build backup image
         run: docker build -t vpscp-backup stack/backup
       - name: Backup image uses PostgreSQL 16 client
-        run: docker run --rm --entrypoint pg_dumpall vpscp-backup --version | grep -E '\(PostgreSQL\) 16\.'
+        shell: bash
+        run: docker run --rm --entrypoint pg_dumpall vpscp-backup --version | grep -E 'PostgreSQL\) 16\.'
