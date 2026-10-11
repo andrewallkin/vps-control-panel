@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -109,3 +110,9 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
         raise HTTPException(status_code=404, detail="Not Found")
 
     return app
+
+
+if os.environ.get("PANEL_SECRET_KEY"):
+    app = create_app()
+else:
+    app = None

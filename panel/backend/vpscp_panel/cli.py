@@ -84,6 +84,16 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
     _print_totp(args.username, secret)
 
 
+def cmd_has_admin(_args: argparse.Namespace) -> None:
+    settings = PanelSettings()
+    run_migrations(settings)
+    init_db(settings)
+    assert db_module.SessionLocal is not None
+    with db_module.SessionLocal() as db:
+        if _get_single_admin(db) is None:
+            sys.exit(1)
+
+
 def cmd_reset_totp(_args: argparse.Namespace) -> None:
     settings = PanelSettings()
     run_migrations(settings)
@@ -123,6 +133,9 @@ def main(argv: list[str] | None = None) -> None:
     create.add_argument("--username", required=True)
     create.add_argument("--force", action="store_true")
     create.set_defaults(func=cmd_create_admin)
+
+    has_admin = sub.add_parser("has-admin")
+    has_admin.set_defaults(func=cmd_has_admin)
 
     reset_totp = sub.add_parser("reset-totp")
     reset_totp.set_defaults(func=cmd_reset_totp)

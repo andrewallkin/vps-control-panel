@@ -39,8 +39,29 @@ services:
     networks:
       - postgres-net
 
+  panel:
+    build:
+      context: ../panel
+    image: vpscp-panel:local
+    restart: always
+    env_file: panel.env
+    group_add:
+      - "${VPSCP_GID}"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /run/vpscp:/run/vpscp
+      - panel_data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+
 volumes:
   pgdata:
+  panel_data:
 
 networks:
   postgres-net:

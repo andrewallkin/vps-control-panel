@@ -147,6 +147,26 @@ def test_reset_totp(cli_env):
     assert before != after
 
 
+def test_has_admin_exits_1_when_no_admin(cli_env):
+    result = _run_cli("has-admin")
+    assert result.returncode == 1
+    assert result.stdout == ""
+    assert "otpauth://" not in result.stdout + result.stderr
+
+
+def test_has_admin_exits_0_when_admin_exists(cli_env):
+    _run_cli(
+        "create-admin",
+        "--username",
+        "admin",
+        env={"VPSCP_ADMIN_PASSWORD": "long-enough-password"},
+    )
+    result = _run_cli("has-admin")
+    assert result.returncode == 0
+    assert result.stdout == ""
+    assert "otpauth://" not in result.stdout + result.stderr
+
+
 def test_reset_password(cli_env):
     _run_cli(
         "create-admin",

@@ -63,6 +63,7 @@ jobs:
       - name: Validate compose file
         run: |
           cp stack/.env.example stack/.env
+          cp stack/panel.env.example stack/panel.env
           docker compose -f stack/docker-compose.yml config -q
       - name: Build backup image
         run: docker build -t vpscp-backup stack/backup
