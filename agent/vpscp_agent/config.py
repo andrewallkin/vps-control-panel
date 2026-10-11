@@ -14,10 +14,29 @@ class Settings:
     disk_paths: tuple[str, ...]
     metrics_interval_seconds: int
     metrics_retention_days: int
+    pg_container: str
+    backup_image: str
+    max_upload_bytes: int
 
     @property
     def state_db_path(self) -> Path:
         return self.state_dir / "state.db"
+
+    @property
+    def backup_state_dir(self) -> Path:
+        return self.state_dir / "backup"
+
+    @property
+    def dumps_dir(self) -> Path:
+        return self.state_dir / "dumps"
+
+    @property
+    def restore_dir(self) -> Path:
+        return self.state_dir / "restore"
+
+    @property
+    def stack_env_path(self) -> Path:
+        return self.stack_dir / ".env"
 
 
 def load_settings(env: Mapping[str, str] | None = None) -> Settings:
@@ -33,4 +52,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         ),
         metrics_interval_seconds=int(env.get("VPSCP_METRICS_INTERVAL", "60")),
         metrics_retention_days=int(env.get("VPSCP_METRICS_RETENTION_DAYS", "7")),
+        pg_container=env.get("VPSCP_PG_CONTAINER", "postgres-central"),
+        backup_image=env.get("VPSCP_BACKUP_IMAGE", "vpscp-backup:local"),
+        max_upload_bytes=int(env.get("VPSCP_MAX_UPLOAD_BYTES", "10737418240")),
     )
