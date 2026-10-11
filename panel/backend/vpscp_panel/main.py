@@ -16,6 +16,7 @@ from vpscp_panel.routes.dashboard import router as dashboard_router
 from vpscp_panel.routes.domains_api import router as domains_api_router
 from vpscp_panel.routes.jobs import router as jobs_router
 from vpscp_panel.routes.metrics import router as metrics_router
+from vpscp_panel.routes.projects_api import router as projects_api_router
 from vpscp_panel.routes.setup import router as setup_router
 
 CONTENT_SECURITY_POLICY = (
@@ -88,6 +89,7 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
     app.include_router(dashboard_router)
     app.include_router(setup_router)
     app.include_router(domains_api_router)
+    app.include_router(projects_api_router)
 
     @app.get("/api")
     @app.get("/api/")

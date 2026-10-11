@@ -6,6 +6,17 @@ from pydantic import AfterValidator
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 _ACME_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+SLUG_RE = re.compile(r"^[a-z][a-z0-9-]{1,38}$")
+SQL_IDENT_RE = re.compile(r"^[a-z][a-z0-9_]{1,62}$")
+ENV_KEY_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
+ROUTE_PATH_RE = re.compile(r"^/[A-Za-z0-9/_-]*$")
+_GITHUB_OWNER_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,100}$")
+_SSH_REPO_RE = re.compile(r"^git@github\.com:([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})\.git$")
+_HTTPS_REPO_RE = re.compile(
+    r"^https://github\.com/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})(\.git)?$"
+)
+RESERVED_SLUGS = frozenset({"panel", "vpscp-panel", "vpscp"})
 
 
 def validate_domain(value: str) -> str:
@@ -30,5 +41,49 @@ def validate_acme_email(value: str | None) -> str | None:
     return value
 
 
+def validate_slug(value: str) -> str:
+    if not SLUG_RE.fullmatch(value):
+        raise ValueError(f"invalid slug: {value!r}")
+    if value in RESERVED_SLUGS:
+        raise ValueError(f"reserved slug: {value!r}")
+    return value
+
+
+def validate_sql_ident(value: str) -> str:
+    if not SQL_IDENT_RE.fullmatch(value):
+        raise ValueError(f"invalid sql identifier: {value!r}")
+    return value
+
+
+def validate_env_key(value: str) -> str:
+    if not ENV_KEY_RE.fullmatch(value):
+        raise ValueError(f"invalid env key: {value!r}")
+    return value
+
+
+def validate_route_path(value: str) -> str:
+    if not ROUTE_PATH_RE.fullmatch(value):
+        raise ValueError(f"invalid route path: {value!r}")
+    return value
+
+
+def validate_branch(value: str) -> str:
+    if not _BRANCH_RE.fullmatch(value) or ".." in value or value.startswith("-"):
+        raise ValueError(f"invalid branch: {value!r}")
+    return value
+
+
+def validate_repo_url(value: str) -> str:
+    if _SSH_REPO_RE.fullmatch(value) or _HTTPS_REPO_RE.fullmatch(value):
+        return value
+    raise ValueError(f"invalid repo url: {value!r}")
+
+
 DomainName = Annotated[str, AfterValidator(validate_domain)]
 Subdomain = Annotated[str, AfterValidator(validate_subdomain)]
+Slug = Annotated[str, AfterValidator(validate_slug)]
+SqlIdent = Annotated[str, AfterValidator(validate_sql_ident)]
+EnvKey = Annotated[str, AfterValidator(validate_env_key)]
+RoutePath = Annotated[str, AfterValidator(validate_route_path)]
+BranchName = Annotated[str, AfterValidator(validate_branch)]
+RepoUrl = Annotated[str, AfterValidator(validate_repo_url)]
