@@ -30,6 +30,10 @@ packages = ["vpscp_agent"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+markers = [
+    "integration: needs a real postgres container",
+]
+addopts = "-m 'not integration'"
 
 [tool.ruff]
 line-length = 100

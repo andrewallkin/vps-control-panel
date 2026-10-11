@@ -19,6 +19,37 @@ jobs:
       - run: uv run ruff check .
       - run: uv run pytest -v
 
+  agent-integration:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: Start postgres
+        run: |
+          docker network create postgres-net
+          docker run -d --name it-postgres --network postgres-net \
+            -e POSTGRES_USER=pgadmin -e POSTGRES_PASSWORD=itpass postgres:16-alpine
+          for i in $(seq 1 30); do docker exec it-postgres pg_isready -U pgadmin && break; sleep 1; done
+      - run: uv sync --frozen
+      - run: uv run pytest -m integration -v
+        env:
+          VPSCP_IT_PG_CONTAINER: it-postgres
+          VPSCP_IT_PG_PASSWORD: itpass
+
+  backup:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: stack/backup
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --frozen --group dev
+      - run: uv run pytest -q
+
   shell:
     runs-on: ubuntu-24.04
     steps:
