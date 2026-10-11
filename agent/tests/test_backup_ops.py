@@ -1,3 +1,4 @@
+import base64
 import json
 
 import pytest
@@ -76,6 +77,12 @@ def test_normalize_service_account_wrong_type_rejected():
     bad = json.dumps({**SA_DOC, "type": "authorized_user"})
     with pytest.raises(ValueError, match="service_account"):
         normalize_service_account(bad)
+
+
+def test_normalize_service_account_non_object_rejected():
+    array_b64 = base64.b64encode(b"[1,2,3]").decode()
+    with pytest.raises(ValueError, match="invalid service account JSON"):
+        normalize_service_account(array_b64)
 
 
 def test_backup_settings_in_normalizes_schedule_hours():

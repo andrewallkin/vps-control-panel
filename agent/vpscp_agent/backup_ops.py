@@ -44,7 +44,7 @@ def normalize_service_account(text: str) -> tuple[str, str]:
         except json.JSONDecodeError as exc:
             raise ValueError("invalid service account JSON") from exc
         if not isinstance(data, dict):
-            raise TypeError("invalid service account JSON")
+            raise ValueError("invalid service account JSON")
         return _parse_service_account_json(data)
     try:
         raw = base64.b64decode(stripped, validate=True)
@@ -55,7 +55,7 @@ def normalize_service_account(text: str) -> tuple[str, str]:
     except json.JSONDecodeError as exc:
         raise ValueError("invalid service account JSON in base64") from exc
     if not isinstance(data, dict):
-        raise TypeError("invalid service account JSON in base64")
+        raise ValueError("invalid service account JSON in base64")  # noqa: TRY004
     return _parse_service_account_json(data)
 
 
