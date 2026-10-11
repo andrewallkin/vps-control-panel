@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from vpscp_agent import audit
-from vpscp_agent.restore import UploadInfo, UploadStore
+from vpscp_agent.restore import UploadInfo, UploadStore, restore_cluster
 
 router = APIRouter(prefix="/v1/restore", tags=["restore"])
 
@@ -14,6 +14,11 @@ class CreateUploadBody(BaseModel):
 
 class CompleteUploadBody(BaseModel):
     sha256: str = Field(min_length=64, max_length=64)
+
+
+class RestoreRunBody(BaseModel):
+    upload_id: str
+    confirm: str
 
 
 def _store(request: Request) -> UploadStore:
@@ -62,6 +67,35 @@ def get_upload(upload_id: str, request: Request) -> dict[str, object]:
         "received": meta.received,
         "created_at": meta.created_at,
     }
+
+
+@router.post("/run", status_code=202)
+def run_restore(body: RestoreRunBody, request: Request) -> dict[str, str]:
+    if body.confirm != "RESTORE":
+        raise ValueError("confirm must be RESTORE")
+    settings = request.app.state.settings
+    psql = request.app.state.psql
+    runner = request.app.state.runner
+    db = request.app.state.db
+    jobs = request.app.state.jobs
+
+    def body_fn(ctx):
+        return restore_cluster(
+            ctx,
+            settings=settings,
+            psql=psql,
+            runner=runner,
+            db=db,
+            upload_id=body.upload_id,
+        )
+
+    job = jobs.start(
+        "db.restore_cluster",
+        {"upload_id": body.upload_id},
+        body_fn,
+        lock_key="postgres",
+    )
+    return {"job_id": job.id}
 
 
 @router.delete("/uploads/{upload_id}", status_code=204)

@@ -137,6 +137,14 @@ class JobManager:
         for job_id in finished[: len(finished) - self._keep]:
             del self._jobs[job_id]
 
+    def is_locked(self, key: str) -> bool:
+        with self._lock:
+            holder = self._lock_keys.get(key)
+            if holder is None:
+                return False
+            job = self._jobs.get(holder)
+            return job is not None and job.status == "running"
+
     def get(self, job_id: str) -> Job | None:
         with self._lock:
             return self._jobs.get(job_id)

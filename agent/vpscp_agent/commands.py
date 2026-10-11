@@ -1,6 +1,7 @@
 import os
 import subprocess
-from collections.abc import Mapping
+import threading
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
@@ -40,6 +41,14 @@ class Runner(Protocol):
         path: Path,
         timeout: float | None = 120,
     ) -> None: ...
+
+    def pipe_through(
+        self,
+        args: list[str],
+        source: Iterator[bytes],
+        on_line: Callable[[str], None],
+        timeout: float | None = 120,
+    ) -> int: ...
 
 
 def _finish(result: CommandResult, *, check: bool) -> CommandResult:
@@ -129,4 +138,48 @@ def stream_to_file(
         raise
 
 
+def pipe_through(
+    args: list[str],
+    source: Iterator[bytes],
+    on_line: Callable[[str], None],
+    timeout: float | None = 120,
+) -> int:
+    proc = subprocess.Popen(
+        args,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=os.environ,
+    )
+    assert proc.stdin is not None
+    assert proc.stdout is not None
+
+    def writer() -> None:
+        try:
+            for chunk in source:
+                proc.stdin.write(chunk)
+            proc.stdin.close()
+        except Exception:
+            proc.kill()
+            raise
+
+    thread = threading.Thread(target=writer, daemon=True)
+    thread.start()
+    try:
+        while True:
+            raw = proc.stdout.readline()
+            if not raw:
+                break
+            on_line(raw.decode(errors="replace").rstrip("\n\r"))
+        thread.join(timeout=timeout)
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
+        thread.join()
+        raise
+    return proc.returncode or 0
+
+
 run_command.stream_to_file = stream_to_file  # type: ignore[attr-defined]
+run_command.pipe_through = pipe_through  # type: ignore[attr-defined]

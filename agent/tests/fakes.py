@@ -1,4 +1,4 @@
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 from vpscp_agent.commands import CommandError, CommandResult
@@ -8,8 +8,15 @@ class FakeRunner:
     def __init__(self) -> None:
         self.calls: list[dict] = []
         self.stream_calls: list[dict] = []
+        self.pipe_through_calls: list[dict] = []
+        self.pipe_through_lines: list[str] = []
+        self.pipe_through_returncode: int = 0
         self.stream_payload: bytes = b"PGDMP-fake-dump"
         self.responses: list[tuple[Callable[[list[str]], bool], CommandResult | Exception]] = []
+
+    def set_pipe_through(self, *, lines: list[str], returncode: int = 0) -> None:
+        self.pipe_through_lines = list(lines)
+        self.pipe_through_returncode = returncode
 
     def __call__(
         self,
@@ -71,3 +78,16 @@ class FakeRunner:
         self.stream_calls.append({"args": args, "path": path, "timeout": timeout})
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(self.stream_payload)
+
+    def pipe_through(
+        self,
+        args: list[str],
+        source: Iterator[bytes],
+        on_line: Callable[[str], None],
+        timeout: float | None = 120,
+    ) -> int:
+        joined = b"".join(source)
+        self.pipe_through_calls.append({"args": args, "source": joined, "timeout": timeout})
+        for line in self.pipe_through_lines:
+            on_line(line)
+        return self.pipe_through_returncode

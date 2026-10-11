@@ -17,9 +17,15 @@ from vpscp_agent.db_ops import (
     verify_password,
 )
 from vpscp_agent.dumps import DumpInfo, dump_path, dump_project, list_dumps
+from vpscp_agent.jobs import JobLockedError
 from vpscp_agent.validation import Slug, SqlIdent, validate_env_value
 
 router = APIRouter(prefix="/v1/db", tags=["database"])
+
+
+def _require_postgres_unlocked(request: Request) -> None:
+    if request.app.state.jobs.is_locked("postgres"):
+        raise JobLockedError("postgres")
 
 
 class CreateDatabaseBody(BaseModel):
@@ -68,6 +74,7 @@ def get_roles(request: Request) -> list[str]:
 
 @router.post("/create", status_code=201)
 def post_create(body: CreateDatabaseBody, request: Request) -> dict[str, str]:
+    _require_postgres_unlocked(request)
     db = request.app.state.db
     psql = request.app.state.psql
     params = {"slug": body.slug, "db_name": body.db_name, "db_user": body.db_user}
@@ -84,6 +91,7 @@ def post_create(body: CreateDatabaseBody, request: Request) -> dict[str, str]:
 
 @router.post("/rotate-password")
 def post_rotate_password(body: RotatePasswordBody, request: Request) -> dict[str, str]:
+    _require_postgres_unlocked(request)
     db = request.app.state.db
     psql = request.app.state.psql
     params = {"db_user": body.db_user}
@@ -94,6 +102,7 @@ def post_rotate_password(body: RotatePasswordBody, request: Request) -> dict[str
 
 @router.post("/verify-password")
 def post_verify_password(body: VerifyPasswordBody, request: Request) -> dict[str, bool]:
+    _require_postgres_unlocked(request)
     validate_env_value(body.password)
     db = request.app.state.db
     psql = request.app.state.psql
@@ -114,6 +123,7 @@ def post_verify_password(body: VerifyPasswordBody, request: Request) -> dict[str
 
 @router.post("/adopt")
 def post_adopt(body: AdoptDatabaseBody, request: Request) -> dict[str, str | None]:
+    _require_postgres_unlocked(request)
     if body.password is not None:
         validate_env_value(body.password)
     db = request.app.state.db
@@ -141,6 +151,7 @@ def post_adopt(body: AdoptDatabaseBody, request: Request) -> dict[str, str | Non
 
 @router.post("/drop", status_code=204)
 def post_drop(body: DropDatabaseBody, request: Request) -> Response:
+    _require_postgres_unlocked(request)
     db = request.app.state.db
     psql = request.app.state.psql
     params = {
@@ -161,6 +172,7 @@ def post_drop(body: DropDatabaseBody, request: Request) -> Response:
 
 @router.post("/detach", status_code=204)
 def post_detach(body: DetachDatabaseBody, request: Request) -> Response:
+    _require_postgres_unlocked(request)
     db = request.app.state.db
     params = {"slug": body.slug}
     with audit.audited(db, "db.detach", params):
@@ -170,6 +182,7 @@ def post_detach(body: DetachDatabaseBody, request: Request) -> Response:
 
 @router.post("/dumps/{slug}")
 def post_dump_project(slug: Slug, request: Request) -> DumpInfo:
+    _require_postgres_unlocked(request)
     settings = request.app.state.settings
     db = request.app.state.db
     psql = request.app.state.psql
