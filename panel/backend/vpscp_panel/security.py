@@ -4,6 +4,7 @@ from base64 import urlsafe_b64encode
 from datetime import UTC, datetime
 
 import pyotp
+import pyotp.utils as pyotp_utils
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from cryptography.fernet import Fernet
@@ -51,10 +52,10 @@ def decrypt_secret(settings: PanelSettings, ciphertext: str) -> str:
     return _fernet(settings).decrypt(ciphertext.encode()).decode()
 
 
-def _totp_step_for_time(when: datetime) -> int:
+def _as_utc(when: datetime) -> datetime:
     if when.tzinfo is None:
-        when = when.replace(tzinfo=UTC)
-    return int(when.timestamp()) // 30
+        return when.replace(tzinfo=UTC)
+    return when.astimezone(UTC)
 
 
 def verify_totp(
@@ -66,13 +67,14 @@ def verify_totp(
 ) -> bool:
     secret = decrypt_secret(settings, admin.totp_secret_enc)
     totp = pyotp.TOTP(secret)
+    when = _as_utc(now)
+    if not totp.verify(code, for_time=when, valid_window=1):
+        return False
     matched_step: int | None = None
-    base = _totp_step_for_time(now)
-    for offset in (0, -1, 1):
-        step = base + offset
-        step_time = datetime.fromtimestamp(step * 30, tz=UTC)
-        if totp.verify(code, for_time=step_time):
-            matched_step = step
+    base = totp.timecode(when)
+    for offset in range(-1, 2):
+        if pyotp_utils.strings_equal(str(code), str(totp.at(when, offset))):
+            matched_step = base + offset
             break
     if matched_step is None:
         return False

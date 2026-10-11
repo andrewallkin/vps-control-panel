@@ -290,9 +290,6 @@ def step_up(
     if admin is None:
         raise HTTPException(status_code=401, detail="unauthorized")
     if not verify_totp(admin, body.code, now, settings=settings):
-        locked = _register_failed_attempt(admin, now, db)
-        if locked is not None:
-            return locked
         raise HTTPException(status_code=401, detail="invalid_credentials")
     session.stepped_up_at = now
     db.commit()

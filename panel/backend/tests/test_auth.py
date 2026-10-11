@@ -236,6 +236,22 @@ def test_absolute_session_expiry(client, admin_user, panel_settings, frozen_time
         assert test_client.get("/api/auth/me").status_code == 401
 
 
+def test_step_up_wrong_code_does_not_lock_login(client, admin_user, frozen_time):
+    payload = login(client, admin_user, frozen_time)
+    for _ in range(5):
+        response = client.post(
+            "/api/auth/step-up",
+            json={"code": "000000"},
+            headers={"X-CSRF-Token": payload["csrf_token"]},
+        )
+        assert response.status_code == 401
+        assert response.json() == {"detail": "invalid_credentials"}
+    with db_module.SessionLocal() as db:
+        admin = db.scalar(select(AdminUser).where(AdminUser.username == "admin"))
+        assert admin.failed_attempts == 0
+        assert admin.locked_until is None
+
+
 def test_step_up_window_on_me(client, admin_user, panel_settings, frozen_time):
     app = create_app(settings=panel_settings)
     t0 = frozen_time

@@ -60,6 +60,7 @@ def cmd_create_admin(args: argparse.Namespace) -> None:
             sys.exit(2)
         now = datetime.now(UTC)
         if existing is not None and args.force:
+            existing.username = args.username
             existing.password_hash = hash_password(password)
             existing.totp_secret_enc = encrypt_secret(settings, secret)
             existing.totp_last_step = None

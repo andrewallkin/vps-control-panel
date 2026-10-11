@@ -71,6 +71,28 @@ def test_create_admin_duplicate_exits_2(cli_env):
     assert result.returncode == 2
 
 
+def test_create_admin_force_changes_username(cli_env):
+    _run_cli(
+        "create-admin",
+        "--username",
+        "admin",
+        env={"VPSCP_ADMIN_PASSWORD": "long-enough-password"},
+    )
+    result = _run_cli(
+        "create-admin",
+        "--username",
+        "other",
+        "--force",
+        env={"VPSCP_ADMIN_PASSWORD": "another-long-password"},
+    )
+    assert result.returncode == 0
+    assert "otpauth://totp/vpscp:other?" in result.stdout
+    init_db(cli_env)
+    with db_module.SessionLocal() as db:
+        admin = db.scalar(select(AdminUser))
+        assert admin.username == "other"
+
+
 def test_create_admin_force_replaces(cli_env):
     _run_cli(
         "create-admin",
