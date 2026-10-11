@@ -5,6 +5,7 @@ import httpx
 import pytest
 from conftest import login, totp_code
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 import vpscp_panel.db as db_module
 from vpscp_panel.models import Deploy, Domain, Project, ProjectService
@@ -138,6 +139,91 @@ def test_image_deploy_succeeded(
         assert row.status == "succeeded"
         assert row.commit == "abc1234"
         assert "hello" in row.log
+
+
+def test_deploy_finished_at_uses_end_clock(
+    client_factory, admin_user, frozen_time, db_session, agent_requests
+):
+    _ready_project(db_session)
+    tags = {"DOCKER_IMAGE_WEB": "backend-main-abc1234"}
+    end_time = frozen_time + timedelta(minutes=5)
+    call_count = [0]
+
+    def clock():
+        call_count[0] += 1
+        return frozen_time if call_count[0] == 1 else end_time
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        agent_requests.append(request)
+        path = request.url.path
+        if path == "/v1/projects/myapp/deploy" and request.method == "POST":
+            return httpx.Response(200, json={"job_id": "job-finish-time"})
+        if path == "/v1/jobs/job-finish-time/events":
+            return httpx.Response(
+                200,
+                content=_sse_bytes(
+                    (
+                        "end",
+                        {
+                            "status": "succeeded",
+                            "result": {"commit": "abc1234"},
+                            "error": None,
+                        },
+                    ),
+                ),
+            )
+        return httpx.Response(404, json={"detail": "not found"})
+
+    client = client_factory(transport=httpx.MockTransport(handler))
+    auth = login(client, admin_user, frozen_time)
+    call_count[0] = 0
+    client.app.state.clock = clock
+
+    response = client.post(
+        "/api/projects/myapp/deploy",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+        json={"tags": tags},
+    )
+    assert response.status_code == 202, response.text
+
+    with db_module.SessionLocal() as db:
+        row = db.get(Deploy, response.json()["id"])
+        assert row is not None
+        assert row.finished_at == end_time.replace(tzinfo=None)
+        assert row.finished_at != frozen_time.replace(tzinfo=None)
+
+
+def test_only_one_running_deploy_per_slug(db_session):
+    _ready_project(db_session)
+    started = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
+    tags = "{}"
+    db_session.add(
+        Deploy(
+            project_slug="myapp",
+            started_at=started,
+            finished_at=None,
+            status="running",
+            tags_json=tags,
+            log="",
+            trigger="deploy",
+            commit=None,
+        )
+    )
+    db_session.commit()
+    db_session.add(
+        Deploy(
+            project_slug="myapp",
+            started_at=started,
+            finished_at=None,
+            status="running",
+            tags_json=tags,
+            log="",
+            trigger="deploy",
+            commit=None,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        db_session.commit()
 
 
 def test_deploy_failed_after_switch(

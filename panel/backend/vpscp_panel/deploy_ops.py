@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
 from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.models import Deploy, Project
+
+
+class DeployAlreadyRunningError(Exception):
+    pass
 
 
 def _parse_sse_block(block: bytes) -> tuple[str | None, str | None]:
@@ -129,11 +135,11 @@ async def run_deploy(
     *,
     tags: dict[str, str],
     trigger: str,
-    now: datetime,
+    clock: Callable[[], datetime],
 ) -> Deploy:
     deploy = Deploy(
         project_slug=project.slug,
-        started_at=now,
+        started_at=clock(),
         finished_at=None,
         status="running",
         tags_json=json.dumps(tags),
@@ -142,7 +148,11 @@ async def run_deploy(
         commit=None,
     )
     db.add(deploy)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise DeployAlreadyRunningError from None
     db.refresh(deploy)
 
     agent_body = build_agent_deploy_body(project, tags)
@@ -150,10 +160,10 @@ async def run_deploy(
         start = await agent.post(f"/v1/projects/{project.slug}/deploy", json=agent_body)
         job_id = start["job_id"]
         log_lines, end_data = await consume_job_events(agent, job_id)
-        _apply_end_event(deploy, project, log_lines, end_data, now)
+        _apply_end_event(deploy, project, log_lines, end_data, clock())
     except Exception as exc:  # noqa: BLE001
         deploy.status = "failed"
-        deploy.finished_at = now
+        deploy.finished_at = clock()
         prefix = deploy.log
         msg = str(exc)
         deploy.log = f"{prefix}\n{msg}".strip() if prefix else msg

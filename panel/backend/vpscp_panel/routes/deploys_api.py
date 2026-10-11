@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.auth import current_session, get_db, require_csrf
 from vpscp_panel.deploy_ops import (
+    DeployAlreadyRunningError,
     deploy_row_payload,
     has_running_deploy,
     project_creation_ready,
@@ -23,10 +24,6 @@ router = APIRouter(prefix="/api", tags=["deploys"])
 
 def _agent(request: Request) -> AgentClient:
     return request.app.state.agent
-
-
-def _now(request: Request):
-    return request.app.state.clock()
 
 
 class StartDeployBody(BaseModel):
@@ -73,14 +70,17 @@ async def start_deploy(
     if has_running_deploy(db, slug):
         raise HTTPException(status_code=409, detail="deploy already running")
 
-    deploy = await run_deploy(
-        db,
-        agent,
-        project,
-        tags=tags,
-        trigger=trigger,
-        now=_now(request),
-    )
+    try:
+        deploy = await run_deploy(
+            db,
+            agent,
+            project,
+            tags=tags,
+            trigger=trigger,
+            clock=request.app.state.clock,
+        )
+    except DeployAlreadyRunningError:
+        raise HTTPException(status_code=409, detail="deploy already running") from None
     return {"id": deploy.id, "status": deploy.status}
 
 
@@ -159,12 +159,15 @@ async def redeploy(
         tags = {}
     tags = {str(k): str(v) for k, v in tags.items()}
 
-    deploy = await run_deploy(
-        db,
-        agent,
-        project,
-        tags=tags,
-        trigger="redeploy",
-        now=_now(request),
-    )
+    try:
+        deploy = await run_deploy(
+            db,
+            agent,
+            project,
+            tags=tags,
+            trigger="redeploy",
+            clock=request.app.state.clock,
+        )
+    except DeployAlreadyRunningError:
+        raise HTTPException(status_code=409, detail="deploy already running") from None
     return {"id": deploy.id, "status": deploy.status}
