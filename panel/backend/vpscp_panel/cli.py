@@ -106,6 +106,9 @@ def cmd_reset_totp(_args: argparse.Namespace) -> None:
             sys.exit(2)
         admin.totp_secret_enc = encrypt_secret(settings, secret)
         admin.totp_last_step = None
+        admin.failed_attempts = 0
+        admin.locked_until = None
+        db.execute(delete(Session))
         db.commit()
         _print_totp(admin.username, secret)
 
@@ -122,6 +125,9 @@ def cmd_reset_password(_args: argparse.Namespace) -> None:
         if admin is None:
             sys.exit(2)
         admin.password_hash = hash_password(password)
+        admin.failed_attempts = 0
+        admin.locked_until = None
+        db.execute(delete(Session))
         db.commit()
 
 

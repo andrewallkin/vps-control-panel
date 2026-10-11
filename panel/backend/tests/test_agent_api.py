@@ -388,6 +388,61 @@ def test_dashboard_unknown_schedule_null_last_run_not_overdue(
     assert not any(w["code"] == "backup_overdue" for w in body["warnings"])
 
 
+@pytest.mark.parametrize("schedule_hours", ["", "   ", ","])
+def test_dashboard_empty_schedule_null_last_run_not_overdue(
+    panel_settings, frozen_time, admin_user, schedule_hours
+):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/metrics/current":
+            return httpx.Response(200, json={"cpus": [], "mem_percent": 50.0, "disks": []})
+        if request.url.path == "/v1/backup/status":
+            return httpx.Response(
+                200,
+                json={"last_run": None, "trigger_pending": False, "container": "backup"},
+            )
+        if request.url.path == "/v1/backup/settings":
+            return httpx.Response(200, json={"schedule_hours": schedule_hours})
+        return httpx.Response(404)
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        login(client, admin_user, frozen_time)
+        response = client.get("/api/dashboard/summary")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["backup"]["overdue"] is False
+    assert not any(w["code"] == "backup_overdue" for w in body["warnings"])
+
+
+def test_dashboard_known_schedule_null_last_run_is_overdue(panel_settings, frozen_time, admin_user):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/metrics/current":
+            return httpx.Response(200, json={"cpus": [], "mem_percent": 50.0, "disks": []})
+        if request.url.path == "/v1/backup/status":
+            return httpx.Response(
+                200,
+                json={"last_run": None, "trigger_pending": False, "container": "backup"},
+            )
+        if request.url.path == "/v1/backup/settings":
+            return httpx.Response(200, json={"schedule_hours": "0,12"})
+        return httpx.Response(404)
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        login(client, admin_user, frozen_time)
+        response = client.get("/api/dashboard/summary")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["backup"]["overdue"] is True
+    assert {"level": "warning", "code": "backup_overdue", "message": "Backup overdue"} in body[
+        "warnings"
+    ]
+
+
 def test_dashboard_disk_warning(panel_settings, frozen_time, admin_user):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v1/metrics/current":

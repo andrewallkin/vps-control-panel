@@ -92,11 +92,16 @@ def _schedule_hours_from_settings(settings: Any) -> str | None:
     raw = settings.get("schedule_hours")
     if not isinstance(raw, str):
         return None
+    stripped = raw.strip()
+    if not stripped:
+        return None
     try:
-        _parse_schedule_hours(raw)
+        hours = _parse_schedule_hours(stripped)
     except ValueError:
         return None
-    return raw
+    if not hours:
+        return None
+    return stripped
 
 
 @router.get("/api/dashboard/summary")

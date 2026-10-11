@@ -232,6 +232,19 @@ def test_upload_requires_step_up_after_completed(setup_client, auth, agent_reque
     assert len(agent_requests) == 0
 
 
+def test_restore_requires_step_up_after_completed(setup_client, auth, agent_requests):
+    setup_client.post("/api/setup/database/empty", headers=csrf_headers(auth))
+    setup_client.post("/api/setup/complete", headers=csrf_headers(auth))
+    response = setup_client.post(
+        "/api/setup/restore",
+        headers=csrf_headers(auth),
+        json={"upload_id": "up-1", "confirm": "RESTORE"},
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "step_up_required"}
+    assert len(agent_requests) == 0
+
+
 def test_delete_upload_proxies(setup_client, auth, agent_requests):
     response = setup_client.delete(
         "/api/setup/uploads/up-1",

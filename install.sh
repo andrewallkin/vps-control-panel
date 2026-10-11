@@ -178,6 +178,8 @@ bootstrap_panel_admin() {
     local username
     read -r -p "Panel admin username: " username
     (cd "${STACK_DIR}" && docker compose exec panel python -m vpscp_panel.cli create-admin --username "${username}")
+  else
+    echo "No panel admin was created; re-run install with a TTY or set VPSCP_ADMIN_USER and VPSCP_ADMIN_PASSWORD." >&2
   fi
 }
 
