@@ -5,14 +5,25 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 from vpscp_agent import __version__, audit, container_metrics, metrics
+from vpscp_agent.commands import CommandError, run_command
 from vpscp_agent.config import Settings
+from vpscp_agent.db_ops import ConflictError
+from vpscp_agent.jobs import JobLockedError, JobManager
+from vpscp_agent.pg import Psql
+from vpscp_agent.routes import backup as backup_routes
+from vpscp_agent.routes import database as database_routes
+from vpscp_agent.routes import jobs as jobs_routes
+from vpscp_agent.routes import restore as restore_routes
 from vpscp_agent.state import StateDB
 
 
-def create_app(settings: Settings) -> FastAPI:
+def create_app(settings: Settings, runner=run_command) -> FastAPI:
     db = StateDB(settings.state_db_path)
 
     @asynccontextmanager
@@ -44,6 +55,41 @@ def create_app(settings: Settings) -> FastAPI:
     )
     app.state.settings = settings
     app.state.db = db
+    app.state.runner = runner
+    app.state.psql = Psql(settings, runner)
+    app.state.jobs = JobManager(db)
+
+    @app.exception_handler(JobLockedError)
+    async def job_locked_handler(_request, _exc: JobLockedError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": "job lock held"})
+
+    @app.exception_handler(ConflictError)
+    async def conflict_handler(_request: Request, exc: ConflictError) -> JSONResponse:
+        return JSONResponse(status_code=409, content={"detail": str(exc)})
+
+    @app.exception_handler(CommandError)
+    async def command_error_handler(_request: Request, exc: CommandError) -> JSONResponse:
+        return JSONResponse(status_code=502, content={"detail": str(exc)})
+
+    @app.exception_handler(ValueError)
+    async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+        if request.url.path.startswith(("/v1/db", "/v1/restore", "/v1/backup")):
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+        raise exc
+
+    @app.exception_handler(RequestValidationError)
+    async def request_validation_handler(
+        request: Request, exc: RequestValidationError
+    ) -> JSONResponse:
+        status = (
+            400 if request.url.path.startswith(("/v1/db", "/v1/restore", "/v1/backup")) else 422
+        )
+        return JSONResponse(status_code=status, content={"detail": jsonable_encoder(exc.errors())})
+
+    app.include_router(jobs_routes.router)
+    app.include_router(database_routes.router)
+    app.include_router(restore_routes.router)
+    app.include_router(backup_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:

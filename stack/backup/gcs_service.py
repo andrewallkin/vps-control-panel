@@ -92,6 +92,38 @@ class GoogleCloudStorageService:
             logger.error(f"Error during GCS upload: {e}")
             return False
 
+    def upload_bytes(self, name: str, data: bytes) -> bool:
+        """Upload in-memory data to the configured GCS bucket."""
+        if not self.is_available():
+            logger.error("Google Cloud Storage service not available")
+            return False
+
+        logger.info(f"Uploading {name} to GCS bucket: {self.bucket_name}...")
+        try:
+            bucket = self.client.bucket(self.bucket_name)
+            blob = bucket.blob(name)
+            blob.upload_from_string(data)
+            logger.info(f"Successfully uploaded: {name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error during GCS upload: {e}")
+            return False
+
+    def delete_blob(self, name: str) -> bool:
+        """Delete a single object from the configured GCS bucket."""
+        if not self.is_available():
+            logger.error("Google Cloud Storage service not available")
+            return False
+
+        try:
+            bucket = self.client.bucket(self.bucket_name)
+            bucket.blob(name).delete()
+            logger.info(f"Deleted blob: {name}")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting blob {name}: {e}")
+            return False
+
     def cleanup_old_backups(self, retention_days: int) -> int:
         """
         Delete files in the GCS bucket older than retention_days.

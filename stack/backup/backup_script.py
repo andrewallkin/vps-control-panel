@@ -8,13 +8,17 @@ import subprocess
 import datetime
 import logging
 import sys
+import threading
 import time
 from urllib.parse import urlparse
 from zoneinfo import ZoneInfo
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.interval import IntervalTrigger
+from config_archive import build_archive, collect_sources, encrypt
 from gcs_service import GoogleCloudStorageService
 from logging_config import configure_logging
+import status
 
 # Configure logging with same config as backend
 configure_logging()
@@ -46,6 +50,40 @@ BACKUP_SCHEDULE_MINUTE = os.environ.get("BACKUP_SCHEDULE_MINUTE", "0")
 BACKUP_TIMEZONE = os.environ.get("BACKUP_TIMEZONE", "UTC")
 WAIT_FOR_POSTGRES_TIMEOUT = int(os.environ.get("BACKUP_WAIT_FOR_POSTGRES_TIMEOUT", "60"))
 WAIT_FOR_POSTGRES_INTERVAL = int(os.environ.get("BACKUP_WAIT_FOR_POSTGRES_INTERVAL", "2"))
+
+_backup_lock = threading.Lock()
+
+
+def _utc_now_iso() -> str:
+    return datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+
+def _startup_backup_enabled() -> bool:
+    return os.environ.get("BACKUP_ON_STARTUP", "").lower() in ("1", "true", "yes")
+
+
+def _write_initial_status_if_missing() -> None:
+    status_path = status.STATE_DIR / status.STATUS_FILENAME
+    if not status_path.exists():
+        status.write_status(
+            started_at=None,
+            finished_at=None,
+            success=None,
+            object=None,
+            size_bytes=None,
+            archive_object=None,
+            archive_skipped_reason=None,
+            error=None,
+        )
+
+
+def _timestamp_from_backup_filename(backup_filename: str) -> str:
+    base = os.path.basename(backup_filename)
+    prefix = "backup_"
+    suffix = ".sql.gz"
+    if base.startswith(prefix) and base.endswith(suffix):
+        return base[len(prefix) : -len(suffix)]
+    return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
 def wait_for_postgres() -> bool:
@@ -132,63 +170,121 @@ def create_pg_dump():
 
 def run_backup():
     """Main backup execution function."""
+    if not _backup_lock.acquire(blocking=False):
+        logger.info("Backup already in progress; skipping this run")
+        return
+
+    started_at = _utc_now_iso()
+    success = False
+    object_name = None
+    size_bytes = None
+    archive_object = None
+    archive_skipped_reason = None
+    archive_error = None
+    error = None
+    backup_file = None
+
     logger.info("=" * 60)
     logger.info("Starting scheduled database backup")
     logger.info("=" * 60)
 
-    # Validate required environment variables
-    if not all([DB_HOST, DB_USER, DB_PASS]):
-        logger.error("ERROR: Missing required database environment variables.")
-        logger.error(f"DB_HOST: {DB_HOST}, DB_USER: {DB_USER}, DB_PASS: {'*' if DB_PASS else None}")
-        return
-
-    # Wait for PostgreSQL to be ready (handles startup race conditions)
-    if not wait_for_postgres():
-        logger.error("Aborting backup: PostgreSQL not ready.")
-        return
-
-    # 1. Create PostgreSQL dump
-    backup_file = create_pg_dump()
-
-    if not backup_file:
-        logger.error("Failed to create cluster dump. Aborting backup.")
-        return
-
     try:
-        # 2. Initialize Google Cloud Storage service
-        gcs_service = GoogleCloudStorageService()
+        if not all([DB_HOST, DB_USER, DB_PASS]):
+            error = "Missing required database environment variables"
+            logger.error("ERROR: Missing required database environment variables.")
+            logger.error(
+                f"DB_HOST: {DB_HOST}, DB_USER: {DB_USER}, DB_PASS: {'*' if DB_PASS else None}"
+            )
+            return
 
+        if not wait_for_postgres():
+            error = "PostgreSQL not ready"
+            logger.error("Aborting backup: PostgreSQL not ready.")
+            return
+
+        backup_file = create_pg_dump()
+        if not backup_file:
+            error = "Failed to create cluster dump"
+            logger.error("Failed to create cluster dump. Aborting backup.")
+            return
+
+        gcs_service = GoogleCloudStorageService()
         if not gcs_service.is_available():
+            error = "Google Cloud Storage service not available"
             logger.error("Google Cloud Storage service not available. Aborting backup.")
             return
 
-        # 3. Upload to Google Cloud Storage
         upload_success = gcs_service.upload_file(backup_file)
-
-        if upload_success:
-            logger.info("Backup uploaded successfully to Google Cloud Storage")
-
-            # 4. Cleanup old backups
-            deleted_count = gcs_service.cleanup_old_backups(RETENTION_DAYS)
-            logger.info(f"Cleanup completed. Deleted {deleted_count} old backup(s).")
-        else:
+        if not upload_success:
+            error = "Failed to upload backup to Google Cloud Storage"
             logger.error("Failed to upload backup to Google Cloud Storage")
+            return
 
-    except Exception as e:
-        logger.error(f"A critical error occurred during backup: {e}", exc_info=True)
+        success = True
+        object_name = os.path.basename(backup_file)
+        size_bytes = os.path.getsize(backup_file)
+        logger.info("Backup uploaded successfully to Google Cloud Storage")
+
+        archive_passphrase = os.environ.get("BACKUP_ARCHIVE_PASSPHRASE")
+        if archive_passphrase:
+            try:
+                sources = collect_sources()
+                archive_data = build_archive(sources)
+                encrypted = encrypt(archive_data, archive_passphrase)
+                archive_name = (
+                    f"config_{_timestamp_from_backup_filename(backup_file)}.tar.gz.age"
+                )
+                if gcs_service.upload_bytes(archive_name, encrypted):
+                    archive_object = archive_name
+                else:
+                    archive_error = "Failed to upload config archive"
+                    logger.error(archive_error)
+            except Exception as exc:
+                archive_error = str(exc)
+                logger.error(f"Config archive failed: {exc}", exc_info=True)
+        else:
+            archive_skipped_reason = "no passphrase configured"
+
+        deleted_count = gcs_service.cleanup_old_backups(RETENTION_DAYS)
+        logger.info(f"Cleanup completed. Deleted {deleted_count} old backup(s).")
+
+    except Exception as exc:
+        error = str(exc)
+        logger.error(f"A critical error occurred during backup: {exc}", exc_info=True)
 
     finally:
-        # 5. Local cleanup (always remove the local backup file)
-        if os.path.exists(backup_file):
+        if backup_file and os.path.exists(backup_file):
             try:
                 os.remove(backup_file)
                 logger.info(f"Removed local backup file: {backup_file}")
-            except Exception as e:
-                logger.warning(f"Failed to remove local backup file: {e}")
+            except Exception as exc:
+                logger.warning(f"Failed to remove local backup file: {exc}")
+
+        try:
+            status_fields = {
+                "started_at": started_at,
+                "finished_at": _utc_now_iso(),
+                "success": success,
+                "object": object_name,
+                "size_bytes": size_bytes,
+                "archive_object": archive_object,
+                "archive_skipped_reason": archive_skipped_reason,
+                "error": error,
+            }
+            if archive_error is not None:
+                status_fields["archive_error"] = archive_error
+            status.write_status(**status_fields)
+        finally:
+            _backup_lock.release()
 
     logger.info("=" * 60)
     logger.info("Backup process completed")
     logger.info("=" * 60)
+
+
+def check_run_now_trigger():
+    if status.consume_trigger():
+        run_backup()
 
 
 def main():
@@ -211,16 +307,26 @@ def main():
         logger.error("Missing required database environment variables. Exiting.")
         sys.exit(1)
 
-    # Create scheduler with timezone
+    _write_initial_status_if_missing()
+
     scheduler = BlockingScheduler(timezone=tz)
 
-    # Schedule the backup job with timezone
     scheduler.add_job(
         run_backup,
         trigger=CronTrigger(hour=BACKUP_SCHEDULE_HOUR, minute=BACKUP_SCHEDULE_MINUTE, timezone=tz),
         id="twice_daily_backup",
         name="Twice Daily Database Backup",
         replace_existing=True,
+    )
+
+    scheduler.add_job(
+        check_run_now_trigger,
+        trigger=IntervalTrigger(seconds=15),
+        id="run_now_trigger",
+        name="Run-now trigger poll",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
     )
 
     # Get the job to check next run time
@@ -231,9 +337,11 @@ def main():
         logger.info("Backup scheduler configured. Next run time will be calculated when scheduler starts.")
 
     try:
-        # Run an immediate backup on startup (optional - can be removed if not desired)
-        logger.info("Running initial backup on startup...")
-        run_backup()
+        if _startup_backup_enabled():
+            logger.info("Running initial backup on startup...")
+            run_backup()
+        else:
+            logger.info("Skipping startup backup (BACKUP_ON_STARTUP not enabled)")
 
         logger.info("Backup scheduler started. Waiting for scheduled time...")
         # Start the scheduler (this will block)

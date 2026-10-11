@@ -24,6 +24,15 @@ Check the agent:
 sudo curl --unix-socket /run/vpscp/agent.sock http://agent/v1/health
 ```
 
+## Agent API (Plan 2)
+
+Mutating routes are audited; long-running work returns a `job_id` (poll `/v1/jobs`).
+
+- **Jobs** — list jobs, job status, job event stream (`/v1/jobs`)
+- **Database** — list databases and roles; create, adopt, drop, detach; rotate and verify passwords; per-slug logical dumps (`/v1/db`, including `/v1/db/dumps/...`)
+- **Restore** — chunked upload, complete, status, delete; run restore from an uploaded dump (`/v1/restore/uploads`, `/v1/restore/run`)
+- **Backup** — read/update GCS backup settings, test credentials, trigger run-now, status (`/v1/backup/settings`, `/v1/backup/test`, `/v1/backup/run-now`, `/v1/backup/status`)
+
 ## Development
 
 ```bash

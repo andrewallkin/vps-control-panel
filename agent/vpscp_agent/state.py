@@ -28,6 +28,14 @@ MIGRATIONS: list[str] = [
         disks_json TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE db_attachment (
+        db_name TEXT PRIMARY KEY,
+        db_user TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        attached_at TEXT NOT NULL
+    );
+    """,
 ]
 
 

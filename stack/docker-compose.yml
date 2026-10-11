@@ -22,11 +22,17 @@ services:
   backup:
     build:
       context: ./backup
+    image: vpscp-backup:local
     restart: always
     env_file: .env
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: "5432"
+      BACKUP_STATE_DIR: /state
+    volumes:
+      - /var/lib/vpscp/backup:/state
+      - /srv/apps:/sources/apps:ro
+      - ./.env:/sources/stack/.env:ro
     depends_on:
       postgres:
         condition: service_healthy

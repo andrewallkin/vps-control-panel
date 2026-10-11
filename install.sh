@@ -135,7 +135,7 @@ setup_directories() {
   log "Directories, group, Docker network"
   getent group vpscp >/dev/null || groupadd --system vpscp
   install -d -m 0755 "${APPS_DIR}" /srv/vpscp /opt/vpscp
-  install -d -m 0700 "${STATE_DIR}"
+  install -d -m 0700 "${STATE_DIR}" "${STATE_DIR}/backup" "${STATE_DIR}/dumps" "${STATE_DIR}/restore"
   docker network inspect postgres-net >/dev/null 2>&1 || docker network create postgres-net
 }
 
@@ -160,6 +160,14 @@ setup_stack() {
     (umask 077 && sed "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${password}|" "${STACK_DIR}/.env.example" > "${STACK_DIR}/.env")
     echo "generated ${STACK_DIR}/.env"
   fi
+  local example_line key
+  while IFS= read -r example_line || [[ -n "${example_line}" ]]; do
+    [[ "${example_line}" =~ ^[A-Z_]+= ]] || continue
+    key="${example_line%%=*}"
+    if ! grep -q "^${key}=" "${STACK_DIR}/.env"; then
+      printf '%s\n' "${example_line}" >> "${STACK_DIR}/.env"
+    fi
+  done < <(grep -E '^[A-Z_]+=' "${STACK_DIR}/.env.example")
   chown root:root "${STACK_DIR}/.env"
   chmod 600 "${STACK_DIR}/.env"
   (cd "${STACK_DIR}" && docker compose up -d --build)
