@@ -1,4 +1,3 @@
-from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -6,14 +5,15 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as DbSession
 
 from vpscp_panel.agent_client import AgentClient, AgentError
-from vpscp_panel.auth import (
-    STEP_UP_DURATION,
-    current_session,
-    get_db,
-    require_csrf,
+from vpscp_panel.auth import current_session, get_db, require_csrf
+from vpscp_panel.models import Domain, Session
+from vpscp_panel.settings_store import get_setting
+from vpscp_panel.setup_helpers import (
+    load_setup,
+    public_setup_state,
+    require_step_up_if_completed,
+    save_setup,
 )
-from vpscp_panel.models import Session
-from vpscp_panel.settings_store import get_setting, set_setting
 
 router = APIRouter(tags=["setup"])
 
@@ -24,48 +24,16 @@ def _agent(request: Request) -> AgentClient:
     return request.app.state.agent
 
 
-def _now(request: Request) -> datetime:
-    return request.app.state.clock()
-
-
-def _as_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
-    return value.astimezone(UTC)
-
-
-def _is_stepped_up(session: Session, now: datetime) -> bool:
-    if session.stepped_up_at is None:
-        return False
-    until = _as_utc(session.stepped_up_at) + STEP_UP_DURATION
-    return until > now
-
-
 def _load_setup(db: DbSession) -> dict[str, Any]:
-    raw = get_setting(db, "setup")
-    if not isinstance(raw, dict):
-        return {"database": "pending", "completed": False}
-    setup = dict(raw)
-    if "database" not in setup:
-        setup["database"] = "pending"
-    if "completed" not in setup:
-        setup["completed"] = False
-    return setup
+    return load_setup(db)
 
 
 def _save_setup(db: DbSession, setup: dict[str, Any]) -> None:
-    set_setting(db, "setup", setup)
-    db.commit()
+    save_setup(db, setup)
 
 
-def _public_state(setup: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "steps": [
-            {"id": "account", "status": "done"},
-            {"id": "database", "status": setup["database"]},
-        ],
-        "completed": setup["completed"],
-    }
+def _public_state(setup: dict[str, Any], db: DbSession) -> dict[str, Any]:
+    return public_setup_state(setup, db)
 
 
 def _require_step_up_if_completed(
@@ -73,9 +41,7 @@ def _require_step_up_if_completed(
     db: DbSession,
     session: Session,
 ) -> None:
-    setup = _load_setup(db)
-    if setup.get("completed") is True and not _is_stepped_up(session, _now(request)):
-        raise HTTPException(status_code=403, detail="step_up_required")
+    require_step_up_if_completed(request, db, session)
 
 
 async def require_setup_mutate(
@@ -129,7 +95,7 @@ async def get_setup_state(
 ) -> dict[str, Any]:
     setup = _load_setup(db)
     setup = await _maybe_sync_restore_job(db, agent, setup)
-    return _public_state(setup)
+    return _public_state(setup, db)
 
 
 @router.post("/api/setup/database/empty")
@@ -140,7 +106,7 @@ def mark_database_empty(
     setup = _load_setup(db)
     setup["database"] = "empty"
     _save_setup(db, setup)
-    return _public_state(setup)
+    return _public_state(setup, db)
 
 
 @router.post("/api/setup/uploads")
@@ -237,6 +203,12 @@ def complete_setup(
     _require_step_up_if_completed(request, db, session)
     if setup.get("database") == "pending":
         raise HTTPException(status_code=409, detail="database_pending")
+    if setup.get("cloudflare") != "done":
+        raise HTTPException(status_code=409, detail="cloudflare_pending")
+    if db.query(Domain).count() < 1:
+        raise HTTPException(status_code=409, detail="domains_pending")
+    if not get_setting(db, "panel_hostname"):
+        raise HTTPException(status_code=409, detail="panel_hostname_pending")
     setup["completed"] = True
     _save_setup(db, setup)
-    return _public_state(setup)
+    return _public_state(setup, db)

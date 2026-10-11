@@ -6,6 +6,7 @@ import vpscp_panel.db as db_module
 from tests.conftest import login
 from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.main import create_app
+from vpscp_panel.models import Domain
 from vpscp_panel.settings_store import get_setting, set_setting
 
 CHUNK_MAX = 16 * 1024 * 1024
@@ -88,6 +89,9 @@ def test_get_state_default_shape(setup_client, auth):
         "steps": [
             {"id": "account", "status": "done"},
             {"id": "database", "status": "pending"},
+            {"id": "cloudflare", "status": "pending"},
+            {"id": "domains", "status": "pending"},
+            {"id": "panel_hostname", "status": "pending"},
         ],
         "completed": False,
     }
@@ -121,16 +125,14 @@ def test_complete_rejected_while_pending(setup_client, auth):
     assert response.json() == {"detail": "database_pending"}
 
 
-def test_complete_accepted_after_empty(setup_client, auth):
+def test_complete_rejected_after_empty_only(setup_client, auth):
     setup_client.post("/api/setup/database/empty", headers=csrf_headers(auth))
     response = setup_client.post(
         "/api/setup/complete",
         headers=csrf_headers(auth),
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["completed"] is True
-    assert body["steps"][1]["status"] == "empty"
+    assert response.status_code == 409
+    assert response.json() == {"detail": "cloudflare_pending"}
 
 
 def test_restore_confirm_validation(setup_client, auth, agent_requests):
@@ -219,9 +221,29 @@ def test_upload_chunk_too_large(setup_client, auth, agent_requests):
     assert len(agent_requests) == 0
 
 
+def _mark_setup_completed():
+    assert db_module.SessionLocal is not None
+    with db_module.SessionLocal() as db:
+        set_setting(
+            db,
+            "setup",
+            {"database": "empty", "cloudflare": "done", "completed": True},
+        )
+        set_setting(db, "panel_hostname", "panel.example.com")
+        db.add(
+            Domain(
+                name="example.com",
+                zone_id="zone-1",
+                cert_status="missing",
+                cert_expires_at=None,
+            )
+        )
+        db.commit()
+
+
 def test_upload_requires_step_up_after_completed(setup_client, auth, agent_requests):
     setup_client.post("/api/setup/database/empty", headers=csrf_headers(auth))
-    setup_client.post("/api/setup/complete", headers=csrf_headers(auth))
+    _mark_setup_completed()
     response = setup_client.post(
         "/api/setup/uploads",
         headers=csrf_headers(auth),
@@ -234,7 +256,7 @@ def test_upload_requires_step_up_after_completed(setup_client, auth, agent_reque
 
 def test_restore_requires_step_up_after_completed(setup_client, auth, agent_requests):
     setup_client.post("/api/setup/database/empty", headers=csrf_headers(auth))
-    setup_client.post("/api/setup/complete", headers=csrf_headers(auth))
+    _mark_setup_completed()
     response = setup_client.post(
         "/api/setup/restore",
         headers=csrf_headers(auth),

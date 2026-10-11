@@ -63,6 +63,8 @@ def mock_transport(agent_requests):
             )
         if path == "/v1/backup/settings":
             return httpx.Response(200, json={"schedule_hours": "0,12"})
+        if path == "/v1/tls/status":
+            return httpx.Response(200, json=[])
         return httpx.Response(404, json={"detail": "not found"})
 
     return httpx.MockTransport(handler)

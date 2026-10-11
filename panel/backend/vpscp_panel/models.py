@@ -38,3 +38,12 @@ class Setting(Base):
 
     key: Mapped[str] = mapped_column(String, primary_key=True)
     value_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class Domain(Base):
+    __tablename__ = "domain"
+
+    name: Mapped[str] = mapped_column(String, primary_key=True)
+    zone_id: Mapped[str] = mapped_column(String, nullable=False)
+    cert_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    cert_expires_at: Mapped[str | None] = mapped_column(String, nullable=True)
