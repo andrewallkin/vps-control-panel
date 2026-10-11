@@ -2,6 +2,7 @@ import { CheckCircle, Spinner } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { fetchDomains, setPanelHostname } from '../../lib/domainsApi'
+import { getPanelHostnameContinuePending, setPanelHostnameContinuePending } from '../../lib/setupSession'
 import { buildFqdn, validateSubdomain } from '../../lib/subdomainValidation'
 
 export interface PanelHostnameSetupStepProps {
@@ -21,7 +22,9 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
   const [useRoot, setUseRoot] = useState(true)
   const [subdomain, setSubdomain] = useState('')
   const [fieldError, setFieldError] = useState<string | null>(null)
-  const [savedHostname, setSavedHostname] = useState<string | null>(null)
+  const [savedHostname, setSavedHostname] = useState<string | null>(() =>
+    getPanelHostnameContinuePending(),
+  )
   const [error, setError] = useState<string | null>(null)
 
   const domainOptions = useMemo(
@@ -48,6 +51,7 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
     },
     onSuccess: async (result) => {
       setSavedHostname(result.panel_hostname)
+      setPanelHostnameContinuePending(result.panel_hostname)
       setError(null)
       await queryClient.invalidateQueries({ queryKey: ['setup', 'state'] })
       onSaved()

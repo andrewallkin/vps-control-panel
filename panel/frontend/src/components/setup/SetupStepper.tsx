@@ -45,11 +45,7 @@ function stepState(
   }
 
   if (stepId === 'finish') {
-    const panelDone = stepStatus(steps, 'panel_hostname') === 'done'
-    if (!panelDone) {
-      return stepIndex <= activeIndex ? 'current' : 'upcoming'
-    }
-    return active === 'finish' ? 'current' : 'done'
+    return active === 'finish' ? 'current' : 'upcoming'
   }
 
   const id = stepId as SetupStepId
@@ -58,13 +54,13 @@ function stepState(
     id === 'database'
       ? status !== 'pending'
       : id === 'domains'
-        ? status === 'done' && hasValidCert
+        ? hasValidCert
         : status === 'done'
 
   if (done) {
     return 'done'
   }
-  return stepIndex === activeIndex ? 'current' : stepIndex < activeIndex ? 'current' : 'upcoming'
+  return stepIndex === activeIndex ? 'current' : 'upcoming'
 }
 
 export function SetupStepper({ active, steps, hasValidCert = false }: SetupStepperProps) {

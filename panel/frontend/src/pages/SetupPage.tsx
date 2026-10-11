@@ -28,6 +28,12 @@ import {
   type SetupStep,
   type UploadCompleteInfo,
 } from '../lib/setupApi'
+import {
+  isCloudflareContinuePending,
+  setCloudflareContinuePending,
+  setPanelHostnameContinuePending,
+  getPanelHostnameContinuePending,
+} from '../lib/setupSession'
 import { resolveActiveStep } from '../lib/setupWizard'
 
 const ACCEPT = '.sql,.sql.gz'
@@ -53,15 +59,22 @@ export function SetupPage() {
     refetchIntervalInBackground: false,
   })
 
-  const [cloudflareZonesRequested, setCloudflareZonesRequested] = useState(false)
-  const [awaitingCloudflareContinue, setAwaitingCloudflareContinue] = useState(false)
-  const [awaitingPanelHostnameContinue, setAwaitingPanelHostnameContinue] = useState(false)
+  const [cloudflareZonesRequested, setCloudflareZonesRequested] = useState(
+    () => isCloudflareContinuePending(),
+  )
+  const [awaitingCloudflareContinue, setAwaitingCloudflareContinue] = useState(
+    () => isCloudflareContinuePending(),
+  )
+  const [awaitingPanelHostnameContinue, setAwaitingPanelHostnameContinue] = useState(
+    () => getPanelHostnameContinuePending() !== null,
+  )
 
   const zonesQuery = useQuery({
     queryKey: ['cloudflare', 'zones'],
     queryFn: fetchCloudflareZones,
     enabled:
       cloudflareZonesRequested ||
+      isCloudflareContinuePending() ||
       stepStatus(setupQuery.data?.steps ?? [], 'cloudflare') === 'done',
     refetchIntervalInBackground: false,
   })
@@ -327,13 +340,22 @@ export function SetupPage() {
         <CloudflareSetupStep
           configured={cloudflareConfigured}
           zones={zonesQuery.data?.zones ?? []}
-          zonesLoading={zonesQuery.isFetching && (zonesQuery.data?.zones ?? []).length === 0}
+          zonesLoading={zonesQuery.isFetching}
+          zonesError={
+            zonesQuery.isError && !zonesQuery.isFetching
+              ? 'Could not load Cloudflare zones.'
+              : null
+          }
           onTokenSaved={() => {
             setCloudflareZonesRequested(true)
             setAwaitingCloudflareContinue(true)
+            setCloudflareContinuePending(true)
             refreshSetup()
           }}
-          onContinue={() => setAwaitingCloudflareContinue(false)}
+          onContinue={() => {
+            setAwaitingCloudflareContinue(false)
+            setCloudflareContinuePending(false)
+          }}
         />
       ) : null}
 
@@ -347,7 +369,10 @@ export function SetupPage() {
             setAwaitingPanelHostnameContinue(true)
             refreshSetup()
           }}
-          onContinue={() => setAwaitingPanelHostnameContinue(false)}
+          onContinue={() => {
+            setAwaitingPanelHostnameContinue(false)
+            setPanelHostnameContinuePending(null)
+          }}
         />
       ) : null}
 

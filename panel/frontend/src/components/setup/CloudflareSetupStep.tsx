@@ -11,6 +11,7 @@ export interface CloudflareSetupStepProps {
   configured: boolean
   zones: CloudflareZone[]
   zonesLoading?: boolean
+  zonesError?: string | null
   onTokenSaved: () => void
   onContinue: () => void
 }
@@ -19,9 +20,11 @@ export function CloudflareSetupStep({
   configured,
   zones,
   zonesLoading = false,
+  zonesError = null,
   onTokenSaved,
   onContinue,
 }: CloudflareSetupStepProps) {
+  const continueDisabled = zonesLoading
   const queryClient = useQueryClient()
   const [token, setToken] = useState('')
   const [tokenSaved, setTokenSaved] = useState(configured)
@@ -79,12 +82,15 @@ export function CloudflareSetupStep({
                 </li>
               ))}
             </ul>
+          ) : zonesError ? (
+            <p className="text-sm text-destructive">{zonesError}</p>
           ) : (
             <p className="text-sm text-muted-foreground">No zones returned for this token.</p>
           )}
           <button
             type="button"
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
+            disabled={continueDisabled}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onContinue}
           >
             Continue
