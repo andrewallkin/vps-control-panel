@@ -70,8 +70,10 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
         return JSONResponse(status_code=502, content={"detail": str(exc)})
 
     @app.exception_handler(ValueError)
-    async def value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
-        return JSONResponse(status_code=400, content={"detail": str(exc)})
+    async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
+        if request.url.path.startswith("/v1/db"):
+            return JSONResponse(status_code=400, content={"detail": str(exc)})
+        raise exc
 
     @app.exception_handler(RequestValidationError)
     async def request_validation_handler(

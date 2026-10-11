@@ -91,7 +91,13 @@ def test_create_database_sends_expected_sql_and_records_attachment(psql, db, mon
     assert runner.calls[2]["extra_env"] == {"VPSCP_PW": fixed}
     assert runner.calls[3]["args"][runner.calls[3]["args"].index("-d") + 1] == db_name
     sql2 = runner.calls[3]["input_data"]
-    assert f"GRANT USAGE, CREATE ON SCHEMA public TO {user_q};" in sql2
+    assert sql2 == (
+        f"GRANT USAGE, CREATE ON SCHEMA public TO {user_q};\n"
+        f"GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO {user_q};\n"
+        f"GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO {user_q};\n"
+        f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON TABLES TO {user_q};\n"
+        f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL PRIVILEGES ON SEQUENCES TO {user_q};\n"
+    )
 
     with db.connect() as conn:
         row = conn.execute(
