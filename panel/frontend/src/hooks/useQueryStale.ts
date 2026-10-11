@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 const STALE_MS = 15_000
 
-export function useQueryStale(dataUpdatedAt: number): boolean {
+function useStaleClock(): { now: number; mountedAt: number } {
   const [mountedAt] = useState(() => Date.now())
   const [now, setNow] = useState(() => Date.now())
 
@@ -11,8 +11,34 @@ export function useQueryStale(dataUpdatedAt: number): boolean {
     return () => window.clearInterval(id)
   }, [])
 
+  return { now, mountedAt }
+}
+
+function isTimestampStale(
+  dataUpdatedAt: number,
+  now: number,
+  mountedAt: number,
+): boolean {
   const reference = dataUpdatedAt > 0 ? dataUpdatedAt : mountedAt
   return now - reference > STALE_MS
+}
+
+/** Oldest successful fetch time; used when multiple queries feed one UI surface. */
+export function oldestSuccessfulUpdateAt(...dataUpdatedAts: number[]): number {
+  const successful = dataUpdatedAts.filter((at) => at > 0)
+  if (successful.length === 0) return 0
+  return Math.min(...successful)
+}
+
+export function useQueryStale(dataUpdatedAt: number): boolean {
+  const { now, mountedAt } = useStaleClock()
+  return isTimestampStale(dataUpdatedAt, now, mountedAt)
+}
+
+/** Stale when any of the queries has not succeeded within the stale window. */
+export function useAnyQueryStale(...dataUpdatedAts: number[]): boolean {
+  const { now, mountedAt } = useStaleClock()
+  return dataUpdatedAts.some((at) => isTimestampStale(at, now, mountedAt))
 }
 
 export { STALE_MS }

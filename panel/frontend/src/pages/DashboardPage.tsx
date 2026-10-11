@@ -59,9 +59,10 @@ export function DashboardPage() {
         <MetricCard
           title="CPU"
           dataUpdatedAt={currentQuery.dataUpdatedAt}
+          historyDataUpdatedAt={historyQuery.dataUpdatedAt}
           chartData={cpuChart}
           chartValueFormatter={percentChartFormatter}
-          chartColor="#22C55E"
+          chartColor="var(--color-accent)"
           chartYDomain={[0, 100]}
           tableHeaders={['Time', 'CPU %']}
           tableRows={chartTableRows(cpuChart, percentChartFormatter)}
@@ -86,9 +87,10 @@ export function DashboardPage() {
         <MetricCard
           title="Memory"
           dataUpdatedAt={currentQuery.dataUpdatedAt}
+          historyDataUpdatedAt={historyQuery.dataUpdatedAt}
           chartData={memChart}
           chartValueFormatter={percentChartFormatter}
-          chartColor="#38BDF8"
+          chartColor="var(--color-foreground)"
           chartYDomain={[0, 100]}
           tableHeaders={['Time', 'Used %']}
           tableRows={chartTableRows(memChart, percentChartFormatter)}
@@ -111,9 +113,10 @@ export function DashboardPage() {
         <MetricCard
           title="Disk"
           dataUpdatedAt={currentQuery.dataUpdatedAt}
+          historyDataUpdatedAt={historyQuery.dataUpdatedAt}
           chartData={diskChart}
           chartValueFormatter={percentChartFormatter}
-          chartColor="#F59E0B"
+          chartColor="var(--color-warning)"
           chartYDomain={[0, 100]}
           tableHeaders={['Time', 'Used %']}
           tableRows={chartTableRows(diskChart, percentChartFormatter)}

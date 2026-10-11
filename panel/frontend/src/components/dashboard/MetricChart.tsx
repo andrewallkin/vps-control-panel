@@ -27,7 +27,7 @@ export function MetricChart({
   data,
   paused,
   valueFormatter = (v) => String(v),
-  color = '#22C55E',
+  color = 'var(--color-accent)',
   yDomain,
 }: MetricChartProps) {
   const reduced = useReducedMotion()
@@ -52,17 +52,21 @@ export function MetricChart({
     <div className="h-40 w-full" aria-hidden>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <CartesianGrid stroke="#475569" strokeDasharray="3 3" vertical={false} />
+          <CartesianGrid
+            stroke="var(--color-border)"
+            strokeDasharray="3 3"
+            vertical={false}
+          />
           <XAxis
             dataKey="label"
-            tick={{ fill: '#94A3B8', fontSize: 10 }}
+            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 10 }}
             tickLine={false}
-            axisLine={{ stroke: '#475569' }}
+            axisLine={{ stroke: 'var(--color-border)' }}
             minTickGap={24}
           />
           <YAxis
             domain={yDomain ?? ['auto', 'auto']}
-            tick={{ fill: '#94A3B8', fontSize: 10 }}
+            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 10 }}
             tickLine={false}
             axisLine={false}
             width={40}
@@ -70,12 +74,12 @@ export function MetricChart({
           />
           <Tooltip
             contentStyle={{
-              background: '#1B2336',
-              border: '1px solid #475569',
+              background: 'var(--color-card)',
+              border: '1px solid var(--color-border)',
               borderRadius: 6,
               fontSize: 12,
             }}
-            labelStyle={{ color: '#F8FAFC' }}
+            labelStyle={{ color: 'var(--color-foreground)' }}
             formatter={(value) => [
               valueFormatter(typeof value === 'number' ? value : Number(value)),
               '',

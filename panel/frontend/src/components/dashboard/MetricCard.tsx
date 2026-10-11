@@ -1,6 +1,9 @@
 import { Pause, Play } from '@phosphor-icons/react'
 import { useState, type ReactNode } from 'react'
-import { useQueryStale } from '../../hooks/useQueryStale'
+import {
+  oldestSuccessfulUpdateAt,
+  useAnyQueryStale,
+} from '../../hooks/useQueryStale'
 import { useTickingNow } from '../../hooks/useTickingNow'
 import { formatSecondsAgo } from '../../lib/format'
 import { StaleBadge } from '../StatusBadge'
@@ -9,6 +12,8 @@ import { MetricChart, type ChartPoint } from './MetricChart'
 export interface MetricCardProps {
   title: string
   dataUpdatedAt: number
+  /** When set (e.g. metrics history), stale/time-ago follow both queries. */
+  historyDataUpdatedAt?: number
   children: ReactNode
   chartData?: ChartPoint[]
   chartValueFormatter?: (value: number) => string
@@ -21,6 +26,7 @@ export interface MetricCardProps {
 export function MetricCard({
   title,
   dataUpdatedAt,
+  historyDataUpdatedAt,
   children,
   chartData = [],
   chartValueFormatter,
@@ -31,14 +37,19 @@ export function MetricCard({
 }: MetricCardProps) {
   const [chartPaused, setChartPaused] = useState(false)
   const now = useTickingNow()
-  const isStale = useQueryStale(dataUpdatedAt)
+  const freshnessTimestamps =
+    historyDataUpdatedAt != null
+      ? [dataUpdatedAt, historyDataUpdatedAt]
+      : [dataUpdatedAt]
+  const displayUpdatedAt = oldestSuccessfulUpdateAt(...freshnessTimestamps)
+  const isStale = useAnyQueryStale(...freshnessTimestamps)
 
   return (
     <section className="flex flex-col rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
+          <span>updated {formatSecondsAgo(displayUpdatedAt, now)}</span>
           {isStale ? <StaleBadge /> : null}
           <button
             type="button"
