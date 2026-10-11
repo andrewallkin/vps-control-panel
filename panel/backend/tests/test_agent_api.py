@@ -297,6 +297,35 @@ def test_dashboard_status_error_keeps_metrics_warnings(panel_settings, frozen_ti
     ]
 
 
+def test_dashboard_status_unreachable_keeps_metrics_warnings(
+    panel_settings, frozen_time, admin_user
+):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/metrics/current":
+            return httpx.Response(200, json={"cpus": [], "mem_percent": 91.0, "disks": []})
+        if request.url.path == "/v1/backup/status":
+            raise httpx.ConnectError("down")
+        if request.url.path == "/v1/backup/settings":
+            return httpx.Response(200, json={"schedule_hours": "0,12"})
+        return httpx.Response(404)
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        login(client, admin_user, frozen_time)
+        response = client.get("/api/dashboard/summary")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["backup"] is None
+    assert {"level": "warning", "code": "memory_high", "message": "Memory above 90%"} in body[
+        "warnings"
+    ]
+    assert {"level": "critical", "code": "agent_unreachable", "message": "Agent unreachable"} in (
+        body["warnings"]
+    )
+
+
 def test_dashboard_settings_error_no_overdue_warning(panel_settings, frozen_time, admin_user):
     old = frozen_time - timedelta(hours=25)
 

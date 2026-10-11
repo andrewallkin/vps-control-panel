@@ -108,26 +108,34 @@ async def dashboard_summary(
     now = _now(request)
 
     metrics: Any = None
+    metrics_unreachable = False
     try:
         metrics = await agent.get("/v1/metrics/current")
     except AgentError as exc:
         if _agent_unreachable(exc):
-            return _empty_summary()
+            metrics_unreachable = True
 
     status: Any = None
+    status_unreachable = False
     try:
         status = await agent.get("/v1/backup/status")
     except AgentError as exc:
         if _agent_unreachable(exc):
-            return _empty_summary()
+            status_unreachable = True
 
     schedule_hours: str | None = None
+    settings_unreachable = False
     try:
         settings = await agent.get("/v1/backup/settings")
         schedule_hours = _schedule_hours_from_settings(settings)
     except AgentError as exc:
         if _agent_unreachable(exc):
-            return _empty_summary()
+            settings_unreachable = True
+
+    agent_unreachable = metrics_unreachable or status_unreachable or settings_unreachable
+    agent_reachable = not metrics_unreachable or not status_unreachable or not settings_unreachable
+    if agent_unreachable and not agent_reachable:
+        return _empty_summary()
 
     backup: dict[str, Any] | None = None
     if isinstance(status, dict):
@@ -168,6 +176,15 @@ async def dashboard_summary(
             warnings.append(
                 {"level": "warning", "code": "backup_overdue", "message": "Backup overdue"}
             )
+
+    if agent_unreachable and agent_reachable:
+        warnings.append(
+            {
+                "level": "critical",
+                "code": "agent_unreachable",
+                "message": "Agent unreachable",
+            }
+        )
 
     return {
         "backup": backup,
