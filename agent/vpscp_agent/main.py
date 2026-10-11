@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from vpscp_agent import __version__, audit, container_metrics, metrics
 from vpscp_agent.commands import CommandError, run_command
 from vpscp_agent.config import Settings
-from vpscp_agent.db_ops import ConflictError
+from vpscp_agent.db_ops import ConflictError, NotFoundError
 from vpscp_agent.jobs import JobLockedError, JobManager
 from vpscp_agent.pg import Psql
 from vpscp_agent.routes import backup as backup_routes
@@ -69,13 +69,19 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     async def conflict_handler(_request: Request, exc: ConflictError) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(exc)})
 
+    @app.exception_handler(NotFoundError)
+    async def not_found_handler(_request: Request, exc: NotFoundError) -> JSONResponse:
+        return JSONResponse(status_code=404, content={"detail": str(exc)})
+
     @app.exception_handler(CommandError)
     async def command_error_handler(_request: Request, exc: CommandError) -> JSONResponse:
         return JSONResponse(status_code=502, content={"detail": str(exc)})
 
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
-        if request.url.path.startswith(("/v1/db", "/v1/restore", "/v1/backup")):
+        if request.url.path.startswith(
+            ("/v1/db", "/v1/restore", "/v1/backup", "/v1/domains", "/v1/server")
+        ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
         raise exc
 

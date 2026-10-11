@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from collections.abc import Callable
 
 import psutil
@@ -74,27 +75,46 @@ def allocate_port(
     listen = listening_ports if listening_ports is not None else _default_listening_ports
 
     with db.connect() as conn:
-        row = conn.execute(
-            "SELECT port FROM port_allocation WHERE owner = ? AND env_var = ?",
-            (owner, env_var),
-        ).fetchone()
-        if row is not None:
-            return int(row["port"])
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            row = conn.execute(
+                "SELECT port FROM port_allocation WHERE owner = ? AND env_var = ?",
+                (owner, env_var),
+            ).fetchone()
+            if row is not None:
+                conn.execute("COMMIT")
+                return int(row["port"])
 
-        taken = {
-            int(r["port"]) for r in conn.execute("SELECT port FROM port_allocation").fetchall()
-        }
-        listening = listen()
-        for port in range(PORT_POOL_START, PORT_POOL_END + 1):
-            if port in RESERVED_POOL_PORTS:
-                continue
-            if port in taken or port in listening:
-                continue
-            conn.execute(
-                "INSERT INTO port_allocation (port, owner, env_var) VALUES (?, ?, ?)",
-                (port, owner, env_var),
-            )
-            return port
+            taken = {
+                int(r["port"]) for r in conn.execute("SELECT port FROM port_allocation").fetchall()
+            }
+            listening = listen()
+            for port in range(PORT_POOL_START, PORT_POOL_END + 1):
+                if port in RESERVED_POOL_PORTS:
+                    continue
+                if port in taken or port in listening:
+                    continue
+                try:
+                    conn.execute(
+                        "INSERT INTO port_allocation (port, owner, env_var) VALUES (?, ?, ?)",
+                        (port, owner, env_var),
+                    )
+                except sqlite3.IntegrityError:
+                    row = conn.execute(
+                        "SELECT port FROM port_allocation WHERE owner = ? AND env_var = ?",
+                        (owner, env_var),
+                    ).fetchone()
+                    if row is not None:
+                        conn.execute("COMMIT")
+                        return int(row["port"])
+                    taken.add(port)
+                    continue
+                conn.execute("COMMIT")
+                return port
+            conn.execute("ROLLBACK")
+        except Exception:
+            conn.execute("ROLLBACK")
+            raise
     raise ConflictError("no free ports in pool")
 
 

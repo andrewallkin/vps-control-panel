@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
-from vpscp_agent.db_ops import ConflictError
+from vpscp_agent.db_ops import ConflictError, NotFoundError
 from vpscp_agent.state import StateDB
 from vpscp_agent.validation import validate_domain, validate_subdomain
 
@@ -82,7 +82,7 @@ def unregister_domain(db: StateDB, name: str) -> None:
             raise ConflictError(f"domain still has hostnames: {name!r}")
         cursor = conn.execute("DELETE FROM domain WHERE name = ?", (name,))
         if cursor.rowcount == 0:
-            raise ValueError(f"domain not registered: {name!r}")
+            raise NotFoundError(f"domain not registered: {name!r}")
 
 
 def list_domains(db: StateDB) -> list[DomainRecord]:

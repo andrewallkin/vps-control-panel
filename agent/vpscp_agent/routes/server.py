@@ -31,19 +31,32 @@ def _get_setting(db: StateDB, key: str) -> str | None:
     return None if row is None else row["value"]
 
 
-def _set_settings(db: StateDB, *, public_ipv4: str | None, acme_email: str | None) -> None:
+def _set_settings(
+    db: StateDB,
+    *,
+    public_ipv4: str | None = None,
+    acme_email: str | None = None,
+    update_public_ipv4: bool = False,
+    update_acme_email: bool = False,
+) -> None:
     with db.connect() as conn:
-        for key, value in (
-            ("public_ipv4", public_ipv4),
-            ("acme_email", acme_email),
-        ):
-            if value is None:
-                conn.execute("DELETE FROM agent_setting WHERE key = ?", (key,))
+        if update_public_ipv4:
+            if public_ipv4 is None:
+                conn.execute("DELETE FROM agent_setting WHERE key = ?", ("public_ipv4",))
             else:
                 conn.execute(
                     "INSERT INTO agent_setting (key, value) VALUES (?, ?) "
                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-                    (key, value),
+                    ("public_ipv4", public_ipv4),
+                )
+        if update_acme_email:
+            if acme_email is None:
+                conn.execute("DELETE FROM agent_setting WHERE key = ?", ("acme_email",))
+            else:
+                conn.execute(
+                    "INSERT INTO agent_setting (key, value) VALUES (?, ?) "
+                    "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    ("acme_email", acme_email),
                 )
 
 
@@ -103,10 +116,20 @@ def get_server_settings(request: Request) -> ServerSettings:
 @router.put("/v1/server/settings")
 def put_server_settings(body: ServerSettingsUpdate, request: Request) -> ServerSettings:
     db = request.app.state.db
-    params = {"public_ipv4": body.public_ipv4, "acme_email": body.acme_email}
+    fields_set = body.model_fields_set
+    params = {key: getattr(body, key) for key in fields_set}
     with audit.audited(db, "server.settings.update", params):
-        _set_settings(db, public_ipv4=body.public_ipv4, acme_email=body.acme_email)
-    return ServerSettings(public_ipv4=body.public_ipv4, acme_email=body.acme_email)
+        _set_settings(
+            db,
+            public_ipv4=body.public_ipv4,
+            acme_email=body.acme_email,
+            update_public_ipv4="public_ipv4" in fields_set,
+            update_acme_email="acme_email" in fields_set,
+        )
+    return ServerSettings(
+        public_ipv4=_get_setting(db, "public_ipv4"),
+        acme_email=_get_setting(db, "acme_email"),
+    )
 
 
 @router.get("/v1/domains")

@@ -1,3 +1,6 @@
+import sqlite3
+from contextlib import contextmanager
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -112,6 +115,41 @@ def test_allocate_port_idempotent(state_db: StateDB):
     assert second == first
 
 
+def test_allocate_port_retries_after_port_integrity_error(state_db: StateDB, monkeypatch):
+    attempts = {"insert": 0}
+    real_connect = state_db.connect
+
+    class _ConnWrapper:
+        def __init__(self, conn: sqlite3.Connection) -> None:
+            self._conn = conn
+
+        def execute(self, sql, parameters=(), /):
+            if (
+                isinstance(sql, str)
+                and "INSERT INTO port_allocation" in sql
+                and parameters
+                and parameters[0] == 10000
+            ):
+                attempts["insert"] += 1
+                if attempts["insert"] == 1:
+                    raise sqlite3.IntegrityError("simulated port collision")
+            return self._conn.execute(sql, parameters)
+
+        def __getattr__(self, name: str):
+            return getattr(self._conn, name)
+
+    @contextmanager
+    def connect_with_collision():
+        with real_connect() as conn:
+            yield _ConnWrapper(conn)
+
+    monkeypatch.setattr(state_db, "connect", connect_with_collision)
+    port = allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: set())
+
+    assert port == 10001
+    assert attempts["insert"] == 1
+
+
 def test_release_ports_and_list(state_db: StateDB):
     allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: set())
     allocate_port(state_db, "owner-a", "OTHER_PORT", listening_ports=lambda: set())
@@ -163,6 +201,22 @@ def test_server_settings_get_not_audited(server_client):
     assert len(audit.list_events(db)) == before
 
 
+def test_server_settings_partial_update_preserves_omitted(server_client):
+    server_client.put(
+        "/v1/server/settings",
+        json={"public_ipv4": "203.0.113.10", "acme_email": "admin@example.com"},
+    )
+    response = server_client.put(
+        "/v1/server/settings",
+        json={"public_ipv4": "198.51.100.5"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "public_ipv4": "198.51.100.5",
+        "acme_email": "admin@example.com",
+    }
+
+
 def test_domain_routes(server_client):
     db = server_client.app.state.db
 
@@ -192,6 +246,19 @@ def test_domain_routes(server_client):
     [delete_event, register_event] = audit.list_events(db)[:2]
     assert register_event.operation == "domain.register"
     assert delete_event.operation == "domain.unregister"
+
+
+def test_delete_unknown_domain_returns_404(server_client):
+    response = server_client.delete("/v1/domains/example.com")
+    assert response.status_code == 404
+
+
+def test_register_domain_empty_zone_id_returns_400(server_client):
+    response = server_client.post(
+        "/v1/domains",
+        json={"name": "example.com", "zone_id": ""},
+    )
+    assert response.status_code == 400
 
 
 def test_port_routes(server_client, monkeypatch):
