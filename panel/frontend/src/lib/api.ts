@@ -98,3 +98,19 @@ export async function loginRequest(payload: {
   setCachedCsrfToken(data.csrf_token)
   return data
 }
+
+export async function stepUpRequest(code: string): Promise<{ stepped_up_until: string | null }> {
+  return apiJson('/api/auth/step-up', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+}
+
+export function isStepUpRequired(error: unknown): boolean {
+  if (!(error instanceof ApiError) || error.status !== 403) {
+    return false
+  }
+  const body = error.body as { detail?: string } | null
+  return body?.detail === 'step_up_required'
+}

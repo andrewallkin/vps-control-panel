@@ -7,7 +7,10 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { CloudflareSetupStep } from '../components/setup/CloudflareSetupStep'
+import { DomainsSetupStep } from '../components/setup/DomainsSetupStep'
 import { LogViewer } from '../components/setup/LogViewer'
+import { PanelHostnameSetupStep } from '../components/setup/PanelHostnameSetupStep'
 import { ProgressBar } from '../components/setup/ProgressBar'
 import { RestoreConfirmDialog } from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
@@ -15,12 +18,14 @@ import { SetupStepper, type WizardStepId } from '../components/setup/SetupSteppe
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
+import { fetchCloudflareZones, fetchDomains } from '../lib/domainsApi'
 import {
   completeSetup,
   fetchSetupState,
   markDatabaseEmpty,
   startSetupRestore,
   type JobEndPayload,
+  type SetupStep,
   type UploadCompleteInfo,
 } from '../lib/setupApi'
 
@@ -31,8 +36,31 @@ function isAcceptedDump(file: File): boolean {
   return name.endsWith('.sql') || name.endsWith('.sql.gz')
 }
 
-function databaseStatusFromState(steps: { id: string; status: string }[]): string {
-  return steps.find((step) => step.id === 'database')?.status ?? 'pending'
+function stepStatus(steps: SetupStep[], id: SetupStep['id']): string {
+  return steps.find((step) => step.id === id)?.status ?? 'pending'
+}
+
+function resolveActiveStep(
+  steps: SetupStep[],
+  hasValidCert: boolean,
+  restoreJobId: string | null,
+  uploading: boolean,
+  uploadInfo: UploadCompleteInfo | null,
+): WizardStepId {
+  const databaseStatus = stepStatus(steps, 'database')
+  if (databaseStatus === 'pending' || uploading || uploadInfo || restoreJobId) {
+    return 'database'
+  }
+  if (stepStatus(steps, 'cloudflare') !== 'done') {
+    return 'cloudflare'
+  }
+  if (!hasValidCert) {
+    return 'domains'
+  }
+  if (stepStatus(steps, 'panel_hostname') !== 'done') {
+    return 'panel_hostname'
+  }
+  return 'finish'
 }
 
 export function SetupPage() {
@@ -47,9 +75,22 @@ export function SetupPage() {
     refetchIntervalInBackground: false,
   })
 
-  const databaseStatus = setupQuery.data
-    ? databaseStatusFromState(setupQuery.data.steps)
-    : 'pending'
+  const zonesQuery = useQuery({
+    queryKey: ['cloudflare', 'zones'],
+    queryFn: fetchCloudflareZones,
+    enabled: stepStatus(setupQuery.data?.steps ?? [], 'cloudflare') === 'done',
+    refetchIntervalInBackground: false,
+  })
+
+  const domainsQuery = useQuery({
+    queryKey: ['domains'],
+    queryFn: fetchDomains,
+    enabled: stepStatus(setupQuery.data?.steps ?? [], 'cloudflare') === 'done',
+    refetchIntervalInBackground: false,
+    refetchInterval: 5000,
+  })
+
+  const hasValidCert = (domainsQuery.data ?? []).some((row) => row.cert_status === 'valid')
 
   const [uploadInfo, setUploadInfo] = useState<UploadCompleteInfo | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
@@ -62,15 +103,14 @@ export function SetupPage() {
   const [jobEnd, setJobEnd] = useState<JobEndPayload | null>(null)
   const [dragOver, setDragOver] = useState(false)
 
-  const activeStep: WizardStepId = useMemo(() => {
-    if (databaseStatus === 'empty' || databaseStatus === 'restored') {
-      return 'finish'
-    }
-    if (uploading || uploadInfo || restoreJobId) {
-      return 'database'
-    }
-    return 'database'
-  }, [databaseStatus, uploadInfo, restoreJobId, uploading])
+  const steps = useMemo(() => setupQuery.data?.steps ?? [], [setupQuery.data?.steps])
+  const databaseStatus = stepStatus(steps, 'database')
+
+  const activeStep = useMemo(
+    () =>
+      resolveActiveStep(steps, hasValidCert, restoreJobId, uploading, uploadInfo),
+    [steps, hasValidCert, restoreJobId, uploading, uploadInfo],
+  )
 
   const emptyMutation = useMutation({
     mutationFn: markDatabaseEmpty,
@@ -94,6 +134,10 @@ export function SetupPage() {
       setConfirmOpen(false)
     },
   })
+
+  const refreshSetup = useCallback(() => {
+    void setupQuery.refetch()
+  }, [setupQuery])
 
   const startUpload = useCallback(async (file: File) => {
     if (!isAcceptedDump(file)) {
@@ -155,22 +199,25 @@ export function SetupPage() {
     [setupQuery],
   )
 
+  const cloudflareConfigured =
+    stepStatus(steps, 'cloudflare') === 'done' || zonesQuery.data?.configured === true
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="space-y-2">
         <h1 className="text-xl font-semibold tracking-tight">First-run setup</h1>
         <p className="text-sm text-muted-foreground">
-          Configure the panel database before using the dashboard.
+          Configure the database, Cloudflare, domains, and panel URL before using the dashboard.
         </p>
       </div>
 
-      <SetupStepper active={activeStep} databaseStatus={databaseStatus} />
+      <SetupStepper active={activeStep} steps={steps} />
 
       {setupQuery.isError ? (
         <p className="text-sm text-destructive">Could not load setup status.</p>
       ) : null}
 
-      {databaseStatus === 'pending' && !restoreJobId ? (
+      {activeStep === 'database' && databaseStatus === 'pending' && !restoreJobId ? (
         <section className="space-y-4" aria-labelledby="database-step-heading">
           <h2 id="database-step-heading" className="text-base font-semibold">
             Database
@@ -189,7 +236,7 @@ export function SetupPage() {
               <Database weight="regular" aria-hidden className="size-6 text-accent" />
               <span className="font-medium">Start empty</span>
               <span className="text-xs text-muted-foreground">
-                Keep the default empty cluster and finish setup.
+                Keep the default empty cluster and continue setup.
               </span>
             </button>
 
@@ -276,7 +323,23 @@ export function SetupPage() {
         </section>
       ) : null}
 
-      {(databaseStatus === 'empty' || databaseStatus === 'restored') && (
+      {activeStep === 'cloudflare' && !restoreJobId ? (
+        <CloudflareSetupStep
+          configured={cloudflareConfigured}
+          zones={zonesQuery.data?.zones ?? []}
+          onConfigured={refreshSetup}
+        />
+      ) : null}
+
+      {activeStep === 'domains' && !restoreJobId ? (
+        <DomainsSetupStep onCertReady={refreshSetup} />
+      ) : null}
+
+      {activeStep === 'panel_hostname' && !restoreJobId ? (
+        <PanelHostnameSetupStep onSaved={refreshSetup} />
+      ) : null}
+
+      {activeStep === 'finish' && !restoreJobId ? (
         <section className="space-y-3" aria-labelledby="finish-heading">
           <h2 id="finish-heading" className="text-base font-semibold">
             Finish
@@ -284,7 +347,7 @@ export function SetupPage() {
           <p className="text-sm text-muted-foreground">
             {databaseStatus === 'restored'
               ? 'Restore completed. Complete setup to open the dashboard.'
-              : 'Empty cluster ready. Complete setup to open the dashboard.'}
+              : 'Configuration is ready. Complete setup to open the dashboard.'}
           </p>
           <button
             type="button"
@@ -301,7 +364,7 @@ export function SetupPage() {
             <p className="text-sm text-destructive">Could not complete setup.</p>
           ) : null}
         </section>
-      )}
+      ) : null}
 
       <RestoreConfirmDialog
         key={confirmDialogKey}

@@ -1,47 +1,73 @@
 import { CheckCircle, Circle, CircleDashed } from '@phosphor-icons/react'
+import type { SetupStep, SetupStepId } from '../../lib/setupApi'
 
-export type WizardStepId = 'account' | 'database' | 'finish'
+export type WizardStepId = SetupStepId | 'finish'
 
 export interface SetupStepperProps {
   active: WizardStepId
-  databaseStatus: string
+  steps: SetupStep[]
 }
 
-const steps: { id: WizardStepId; label: string }[] = [
-  { id: 'account', label: 'Account' },
-  { id: 'database', label: 'Database' },
-  { id: 'finish', label: 'Finish' },
+const stepOrder: WizardStepId[] = [
+  'account',
+  'database',
+  'cloudflare',
+  'domains',
+  'panel_hostname',
+  'finish',
 ]
+
+const stepLabels: Record<WizardStepId, string> = {
+  account: 'Account',
+  database: 'Database',
+  cloudflare: 'Cloudflare',
+  domains: 'Domains',
+  panel_hostname: 'Panel hostname',
+  finish: 'Finish',
+}
+
+function stepStatus(steps: SetupStep[], id: SetupStepId): string {
+  return steps.find((step) => step.id === id)?.status ?? 'pending'
+}
 
 function stepState(
   stepId: WizardStepId,
   active: WizardStepId,
-  databaseStatus: string,
+  steps: SetupStep[],
 ): 'done' | 'current' | 'upcoming' {
-  const order: WizardStepId[] = ['account', 'database', 'finish']
-  const activeIndex = order.indexOf(active)
-  const stepIndex = order.indexOf(stepId)
+  const activeIndex = stepOrder.indexOf(active)
+  const stepIndex = stepOrder.indexOf(stepId)
 
   if (stepId === 'account') {
     return 'done'
   }
-  if (stepId === 'database') {
-    if (databaseStatus !== 'pending') {
-      return 'done'
+
+  if (stepId === 'finish') {
+    const panelDone = stepStatus(steps, 'panel_hostname') === 'done'
+    if (!panelDone) {
+      return stepIndex <= activeIndex ? 'current' : 'upcoming'
     }
-    return active === 'database' ? 'current' : stepIndex <= activeIndex ? 'current' : 'upcoming'
-  }
-  if (databaseStatus !== 'pending') {
     return active === 'finish' ? 'current' : 'done'
   }
-  return stepIndex <= activeIndex ? 'current' : 'upcoming'
+
+  const id = stepId as SetupStepId
+  const status = stepStatus(steps, id)
+  const done =
+    id === 'database'
+      ? status !== 'pending'
+      : status === 'done'
+
+  if (done) {
+    return 'done'
+  }
+  return stepIndex === activeIndex ? 'current' : stepIndex < activeIndex ? 'current' : 'upcoming'
 }
 
-export function SetupStepper({ active, databaseStatus }: SetupStepperProps) {
+export function SetupStepper({ active, steps }: SetupStepperProps) {
   return (
-    <ol className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
-      {steps.map((step, index) => {
-        const state = stepState(step.id, active, databaseStatus)
+    <ol className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+      {stepOrder.map((stepId, index) => {
+        const state = stepState(stepId, active, steps)
         const icon =
           state === 'done' ? (
             <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />
@@ -52,7 +78,7 @@ export function SetupStepper({ active, databaseStatus }: SetupStepperProps) {
           )
 
         return (
-          <li key={step.id} className="flex min-w-0 items-center gap-2 sm:flex-1">
+          <li key={stepId} className="flex min-w-0 items-center gap-2 sm:flex-1 sm:min-w-[8rem]">
             <div className="flex min-w-0 items-center gap-2">
               {icon}
               <span
@@ -62,17 +88,14 @@ export function SetupStepper({ active, databaseStatus }: SetupStepperProps) {
                     : 'text-sm font-medium text-foreground'
                 }
               >
-                {step.label}
-                {step.id === 'account' ? (
+                {stepLabels[stepId]}
+                {stepId === 'account' ? (
                   <span className="sr-only">, completed</span>
                 ) : null}
               </span>
             </div>
-            {index < steps.length - 1 ? (
-              <span
-                aria-hidden
-                className="hidden h-px flex-1 bg-border sm:block"
-              />
+            {index < stepOrder.length - 1 ? (
+              <span aria-hidden className="hidden h-px flex-1 bg-border sm:block" />
             ) : null}
           </li>
         )
