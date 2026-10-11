@@ -55,13 +55,20 @@ def _backup_overdue(last_run: Any, schedule_hours: str | None, now: datetime) ->
         return True
     if schedule_hours is None:
         return False
-    threshold = _backup_threshold_hours(schedule_hours)
+    try:
+        threshold = _backup_threshold_hours(schedule_hours)
+    except ValueError:
+        return False
     elapsed = (now - finished_at).total_seconds() / 3600.0
     return elapsed > threshold
 
 
 def _backup_failed(last_run: Any) -> bool:
     return isinstance(last_run, dict) and last_run.get("success") is False
+
+
+def _agent_unreachable(exc: AgentError) -> bool:
+    return exc.status == 503 and exc.detail == "agent unavailable"
 
 
 def _empty_summary() -> dict[str, Any]:
@@ -79,6 +86,19 @@ def _empty_summary() -> dict[str, Any]:
     }
 
 
+def _schedule_hours_from_settings(settings: Any) -> str | None:
+    if not isinstance(settings, dict):
+        return None
+    raw = settings.get("schedule_hours")
+    if not isinstance(raw, str):
+        return None
+    try:
+        _parse_schedule_hours(raw)
+    except ValueError:
+        return None
+    return raw
+
+
 @router.get("/api/dashboard/summary")
 async def dashboard_summary(
     request: Request,
@@ -86,29 +106,37 @@ async def dashboard_summary(
     agent: Annotated[AgentClient, Depends(_agent)],
 ) -> dict[str, Any]:
     now = _now(request)
+
+    metrics: Any = None
     try:
         metrics = await agent.get("/v1/metrics/current")
+    except AgentError as exc:
+        if _agent_unreachable(exc):
+            return _empty_summary()
+
+    status: Any = None
+    try:
         status = await agent.get("/v1/backup/status")
-    except AgentError:
-        return _empty_summary()
+    except AgentError as exc:
+        if _agent_unreachable(exc):
+            return _empty_summary()
 
     schedule_hours: str | None = None
     try:
         settings = await agent.get("/v1/backup/settings")
-        if isinstance(settings, dict):
-            raw = settings.get("schedule_hours")
-            if isinstance(raw, str):
-                schedule_hours = raw
+        schedule_hours = _schedule_hours_from_settings(settings)
     except AgentError as exc:
-        if exc.status not in (404,):
+        if _agent_unreachable(exc):
             return _empty_summary()
 
-    last_run = status.get("last_run") if isinstance(status, dict) else None
-    backup = {
-        "last_run": last_run,
-        "overdue": _backup_overdue(last_run, schedule_hours, now),
-        "failed": _backup_failed(last_run),
-    }
+    backup: dict[str, Any] | None = None
+    if isinstance(status, dict):
+        last_run = status.get("last_run")
+        backup = {
+            "last_run": last_run,
+            "overdue": _backup_overdue(last_run, schedule_hours, now),
+            "failed": _backup_failed(last_run),
+        }
 
     warnings: list[dict[str, str]] = []
     disks = metrics.get("disks") if isinstance(metrics, dict) else None
@@ -131,10 +159,15 @@ async def dashboard_summary(
     if isinstance(mem_percent, (int, float)) and mem_percent > 90:
         warnings.append({"level": "warning", "code": "memory_high", "message": "Memory above 90%"})
 
-    if backup["failed"]:
-        warnings.append({"level": "critical", "code": "backup_failed", "message": "Backup failed"})
-    if backup["overdue"]:
-        warnings.append({"level": "warning", "code": "backup_overdue", "message": "Backup overdue"})
+    if backup is not None:
+        if backup["failed"]:
+            warnings.append(
+                {"level": "critical", "code": "backup_failed", "message": "Backup failed"}
+            )
+        if backup["overdue"]:
+            warnings.append(
+                {"level": "warning", "code": "backup_overdue", "message": "Backup overdue"}
+            )
 
     return {
         "backup": backup,

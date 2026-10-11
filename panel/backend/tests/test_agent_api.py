@@ -238,6 +238,98 @@ def test_dashboard_agent_unreachable(panel_settings, frozen_time, admin_user):
     ]
 
 
+def test_dashboard_metrics_error_keeps_backup(panel_settings, frozen_time, admin_user):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/metrics/current":
+            return httpx.Response(500, json={"detail": "metrics down"})
+        if request.url.path == "/v1/backup/status":
+            return httpx.Response(
+                200,
+                json={
+                    "last_run": {
+                        "success": True,
+                        "finished_at": frozen_time.isoformat(),
+                    },
+                    "trigger_pending": False,
+                    "container": "backup",
+                },
+            )
+        if request.url.path == "/v1/backup/settings":
+            return httpx.Response(200, json={"schedule_hours": "0,12"})
+        return httpx.Response(404)
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        login(client, admin_user, frozen_time)
+        response = client.get("/api/dashboard/summary")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["backup"] is not None
+    assert body["backup"]["last_run"]["success"] is True
+    assert not any(w["code"] == "agent_unreachable" for w in body["warnings"])
+    assert not any(w["code"] in ("disk_high", "memory_high") for w in body["warnings"])
+
+
+def test_dashboard_status_error_keeps_metrics_warnings(panel_settings, frozen_time, admin_user):
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/metrics/current":
+            return httpx.Response(200, json={"cpus": [], "mem_percent": 91.0, "disks": []})
+        if request.url.path == "/v1/backup/status":
+            return httpx.Response(500, json={"detail": "status down"})
+        if request.url.path == "/v1/backup/settings":
+            return httpx.Response(200, json={"schedule_hours": "0,12"})
+        return httpx.Response(404)
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        login(client, admin_user, frozen_time)
+        response = client.get("/api/dashboard/summary")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["backup"] is None
+    assert not any(w["code"] == "agent_unreachable" for w in body["warnings"])
+    assert {"level": "warning", "code": "memory_high", "message": "Memory above 90%"} in body[
+        "warnings"
+    ]
+
+
+def test_dashboard_settings_error_no_overdue_warning(panel_settings, frozen_time, admin_user):
+    old = frozen_time - timedelta(hours=25)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/metrics/current":
+            return httpx.Response(200, json={"cpus": [], "mem_percent": 50.0, "disks": []})
+        if request.url.path == "/v1/backup/status":
+            return httpx.Response(
+                200,
+                json={
+                    "last_run": {"success": True, "finished_at": old.isoformat()},
+                    "trigger_pending": False,
+                    "container": "backup",
+                },
+            )
+        if request.url.path == "/v1/backup/settings":
+            return httpx.Response(500, json={"detail": "settings down"})
+        return httpx.Response(404)
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        login(client, admin_user, frozen_time)
+        response = client.get("/api/dashboard/summary")
+    body = response.json()
+    assert response.status_code == 200
+    assert body["backup"] is not None
+    assert body["backup"]["overdue"] is False
+    assert not any(w["code"] == "backup_overdue" for w in body["warnings"])
+    assert not any(w["code"] == "agent_unreachable" for w in body["warnings"])
+
+
 def test_dashboard_disk_warning(panel_settings, frozen_time, admin_user):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/v1/metrics/current":
