@@ -43,6 +43,16 @@ MIGRATIONS: list[str] = [
     CREATE TABLE port_allocation (port INTEGER PRIMARY KEY, owner TEXT NOT NULL, env_var TEXT NOT NULL, UNIQUE(owner, env_var));
     CREATE TABLE agent_setting (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     """,
+    """
+    CREATE TABLE project (
+        slug TEXT PRIMARY KEY,
+        repo_url TEXT NOT NULL,
+        branch TEXT NOT NULL,
+        compose_file TEXT NOT NULL,
+        deploy_mode TEXT NOT NULL,
+        created_at TEXT NOT NULL
+    );
+    """,
 ]
 
 

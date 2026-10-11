@@ -27,6 +27,89 @@ def _matcher(pattern: re.Pattern[str], kind: str) -> Callable[[str], str]:
 
 
 validate_slug = _matcher(SLUG_RE, "project slug")
+
+RESERVED_PROJECT_SLUGS = frozenset({"panel", "vpscp-panel", "vpscp"})
+
+_REPO_URL_SSH_RE = re.compile(
+    r"^git@github.com:([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})\.git$"
+)
+_REPO_URL_HTTPS_RE = re.compile(
+    r"^https://github.com/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})(\.git)?$"
+)
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,100}$")
+_COMPOSE_FILE_RE = re.compile(r"^[A-Za-z0-9._/-]{1,200}$")
+
+
+def validate_project_slug(value: str) -> str:
+    validate_slug(value)
+    if value in RESERVED_PROJECT_SLUGS:
+        raise ValueError(f"reserved project slug: {value!r}")
+    return value
+
+
+def _validate_file_repo_url(value: str) -> str:
+    prefix = "file://"
+    if not value.startswith(prefix):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    path = value[len(prefix) :]
+    if not path.startswith("/"):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    if path.endswith("/") or "//" in path:
+        raise ValueError(f"invalid repo_url: {value!r}")
+    if any(ch in value for ch in ("\n", "\r", "\x00")):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    segments = path.split("/")
+    if any(segment == ".." for segment in segments):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    if any(segment == "" for segment in segments[1:]):
+        raise ValueError(f"invalid repo_url: {value!r}")
+    return value
+
+
+def validate_repo_url(value: str, *, allow_file_repos: bool = False) -> str:
+    if _REPO_URL_SSH_RE.fullmatch(value) or _REPO_URL_HTTPS_RE.fullmatch(value):
+        return value
+    if allow_file_repos:
+        return _validate_file_repo_url(value)
+    raise ValueError(f"invalid repo_url: {value!r}")
+
+
+def _reject_path_segments(value: str, kind: str) -> None:
+    if ".." in value:
+        raise ValueError(f"invalid {kind}: {value!r}")
+    if value.startswith(("-", "/")):
+        raise ValueError(f"invalid {kind}: {value!r}")
+    if "//" in value or value.endswith("/"):
+        raise ValueError(f"invalid {kind}: {value!r}")
+    for segment in value.split("/"):
+        if segment == "":
+            raise ValueError(f"invalid {kind}: {value!r}")
+
+
+def validate_branch(value: str) -> str:
+    if not _BRANCH_RE.fullmatch(value):
+        raise ValueError(f"invalid branch: {value!r}")
+    _reject_path_segments(value, "branch")
+    return value
+
+
+def validate_compose_file(value: str) -> str:
+    if not _COMPOSE_FILE_RE.fullmatch(value):
+        raise ValueError(f"invalid compose_file: {value!r}")
+    _reject_path_segments(value, "compose_file")
+    return value
+
+
+def validate_deploy_mode(value: str) -> str:
+    if value not in ("image", "build"):
+        raise ValueError(f"invalid deploy_mode: {value!r}")
+    return value
+
+
+def is_ssh_repo_url(repo_url: str) -> bool:
+    return repo_url.startswith("git@github.com:")
+
+
 validate_domain = _matcher(DOMAIN_RE, "domain")
 validate_env_key = _matcher(ENV_KEY_RE, "env key")
 validate_sql_ident = _matcher(SQL_IDENT_RE, "SQL identifier")

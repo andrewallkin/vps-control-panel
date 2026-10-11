@@ -21,6 +21,7 @@ class Settings:
     nginx_dir: Path
     tls_self_signed: bool
     cloudflare_api_base: str
+    allow_file_repos: bool
 
     @property
     def state_db_path(self) -> Path:
@@ -63,4 +64,5 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         nginx_dir=Path(env.get("VPSCP_NGINX_DIR", "/etc/nginx")),
         tls_self_signed=env.get("VPSCP_TLS_SELF_SIGNED") == "1",
         cloudflare_api_base=env.get("VPSCP_CLOUDFLARE_API", "https://api.cloudflare.com/client/v4"),
+        allow_file_repos=env.get("VPSCP_ALLOW_FILE_REPOS") == "1",
     )

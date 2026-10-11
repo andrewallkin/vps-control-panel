@@ -1,4 +1,4 @@
-import { Gauge, Globe, Gear, List, X } from '@phosphor-icons/react'
+import { Gauge, Globe, Gear, List, Stack, X } from '@phosphor-icons/react'
 import { useEffect, useId, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 
@@ -32,6 +32,10 @@ export function Layout() {
       <NavLink to="/" end className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <Gauge weight="regular" aria-hidden className="size-5 shrink-0" />
         Dashboard
+      </NavLink>
+      <NavLink to="/projects" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+        <Stack weight="regular" aria-hidden className="size-5 shrink-0" />
+        Projects
       </NavLink>
       <NavLink to="/domains" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <Globe weight="regular" aria-hidden className="size-5 shrink-0" />
