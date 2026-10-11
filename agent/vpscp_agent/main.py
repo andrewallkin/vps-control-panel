@@ -18,6 +18,7 @@ from vpscp_agent.db_ops import ConflictError, NotFoundError
 from vpscp_agent.jobs import JobLockedError, JobManager
 from vpscp_agent.nginx_apply import NginxTestError
 from vpscp_agent.pg import Psql
+from vpscp_agent.registry import DockerHubLoginError
 from vpscp_agent.routes import backup as backup_routes
 from vpscp_agent.routes import compose as compose_routes
 from vpscp_agent.routes import database as database_routes
@@ -26,6 +27,7 @@ from vpscp_agent.routes import docker as docker_routes
 from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.routes import nginx as nginx_routes
 from vpscp_agent.routes import projects as projects_routes
+from vpscp_agent.routes import registry as registry_routes
 from vpscp_agent.routes import restore as restore_routes
 from vpscp_agent.routes import server as server_routes
 from vpscp_agent.routes import tls as tls_routes
@@ -88,6 +90,12 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     async def cloudflare_error_handler(_request: Request, exc: CloudflareError) -> JSONResponse:
         return JSONResponse(status_code=502, content={"detail": str(exc)})
 
+    @app.exception_handler(DockerHubLoginError)
+    async def dockerhub_login_error_handler(
+        _request: Request, _exc: DockerHubLoginError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=502, content={"detail": "Docker Hub login failed"})
+
     @app.exception_handler(NginxTestError)
     async def nginx_test_error_handler(_request: Request, exc: NginxTestError) -> JSONResponse:
         return JSONResponse(status_code=422, content={"detail": exc.output})
@@ -105,6 +113,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
                 "/v1/tls",
                 "/v1/nginx",
                 "/v1/projects",
+                "/v1/registry",
             )
         ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -130,6 +139,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(nginx_routes.router)
     app.include_router(projects_routes.router)
     app.include_router(compose_routes.router)
+    app.include_router(registry_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
