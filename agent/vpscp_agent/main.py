@@ -1,11 +1,12 @@
 import asyncio
+import subprocess
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 
-from vpscp_agent import __version__, audit, metrics
+from vpscp_agent import __version__, audit, container_metrics, metrics
 from vpscp_agent.config import Settings
 from vpscp_agent.state import StateDB
 
@@ -61,5 +62,16 @@ def create_app(settings: Settings) -> FastAPI:
     @app.get("/v1/metrics/history")
     def metrics_history(hours: int = Query(24, ge=1, le=168)) -> list[metrics.MetricPoint]:
         return metrics.history(db, since=datetime.now(UTC) - timedelta(hours=hours))
+
+    @app.get("/v1/metrics/containers")
+    def metrics_containers() -> list[container_metrics.ContainerMetrics]:
+        try:
+            return container_metrics.collect_containers()
+        except (
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+        ) as exc:
+            raise HTTPException(status_code=503, detail=f"docker unavailable: {exc}") from exc
 
     return app
