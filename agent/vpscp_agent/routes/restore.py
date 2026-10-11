@@ -6,8 +6,6 @@ from vpscp_agent.restore import UploadInfo, UploadStore
 
 router = APIRouter(prefix="/v1/restore", tags=["restore"])
 
-_MAX_CHUNK_BYTES = 16 * 1024 * 1024
-
 
 class CreateUploadBody(BaseModel):
     filename: str
@@ -38,8 +36,6 @@ async def append_upload(
     offset: int = Query(..., ge=0),
 ) -> dict[str, int]:
     chunk = await request.body()
-    if len(chunk) > _MAX_CHUNK_BYTES:
-        raise ValueError("chunk exceeds 16 MiB")
     db = request.app.state.db
     params = {"upload_id": upload_id, "offset": offset, "bytes": len(chunk)}
     with audit.audited(db, "restore.append", params):
