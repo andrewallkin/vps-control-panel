@@ -19,6 +19,6 @@ WORKDIR /app
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
 
-COPY backup_script.py gcs_service.py logging_config.py ./
+COPY *.py ./
 
 CMD ["uv", "run", "--no-sync", "backup_script.py"]
