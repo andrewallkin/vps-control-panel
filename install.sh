@@ -152,13 +152,19 @@ install_agent() {
 }
 
 refresh_vpscp_gid() {
-  local gid
+  local gid env_file tmp
   gid="$(getent group vpscp | cut -d: -f3)"
-  if grep -q '^VPSCP_GID=' "${STACK_DIR}/.env"; then
-    sed -i "s/^VPSCP_GID=.*/VPSCP_GID=${gid}/" "${STACK_DIR}/.env"
+  env_file="${STACK_DIR}/.env"
+  tmp="$(mktemp "${env_file}.XXXXXX")"
+  if grep -q '^VPSCP_GID=' "${env_file}"; then
+    sed "s/^VPSCP_GID=.*/VPSCP_GID=${gid}/" "${env_file}" > "${tmp}"
   else
-    printf 'VPSCP_GID=%s\n' "${gid}" >> "${STACK_DIR}/.env"
+    cat "${env_file}" > "${tmp}"
+    printf 'VPSCP_GID=%s\n' "${gid}" >> "${tmp}"
   fi
+  chown root:root "${tmp}"
+  chmod 600 "${tmp}"
+  mv "${tmp}" "${env_file}"
 }
 
 bootstrap_panel_admin() {
