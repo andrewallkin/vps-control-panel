@@ -41,7 +41,6 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
   const [lines, setLines] = useState<string[]>([])
   const [paused, setPaused] = useState(false)
   const [search, setSearch] = useState('')
-  const [connected, setConnected] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pausedRef = useRef(paused)
   const sourceRef = useRef<EventSource | null>(null)
@@ -54,7 +53,6 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
     if (paused) {
       sourceRef.current?.close()
       sourceRef.current = null
-      setConnected(false)
       return
     }
 
@@ -69,7 +67,6 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
       `/api/projects/${encodeURIComponent(slug)}/logs?${params.toString()}`,
     )
     sourceRef.current = source
-    setConnected(true)
 
     source.onmessage = (event) => {
       const text = event.data
@@ -81,7 +78,6 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
 
     source.onerror = () => {
       source.close()
-      setConnected(false)
     }
 
     return () => {
@@ -160,7 +156,7 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
       >
         {displayLines.length === 0 ? (
           <p className="text-muted-foreground">
-            {connected ? 'Waiting for log…' : 'Log stream paused.'}
+            {paused ? 'Log stream paused.' : 'Waiting for log…'}
           </p>
         ) : (
           displayLines.map((line, index) => (

@@ -1,6 +1,6 @@
 import { Spinner } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CreationChecklist } from '../components/projects/CreationChecklist'
 import { EnvEditor, syncLockedEnvRows } from '../components/projects/EnvEditor'
@@ -131,49 +131,56 @@ export function NewProjectWizardPage() {
     refetchIntervalInBackground: false,
   })
 
-  useEffect(() => {
-    if (!existingProjectQuery.data || retrySlug === null) {
-      return
-    }
-    const project = existingProjectQuery.data
-    setDisplayName(project.display_name)
-    setSlug(project.slug)
+  const existingProject = existingProjectQuery.data
+  const [hydratedRetrySlug, setHydratedRetrySlug] = useState<string | null>(null)
+  const hydratingExisting =
+    existingProject !== undefined && retrySlug !== null && hydratedRetrySlug !== existingProject.slug
+  if (hydratingExisting && existingProject) {
+    setHydratedRetrySlug(existingProject.slug)
+    setDisplayName(existingProject.display_name)
+    setSlug(existingProject.slug)
     setSlugTouched(true)
-    setRepoUrl(project.repo_url)
-    setBranch(project.branch)
-    setComposeFile(project.compose_file)
-    setDeployMode(project.deploy_mode)
-    setDockerHubRepo(project.docker_hub_repo ?? '')
-    setDatabaseMode(project.database_mode)
-    setDbName(project.db_name ?? defaultDbName(project.slug))
-    setDbUser(project.db_user ?? defaultDbUser(project.db_name ?? defaultDbName(project.slug)))
-    setWriteDatabaseUrl(project.write_database_url)
-    setActiveCreationSlug(project.slug)
-    const status = project.creation_state.status
+    setRepoUrl(existingProject.repo_url)
+    setBranch(existingProject.branch)
+    setComposeFile(existingProject.compose_file)
+    setDeployMode(existingProject.deploy_mode)
+    setDockerHubRepo(existingProject.docker_hub_repo ?? '')
+    setDatabaseMode(existingProject.database_mode)
+    setDbName(existingProject.db_name ?? defaultDbName(existingProject.slug))
+    setDbUser(
+      existingProject.db_user ??
+        defaultDbUser(existingProject.db_name ?? defaultDbName(existingProject.slug)),
+    )
+    setWriteDatabaseUrl(existingProject.write_database_url)
+    setActiveCreationSlug(existingProject.slug)
+    const status = existingProject.creation_state.status
     if (status === 'running' || status === 'failed') {
       setStep('progress')
     }
-  }, [existingProjectQuery.data, retrySlug])
+  }
 
-  useEffect(() => {
-    if (!slugTouched && displayName.trim()) {
-      const derived = slugFromName(displayName)
-      if (derived.ok) {
-        setSlug(derived.slug)
-      } else if (!derived.ok && derived.error === 'reserved slug') {
-        setSlug('panel')
-      } else {
-        setSlug(
-          displayName
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '-')
-            .replace(/^-+|-+$/g, ''),
-        )
-      }
+  const [slugDerivedFrom, setSlugDerivedFrom] = useState<string | null>(null)
+  if (!slugTouched && !hydratingExisting && displayName.trim() && slugDerivedFrom !== displayName) {
+    setSlugDerivedFrom(displayName)
+    const derived = slugFromName(displayName)
+    if (derived.ok) {
+      setSlug(derived.slug)
+    } else if (derived.error === 'reserved slug') {
+      setSlug('panel')
+    } else {
+      setSlug(
+        displayName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, ''),
+      )
     }
-  }, [displayName, slugTouched])
+  }
 
-  useEffect(() => {
+  const dbSyncKey = `${databaseMode}\0${slug}`
+  const [appliedDbSyncKey, setAppliedDbSyncKey] = useState<string | null>(null)
+  if (appliedDbSyncKey !== dbSyncKey) {
+    setAppliedDbSyncKey(dbSyncKey)
     if (databaseMode === 'new' && slug) {
       const name = defaultDbName(slug)
       setDbName(name)
@@ -186,24 +193,29 @@ export function NewProjectWizardPage() {
     if (databaseMode === 'adopted') {
       setWriteDatabaseUrl(true)
     }
-  }, [databaseMode, slug])
+  }
 
   const routePortEnvVars = useMemo(
     () => routes.map((r) => r.port_env_var).filter(Boolean),
     [routes],
   )
 
-  useEffect(() => {
-    const resolvedDbName =
-      databaseMode === 'adopted'
-        ? adoptedDbName
-        : databaseMode === 'new'
-          ? dbName
-          : ''
-    const resolvedDbUser =
-      databaseMode === 'adopted'
-        ? databasesQuery.data?.find((d) => d.name === adoptedDbName)?.owner ?? dbUser
-        : dbUser
+  const resolvedDbName =
+    databaseMode === 'adopted' ? adoptedDbName : databaseMode === 'new' ? dbName : ''
+  const resolvedDbUser =
+    databaseMode === 'adopted'
+      ? (databasesQuery.data?.find((d) => d.name === adoptedDbName)?.owner ?? dbUser)
+      : dbUser
+  const envSyncKey = JSON.stringify({
+    databaseMode,
+    resolvedDbName,
+    resolvedDbUser,
+    routePortEnvVars,
+    writeDatabaseUrl,
+  })
+  const [appliedEnvSyncKey, setAppliedEnvSyncKey] = useState<string | null>(null)
+  if (appliedEnvSyncKey !== envSyncKey) {
+    setAppliedEnvSyncKey(envSyncKey)
     setEnvRows((prev) =>
       syncLockedEnvRows(
         prev,
@@ -214,15 +226,7 @@ export function NewProjectWizardPage() {
         writeDatabaseUrl,
       ),
     )
-  }, [
-    databaseMode,
-    dbName,
-    dbUser,
-    adoptedDbName,
-    routePortEnvVars,
-    writeDatabaseUrl,
-    databasesQuery.data,
-  ])
+  }
 
   const slugValidation = validateProjectSlug(slug)
   const basicsValid =

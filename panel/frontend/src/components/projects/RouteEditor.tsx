@@ -1,5 +1,4 @@
 import { Plus, Trash } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
 import type { RouteDraft, RoutesValidationResult } from '../../lib/routeValidation'
 import { validateRoutes } from '../../lib/routeValidation'
 
@@ -10,38 +9,31 @@ export interface RouteEditorProps {
 }
 
 export function RouteEditor({ routes, onChange, onValidationChange }: RouteEditorProps) {
-  const [localRoutes, setLocalRoutes] = useState(routes)
-
-  useEffect(() => {
-    setLocalRoutes(routes)
-  }, [routes])
-
   function emit(next: RouteDraft[]) {
-    setLocalRoutes(next)
     onChange(next)
     onValidationChange?.(validateRoutes(next))
   }
 
   function updateRoute(index: number, patch: Partial<RouteDraft>) {
-    emit(localRoutes.map((route, i) => (i === index ? { ...route, ...patch } : route)))
+    emit(routes.map((route, i) => (i === index ? { ...route, ...patch } : route)))
   }
 
   function addRoute() {
-    emit([...localRoutes, { path_prefix: '/', port_env_var: '' }])
+    emit([...routes, { path_prefix: '/', port_env_var: '' }])
   }
 
   function removeRoute(index: number) {
-    if (localRoutes.length <= 1) {
+    if (routes.length <= 1) {
       return
     }
-    emit(localRoutes.filter((_, i) => i !== index))
+    emit(routes.filter((_, i) => i !== index))
   }
 
-  const validation = validateRoutes(localRoutes)
+  const validation = validateRoutes(routes)
 
   return (
     <div className="space-y-4">
-      {localRoutes.map((route, index) => (
+      {routes.map((route, index) => (
         <div
           key={index}
           className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 sm:flex-row sm:items-end"
@@ -72,7 +64,7 @@ export function RouteEditor({ routes, onChange, onValidationChange }: RouteEdito
           </div>
           <button
             type="button"
-            disabled={localRoutes.length <= 1}
+            disabled={routes.length <= 1}
             className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm text-muted-foreground transition-colors duration-200 hover:bg-muted disabled:opacity-50 cursor-pointer"
             onClick={() => removeRoute(index)}
           >

@@ -1,20 +1,25 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
+import type { EnvRow } from '../../lib/envEditorUtils'
 import { EnvEditor } from './EnvEditor'
+
+function EnvEditorHarness({ initialRows }: { initialRows: EnvRow[] }) {
+  const [rows, setRows] = useState(initialRows)
+  return <EnvEditor rows={rows} routePortEnvVars={[]} onChange={(next) => setRows(next)} />
+}
 
 describe('EnvEditor', () => {
   it('applies bulk paste without overwriting locked keys', async () => {
     const user = userEvent.setup()
 
     render(
-      <EnvEditor
-        rows={[
+      <EnvEditorHarness
+        initialRows={[
           { key: 'POSTGRES_PASSWORD', value: 'original-secret', locked: true },
           { key: 'FOO', value: '', locked: false },
         ]}
-        routePortEnvVars={[]}
-        onChange={() => undefined}
       />,
     )
 

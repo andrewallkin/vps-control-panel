@@ -1,5 +1,5 @@
 import { Plus, Trash } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   applyEnvPaste,
   type EnvRow,
@@ -16,24 +16,18 @@ export interface EnvEditorProps {
 }
 
 export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) {
-  const [localRows, setLocalRows] = useState(rows)
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [invalidPasteLines, setInvalidPasteLines] = useState<string[]>([])
   const [focusedKey, setFocusedKey] = useState<string | null>(null)
 
-  useEffect(() => {
-    setLocalRows(rows)
-  }, [rows])
-
   function emit(nextRows: EnvRow[]) {
-    setLocalRows(nextRows)
     onChange(nextRows, envRowsToUserEnv(nextRows))
   }
 
   function updateRow(index: number, patch: Partial<EnvRow>) {
     emit(
-      localRows.map((row, i) => {
+      rows.map((row, i) => {
         if (i !== index) {
           return row
         }
@@ -47,19 +41,19 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
   }
 
   function removeRow(index: number) {
-    const row = localRows[index]
+    const row = rows[index]
     if (!row || row.locked) {
       return
     }
-    emit(localRows.filter((_, i) => i !== index))
+    emit(rows.filter((_, i) => i !== index))
   }
 
   function addRow() {
-    emit([...localRows, { key: '', value: '', locked: false }])
+    emit([...rows, { key: '', value: '', locked: false, edited: true }])
   }
 
   function applyPaste() {
-    const { rows: next, invalidLines } = applyEnvPaste(localRows, pasteText, routePortEnvVars)
+    const { rows: next, invalidLines } = applyEnvPaste(rows, pasteText, routePortEnvVars)
     setInvalidPasteLines(invalidLines)
     emit(next)
     if (invalidLines.length === 0) {
@@ -120,7 +114,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
       ) : null}
 
       <ul className="space-y-3">
-        {localRows.map((row, index) => {
+        {rows.map((row, index) => {
           const focused = focusedKey === row.key
           const displayValue = row.locked ? row.value : maskEnvValue(row.value, focused)
           return (
@@ -174,7 +168,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
         })}
       </ul>
 
-      {localRows.length === 0 ? (
+      {rows.length === 0 ? (
         <button
           type="button"
           className="text-sm text-accent underline cursor-pointer"

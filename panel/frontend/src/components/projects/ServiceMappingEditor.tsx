@@ -1,5 +1,4 @@
 import { Plus, Trash } from '@phosphor-icons/react'
-import { useEffect, useState } from 'react'
 import type { ServiceMappingRow } from '../../lib/serviceMappingUtils'
 import { prepareServiceMappingRows } from '../../lib/serviceMappingUtils'
 
@@ -14,42 +13,32 @@ export function ServiceMappingEditor({
   onChange,
   onValidationChange,
 }: ServiceMappingEditorProps) {
-  const [localRows, setLocalRows] = useState(services)
-
-  useEffect(() => {
-    setLocalRows(services)
-  }, [services])
-
   function emit(next: ServiceMappingRow[]) {
-    setLocalRows(next)
     onChange(next)
     const result = prepareServiceMappingRows(next)
     onValidationChange?.(result.ok, result.ok ? null : result.error)
   }
 
   function updateRow(index: number, patch: Partial<ServiceMappingRow>) {
-    emit(localRows.map((row, i) => (i === index ? { ...row, ...patch } : row)))
+    emit(services.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   }
 
   function addRow() {
-    emit([
-      ...localRows,
-      { service_name: '', image_env_var: '', tag_prefix: '' },
-    ])
+    emit([...services, { service_name: '', image_env_var: '', tag_prefix: '' }])
   }
 
   function removeRow(index: number) {
-    emit(localRows.filter((_, i) => i !== index))
+    emit(services.filter((_, i) => i !== index))
   }
 
-  const validation = prepareServiceMappingRows(localRows)
+  const validation = prepareServiceMappingRows(services)
 
   return (
     <div className="space-y-3">
-      {localRows.length === 0 ? (
+      {services.length === 0 ? (
         <p className="text-sm text-muted-foreground">No image services configured.</p>
       ) : null}
-      {localRows.map((row, index) => (
+      {services.map((row, index) => (
         <div
           key={index}
           className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 lg:flex-row lg:items-end"

@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useState } from 'react'
 import { formatPushedAtRelative } from '../../lib/format'
 import type { RegistryTagOption } from '../../lib/projectDeployTypes'
 
@@ -18,13 +18,10 @@ function normalizeTags(tags: RegistryTagOption[] | string[]): RegistryTagOption[
   })
 }
 
-export function TagPicker({
-  tags,
-  selectedName,
-  onSelectedNameChange,
-  now = Date.now(),
-}: TagPickerProps) {
+export function TagPicker({ tags, selectedName, onSelectedNameChange, now }: TagPickerProps) {
   const selectId = useId()
+  const [mountedAt] = useState(() => Date.now())
+  const clock = now ?? mountedAt
   const options = normalizeTags(tags)
   const selected = options.find((tag) => tag.name === selectedName) ?? options[0]
 
@@ -51,7 +48,7 @@ export function TagPicker({
           {selected.pushed_at ? (
             <>
               {' · '}
-              {formatPushedAtRelative(selected.pushed_at, now)}
+              {formatPushedAtRelative(selected.pushed_at, clock)}
             </>
           ) : null}
         </p>

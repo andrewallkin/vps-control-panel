@@ -144,11 +144,19 @@ export function ProjectPage() {
   })
 
   const project = projectQuery.data
-
-  useEffect(() => {
-    if (!project) {
-      return
-    }
+  const projectFormKey = project
+    ? JSON.stringify({
+        hostnames: project.hostnames,
+        routes: project.routes,
+        migration_command: project.migration_command,
+        migration_service: project.migration_service,
+        health_check_url: project.health_check_url,
+        services: project.services,
+      })
+    : null
+  const [appliedProjectFormKey, setAppliedProjectFormKey] = useState<string | null>(null)
+  if (project && projectFormKey !== null && appliedProjectFormKey !== projectFormKey) {
+    setAppliedProjectFormKey(projectFormKey)
     setHostnamesDraft(project.hostnames)
     setRoutesDraft(
       project.routes.map((route) => ({
@@ -166,7 +174,7 @@ export function ProjectPage() {
         tag_prefix: svc.tag_prefix,
       })),
     )
-  }, [project])
+  }
 
   const psQuery = useQuery({
     queryKey: ['project', slug, 'compose-ps'],
@@ -191,13 +199,13 @@ export function ProjectPage() {
     refetchIntervalInBackground: false,
   })
 
-  useEffect(() => {
-    if (!tagsQuery.data) {
-      return
-    }
+  const tagsData = tagsQuery.data
+  const [appliedTagsData, setAppliedTagsData] = useState(tagsData)
+  if (tagsData && appliedTagsData !== tagsData) {
+    setAppliedTagsData(tagsData)
     setSelectedTags((prev) => {
       const next = { ...prev }
-      for (const svc of tagsQuery.data.services) {
+      for (const svc of tagsData.services) {
         const options = normalizeRegistryTags(svc.tags)
         if (options.length === 0) {
           continue
@@ -208,7 +216,7 @@ export function ProjectPage() {
       }
       return next
     })
-  }, [tagsQuery.data])
+  }
 
   const deploysQuery = useQuery({
     queryKey: ['project', slug, 'deploys'],
@@ -234,14 +242,12 @@ export function ProjectPage() {
   const runningDeploy = deploys.find((row) => row.status === 'running')
   const latestDeploy = deploys[0]
   const latestSucceeded = deploys.find((row) => row.status === 'succeeded')
-
-  useEffect(() => {
-    if (runningDeploy) {
-      setActiveDeployId(runningDeploy.id)
-      return
-    }
-    setActiveDeployId(null)
-  }, [runningDeploy?.id])
+  const runningDeployId = runningDeploy?.id ?? null
+  const [seenRunningDeployId, setSeenRunningDeployId] = useState<number | null>(null)
+  if (seenRunningDeployId !== runningDeployId) {
+    setSeenRunningDeployId(runningDeployId)
+    setActiveDeployId(runningDeployId)
+  }
 
   const envQuery = useQuery({
     queryKey: ['project', slug, 'env'],
@@ -254,15 +260,16 @@ export function ProjectPage() {
     () => project?.routes.map((route) => route.port_env_var) ?? [],
     [project?.routes],
   )
-
-  useEffect(() => {
-    if (!envQuery.data) {
-      return
-    }
+  const envApplyKey = envQuery.data
+    ? JSON.stringify({ entries: envQuery.data.entries, routePortEnvVars })
+    : null
+  const [appliedEnvKey, setAppliedEnvKey] = useState<string | null>(null)
+  if (envQuery.data && envApplyKey !== null && appliedEnvKey !== envApplyKey) {
+    setAppliedEnvKey(envApplyKey)
     setLoadedEnvKeys(envQuery.data.entries.map((entry) => entry.key))
     setEnvRows(entriesToEnvRows(envQuery.data.entries, routePortEnvVars))
     setEnvDirty(false)
-  }, [envQuery.data, routePortEnvVars])
+  }
 
   const dumpsQuery = useQuery({
     queryKey: ['project', slug, 'dumps'],
