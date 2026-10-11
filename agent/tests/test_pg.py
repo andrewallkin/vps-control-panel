@@ -44,4 +44,3 @@ def test_verify_login_uses_container_host(settings, tmp_path):
 def test_quote_ident_rejects_injection():
     with pytest.raises(ValueError):
         quote_ident('x"; drop')
-
