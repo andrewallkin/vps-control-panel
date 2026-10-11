@@ -157,7 +157,7 @@ setup_stack() {
   if [[ ! -f "${STACK_DIR}/.env" ]]; then
     local password
     password="$(openssl rand -base64 48 | tr -d '/+=\n' | cut -c1-40)"
-    sed "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${password}|" "${STACK_DIR}/.env.example" > "${STACK_DIR}/.env"
+    (umask 077 && sed "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${password}|" "${STACK_DIR}/.env.example" > "${STACK_DIR}/.env")
     echo "generated ${STACK_DIR}/.env"
   fi
   chown root:root "${STACK_DIR}/.env"
