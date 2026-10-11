@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 from fastapi import APIRouter, HTTPException, Request
 
@@ -18,7 +19,14 @@ def get_docker_df(request: Request) -> DockerDiskUsage:
     runner = request.app.state.runner
     try:
         return docker_df(runner)
-    except (CommandError, json.JSONDecodeError, ValueError, KeyError) as exc:
+    except (
+        CommandError,
+        FileNotFoundError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+        ValueError,
+        KeyError,
+    ) as exc:
         raise _docker_unavailable(exc) from exc
 
 
@@ -29,5 +37,12 @@ def post_prune_images(request: Request) -> dict[str, int]:
     with audit.audited(db, "docker.prune_images", {}):
         try:
             return prune_images(runner)
-        except (CommandError, json.JSONDecodeError, ValueError, KeyError) as exc:
+        except (
+            CommandError,
+            FileNotFoundError,
+            subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+            ValueError,
+            KeyError,
+        ) as exc:
             raise _docker_unavailable(exc) from exc

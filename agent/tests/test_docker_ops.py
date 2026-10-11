@@ -1,4 +1,5 @@
 import json
+import subprocess
 
 import pytest
 from fastapi.testclient import TestClient
@@ -174,6 +175,37 @@ def test_get_docker_df_returns_503_on_docker_failure(docker_client):
     )
 
     response = client.get("/v1/docker/df")
+
+    assert response.status_code == 503
+    assert "docker unavailable" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    ("method", "path", "match_args", "exc"),
+    [
+        ("get", "/v1/docker/df", DF_ARGS, FileNotFoundError("docker")),
+        (
+            "get",
+            "/v1/docker/df",
+            DF_ARGS,
+            subprocess.TimeoutExpired(["docker", "system", "df"], 120),
+        ),
+        ("post", "/v1/docker/prune-images", PRUNE_ARGS, FileNotFoundError("docker")),
+        (
+            "post",
+            "/v1/docker/prune-images",
+            PRUNE_ARGS,
+            subprocess.TimeoutExpired(["docker", "image", "prune"], 120),
+        ),
+    ],
+)
+def test_docker_routes_return_503_on_missing_docker_or_timeout(
+    docker_client, method, path, match_args, exc
+):
+    client, runner = docker_client
+    runner.responses.append((lambda args: args == match_args, exc))
+
+    response = client.request(method, path)
 
     assert response.status_code == 503
     assert "docker unavailable" in response.json()["detail"]
