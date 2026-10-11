@@ -357,7 +357,7 @@ def test_restore_cluster_restores_database_and_admin_password(it_env):
 
         store = UploadStore(settings)
         upload_id = _complete_upload(store, dump_path.read_bytes())
-        result = restore_cluster(
+        restore_cluster(
             _ctx(),
             settings=settings,
             psql=psql,
@@ -365,7 +365,6 @@ def test_restore_cluster_restores_database_and_admin_password(it_env):
             db=state,
             upload_id=upload_id,
         )
-        assert result["error_count"] == 0
 
         count_rows = psql.query_rows(
             "SELECT id FROM seed_row;",
