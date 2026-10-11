@@ -10,6 +10,9 @@ dependencies = [
     "psutil>=6.1",
 ]
 
+[project.scripts]
+vpscp-agent = "vpscp_agent.server:main"
+
 [dependency-groups]
 dev = [
     "pytest>=8.3",
