@@ -18,6 +18,7 @@ from vpscp_agent.jobs import JobLockedError, JobManager
 from vpscp_agent.pg import Psql
 from vpscp_agent.routes import database as database_routes
 from vpscp_agent.routes import jobs as jobs_routes
+from vpscp_agent.routes import restore as restore_routes
 from vpscp_agent.state import StateDB
 
 
@@ -71,7 +72,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
 
     @app.exception_handler(ValueError)
     async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
-        if request.url.path.startswith("/v1/db"):
+        if request.url.path.startswith(("/v1/db", "/v1/restore")):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
         raise exc
 
@@ -79,11 +80,12 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     async def request_validation_handler(
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
-        status = 400 if request.url.path.startswith("/v1/db") else 422
+        status = 400 if request.url.path.startswith(("/v1/db", "/v1/restore")) else 422
         return JSONResponse(status_code=status, content={"detail": jsonable_encoder(exc.errors())})
 
     app.include_router(jobs_routes.router)
     app.include_router(database_routes.router)
+    app.include_router(restore_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
