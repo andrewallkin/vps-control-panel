@@ -6,6 +6,7 @@ import {
   envRowsToUserEnv,
   generateSecret,
   isEnvKeyLocked,
+  maskEnvValue,
 } from '../../lib/envEditorUtils'
 
 export interface EnvEditorProps {
@@ -110,7 +111,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
       <ul className="space-y-3">
         {localRows.map((row, index) => {
           const focused = focusedKey === row.key
-          const maskValue = !row.locked && !focused && row.value.length > 0
+          const displayValue = row.locked ? row.value : maskEnvValue(row.value, focused)
           return (
             <li
               key={`${row.key}-${index}`}
@@ -127,11 +128,11 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
               />
               <input
                 aria-label={row.key || 'Value'}
-                type={maskValue ? 'password' : 'text'}
+                type="text"
                 readOnly={row.locked}
                 autoComplete="off"
                 className="min-w-0 flex-[2] rounded-md border border-border bg-background px-3 py-2 font-mono text-sm read-only:opacity-80"
-                value={row.value}
+                value={displayValue}
                 onFocus={() => setFocusedKey(row.key)}
                 onBlur={() => setFocusedKey(null)}
                 onChange={(event) => updateRow(index, { value: event.target.value })}

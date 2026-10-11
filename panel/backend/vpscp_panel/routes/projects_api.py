@@ -41,6 +41,7 @@ from vpscp_panel.validation import (
     Slug,
     SqlIdent,
     Subdomain,
+    validate_docker_hub_repo,
     validate_sql_ident,
 )
 
@@ -81,6 +82,7 @@ class CreateProjectBody(BaseModel):
     user_env: str | None = None
     hostnames: list[HostnameInput]
     routes: list[RouteInput]
+    docker_hub_repo: str | None = None
 
     @field_validator("display_name", "compose_file")
     @classmethod
@@ -222,6 +224,12 @@ async def create_project(
     _session: Annotated[Session, Depends(require_csrf)],
 ) -> dict[str, Any]:
     _validate_db_fields(body)
+    docker_hub_repo = body.docker_hub_repo
+    if docker_hub_repo is not None:
+        try:
+            docker_hub_repo = validate_docker_hub_repo(docker_hub_repo)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     if db.get(Project, body.slug) is not None:
         raise HTTPException(status_code=409, detail="project already exists")
     for hostname in body.hostnames:
@@ -242,7 +250,7 @@ async def create_project(
         branch=body.branch,
         compose_file=body.compose_file,
         deploy_mode=body.deploy_mode,
-        docker_hub_repo=None,
+        docker_hub_repo=docker_hub_repo,
         database_mode=body.database_mode,
         db_name=db_name,
         db_user=db_user,

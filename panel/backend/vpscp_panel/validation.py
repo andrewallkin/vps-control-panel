@@ -11,6 +11,7 @@ SQL_IDENT_RE = re.compile(r"^[a-z][a-z0-9_]{1,62}$")
 ENV_KEY_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 ROUTE_PATH_RE = re.compile(r"^/[A-Za-z0-9/_-]*$")
 _GITHUB_OWNER_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
+_DOCKER_HUB_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,100}$")
 _SSH_REPO_RE = re.compile(r"^git@github\.com:([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})\.git$")
 _HTTPS_REPO_RE = re.compile(
@@ -77,6 +78,12 @@ def validate_repo_url(value: str) -> str:
     if _SSH_REPO_RE.fullmatch(value) or _HTTPS_REPO_RE.fullmatch(value):
         return value
     raise ValueError(f"invalid repo url: {value!r}")
+
+
+def validate_docker_hub_repo(value: str) -> str:
+    if not _DOCKER_HUB_REPO_RE.fullmatch(value):
+        raise ValueError(f"invalid docker hub repo: {value!r}")
+    return value
 
 
 DomainName = Annotated[str, AfterValidator(validate_domain)]

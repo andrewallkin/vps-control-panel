@@ -21,10 +21,22 @@ describe('EnvEditor', () => {
     await user.click(screen.getByRole('button', { name: /paste \.env/i }))
     const textarea = screen.getByLabelText(/paste \.env/i)
     await user.clear(textarea)
-    await user.type(textarea, 'FOO=bar\n# c\nPOSTGRES_PASSWORD=stolen\n')
+    await user.type(textarea, 'FOO=barbaz12\n# c\nPOSTGRES_PASSWORD=stolen\n')
     await user.click(screen.getByRole('button', { name: /apply paste/i }))
 
-    expect(screen.getByLabelText(/^FOO$/i)).toHaveValue('bar')
+    expect(screen.getByLabelText(/^FOO$/i)).toHaveValue('••••12')
     expect(screen.getByLabelText(/^POSTGRES_PASSWORD$/i)).toHaveValue('original-secret')
+  })
+
+  it('masks unlocked env values when not focused', () => {
+    render(
+      <EnvEditor
+        rows={[{ key: 'SECRET', value: 'abcdefgh', locked: false }]}
+        routePortEnvVars={[]}
+        onChange={() => undefined}
+      />,
+    )
+
+    expect(screen.getByLabelText(/^SECRET$/i)).toHaveValue('••••gh')
   })
 })
