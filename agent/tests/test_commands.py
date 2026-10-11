@@ -1,4 +1,5 @@
 import gzip
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -30,3 +31,10 @@ def test_stream_to_gzip_file_compresses_stdout(tmp_path: Path) -> None:
     out = tmp_path / "out.gz"
     stream_to_gzip_file(["sh", "-c", "printf hello"], out)
     assert gzip.decompress(out.read_bytes()) == b"hello"
+
+
+def test_stream_to_gzip_file_times_out_while_stdout_open(tmp_path: Path) -> None:
+    out = tmp_path / "slow.gz"
+    with pytest.raises(subprocess.TimeoutExpired):
+        stream_to_gzip_file(["sleep", "30"], out, timeout=1)
+    assert not out.exists()

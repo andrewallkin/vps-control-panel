@@ -1,7 +1,9 @@
 import gzip
 import os
+import select
 import subprocess
 import threading
+import time
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -174,13 +176,26 @@ def stream_to_gzip_file(
 
         try:
             assert proc.stdout is not None
+            stdout_fd = proc.stdout.fileno()
+            started = time.monotonic()
             with gzip.open(path, "wb") as gzip_file:
                 while True:
+                    if timeout is not None:
+                        remaining = timeout - (time.monotonic() - started)
+                        if remaining <= 0:
+                            raise subprocess.TimeoutExpired(args, timeout)
+                        ready, _, _ = select.select([stdout_fd], [], [], remaining)
+                        if not ready:
+                            raise subprocess.TimeoutExpired(args, timeout)
                     chunk = proc.stdout.read(65536)
                     if not chunk:
                         break
                     gzip_file.write(chunk)
-            proc.wait(timeout=timeout)
+            if timeout is not None:
+                remaining = timeout - (time.monotonic() - started)
+                proc.wait(timeout=max(remaining, 0))
+            else:
+                proc.wait()
         except subprocess.TimeoutExpired:
             proc.kill()
             proc.communicate()

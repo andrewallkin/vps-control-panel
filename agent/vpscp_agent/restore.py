@@ -34,6 +34,7 @@ _RESERVE_BYTES = 1024**3
 _PG_HEADER = "PostgreSQL database cluster dump"
 _ROLE_RE = re.compile(r"^CREATE ROLE (\S+);")
 _DATABASE_RE = re.compile(r"^CREATE DATABASE (\S+) ")
+_UPLOAD_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
 ALLOWED_SUFFIXES = (".sql.gz", ".sql")
 
@@ -65,29 +66,48 @@ class UploadMeta:
     created_at: str
 
 
+def _validate_upload_id(upload_id: str) -> None:
+    if _UPLOAD_ID_RE.fullmatch(upload_id) is None:
+        raise ValueError("invalid upload id")
+
+
 def validate_dump(path: Path, *, filename: str | None = None) -> DumpScan:
     name = filename if filename is not None else path.name
     if name.endswith(".sql.gz"):
         kind = "gzip"
-        try:
-            with gzip.open(path, "rb") as gz:
-                lines = _read_line_stream(gz)
-        except (EOFError, gzip.BadGzipFile) as exc:
-            raise ValueError("corrupt gzip") from exc
     elif name.endswith(".sql"):
         kind = "plain"
-        with path.open("rb") as f:
-            lines = _read_line_stream(f)
     else:
         raise ValueError("unsupported dump extension")
 
-    header_ok = _scan_header(lines)
+    try:
+        if kind == "gzip":
+            with gzip.open(path, "rb") as stream:
+                header_ok, roles, databases = _scan_dump_stream(stream)
+        else:
+            with path.open("rb") as stream:
+                header_ok, roles, databases = _scan_dump_stream(stream)
+    except (EOFError, gzip.BadGzipFile) as exc:
+        if kind == "gzip":
+            raise ValueError("corrupt gzip") from exc
+        raise
+
     if not header_ok:
         raise ValueError("not a pg_dumpall file")
 
+    return DumpScan(kind=kind, header_ok=header_ok, databases=databases, roles=roles)
+
+
+def _scan_dump_stream(stream) -> tuple[bool, list[str], list[str]]:
     roles: list[str] = []
     databases: list[str] = []
-    for line in lines:
+    header_ok = False
+    header_lines = 0
+    for line in _iter_dump_lines(stream):
+        if header_lines < 50:
+            if _PG_HEADER in line:
+                header_ok = True
+            header_lines += 1
         m = _ROLE_RE.match(line)
         if m:
             roles.append(m.group(1))
@@ -95,25 +115,15 @@ def validate_dump(path: Path, *, filename: str | None = None) -> DumpScan:
         m = _DATABASE_RE.match(line)
         if m:
             databases.append(m.group(1))
+    return header_ok, roles, databases
 
-    return DumpScan(kind=kind, header_ok=header_ok, databases=databases, roles=roles)
 
-
-def _read_line_stream(stream) -> list[str]:
-    lines: list[str] = []
+def _iter_dump_lines(stream) -> Iterator[str]:
     while True:
         raw = stream.readline()
         if not raw:
             break
-        lines.append(raw.decode("utf-8", errors="replace").rstrip("\n\r"))
-    return lines
-
-
-def _scan_header(lines: list[str]) -> bool:
-    for line in lines[:50]:
-        if _PG_HEADER in line:
-            return True
-    return False
+        yield raw.decode("utf-8", errors="replace").rstrip("\n\r")
 
 
 class UploadStore:
@@ -165,9 +175,14 @@ class UploadStore:
         if meta.received != meta.size:
             raise ValueError("upload incomplete")
         part_path = self._part_path(upload_id)
-        data = part_path.read_bytes()
-        digest = hashlib.sha256(data).hexdigest()
-        if digest != sha256.lower():
+        hasher = hashlib.sha256()
+        with part_path.open("rb") as part_file:
+            while True:
+                chunk = part_file.read(1024 * 1024)
+                if not chunk:
+                    break
+                hasher.update(chunk)
+        if hasher.hexdigest() != sha256.lower():
             raise ValueError("sha256 mismatch")
         scan = validate_dump(part_path, filename=meta.filename)
         suffix = ".sql.gz" if meta.filename.endswith(".sql.gz") else ".sql"
@@ -227,6 +242,11 @@ class UploadStore:
                 created = created.replace(tzinfo=UTC)
             if created < cutoff:
                 upload_id = meta_path.stem
+                try:
+                    _validate_upload_id(upload_id)
+                except ValueError:
+                    meta_path.unlink(missing_ok=True)
+                    continue
                 for path in self._artifact_paths(upload_id, meta.filename):
                     if path.exists():
                         path.unlink()
@@ -241,9 +261,11 @@ class UploadStore:
         return paths
 
     def _part_path(self, upload_id: str) -> Path:
+        _validate_upload_id(upload_id)
         return self._dir / f"{upload_id}.part"
 
     def _meta_path(self, upload_id: str) -> Path:
+        _validate_upload_id(upload_id)
         return self._dir / f"{upload_id}.json"
 
     def _write_meta(self, upload_id: str, meta: UploadMeta) -> None:

@@ -15,6 +15,7 @@ from vpscp_agent.backup_ops import (
     write_settings,
 )
 from vpscp_agent.backup_ops import test_credentials as backup_test_credentials
+from vpscp_agent.commands import CommandError
 from vpscp_agent.main import create_app
 
 SA_DOC = {
@@ -110,6 +111,15 @@ def test_write_settings_env_keys_and_preserves_comments(stack_settings):
     assert "BACKUP_ARCHIVE_PASSPHRASE=long-passphrase\n" in text
     assert out.credentials_configured is True
     assert out.client_email == SA_DOC["client_email"]
+
+
+def test_write_settings_rolls_back_env_on_compose_failure(stack_settings):
+    runner = FakeRunner()
+    runner.on("docker compose", returncode=1, stderr="compose failed")
+    original = stack_settings.stack_env_path.read_text()
+    with pytest.raises(CommandError):
+        write_settings(stack_settings, runner, BackupSettingsIn(**default_body()))
+    assert stack_settings.stack_env_path.read_text() == original
 
 
 def test_write_settings_compose_recreate_cwd(stack_settings):

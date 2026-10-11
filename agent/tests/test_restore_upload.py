@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from vpscp_agent import audit
 from vpscp_agent.main import create_app
+from vpscp_agent.restore import UploadStore
 
 TINY_DUMP_PLAIN = (
     b"--\n-- PostgreSQL database cluster dump\n--\n"
@@ -134,6 +135,14 @@ def test_non_pg_file(restore_client, settings):
     assert resp.status_code == 400
     assert "not a pg_dumpall file" in resp.json()["detail"]
     assert (settings.restore_dir / f"{upload_id}.part").is_file()
+
+
+def test_upload_id_rejects_path_traversal_and_short_id(settings):
+    store = UploadStore(settings)
+    with pytest.raises(ValueError, match="invalid upload id"):
+        store.get("../")
+    with pytest.raises(ValueError, match="invalid upload id"):
+        store.get("abc")
 
 
 def test_get_not_audited(restore_client):

@@ -4,11 +4,12 @@ import base64
 import json
 import os
 import re
+from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, Field, field_validator
 
-from vpscp_agent.commands import CommandResult
+from vpscp_agent.commands import CommandError, CommandResult
 from vpscp_agent.config import Settings
 from vpscp_agent.envfile import read_env, write_env_atomic
 
@@ -162,8 +163,29 @@ def read_settings(settings: Settings) -> BackupSettingsOut:
     return _settings_from_env(env)
 
 
+def _restore_env_bytes(path: Path, previous: bytes) -> None:
+    if not previous:
+        path.unlink(missing_ok=True)
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.parent / f".{path.name}.tmp.{os.getpid()}"
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(previous)
+            handle.flush()
+            os.fsync(handle.fileno())
+    except Exception:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    os.replace(tmp_path, path)
+    os.chmod(path, 0o600)
+
+
 def write_settings(settings: Settings, runner, body: BackupSettingsIn) -> BackupSettingsOut:
-    env = read_env(settings.stack_env_path)
+    env_path = settings.stack_env_path
+    previous = env_path.read_bytes() if env_path.is_file() else b""
+    env = read_env(env_path)
     updates: dict[str, str] = {
         ENV_BUCKET: body.bucket,
         ENV_SCHEDULE_HOUR: body.schedule_hours,
@@ -177,19 +199,23 @@ def write_settings(settings: Settings, runner, body: BackupSettingsIn) -> Backup
     if body.archive_passphrase is not None:
         updates[ENV_ARCHIVE_PASSPHRASE] = body.archive_passphrase
     env.set_many(updates)
-    write_env_atomic(settings.stack_env_path, env)
-    runner(
-        [
-            "docker",
-            "compose",
-            "up",
-            "-d",
-            "--no-deps",
-            "--force-recreate",
-            "backup",
-        ],
-        cwd=settings.stack_dir,
-    )
+    write_env_atomic(env_path, env)
+    try:
+        runner(
+            [
+                "docker",
+                "compose",
+                "up",
+                "-d",
+                "--no-deps",
+                "--force-recreate",
+                "backup",
+            ],
+            cwd=settings.stack_dir,
+        )
+    except CommandError:
+        _restore_env_bytes(env_path, previous)
+        raise
     return read_settings(settings)
 
 
