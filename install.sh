@@ -203,7 +203,14 @@ setup_stack() {
   chown root:root "${STACK_DIR}/.env"
   chmod 600 "${STACK_DIR}/.env"
   if [[ ! -f "${STACK_DIR}/panel.env" ]]; then
-    (umask 077 && printf 'PANEL_SECRET_KEY=%s\n' "$(openssl rand -hex 32)" > "${STACK_DIR}/panel.env")
+    local panel_env_file tmp secret
+    panel_env_file="${STACK_DIR}/panel.env"
+    secret="$(openssl rand -hex 32)"
+    tmp="$(mktemp "${panel_env_file}.XXXXXX")"
+    printf 'PANEL_SECRET_KEY=%s\n' "${secret}" > "${tmp}"
+    chown root:root "${tmp}"
+    chmod 600 "${tmp}"
+    mv "${tmp}" "${panel_env_file}"
     echo "generated ${STACK_DIR}/panel.env"
   fi
   chown root:root "${STACK_DIR}/panel.env"
