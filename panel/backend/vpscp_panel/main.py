@@ -14,6 +14,7 @@ from vpscp_panel.db import init_db, run_migrations
 from vpscp_panel.routes.dashboard import router as dashboard_router
 from vpscp_panel.routes.jobs import router as jobs_router
 from vpscp_panel.routes.metrics import router as metrics_router
+from vpscp_panel.routes.setup import router as setup_router
 
 CONTENT_SECURITY_POLICY = (
     "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
@@ -83,6 +84,7 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
     app.include_router(metrics_router)
     app.include_router(jobs_router)
     app.include_router(dashboard_router)
+    app.include_router(setup_router)
 
     @app.get("/api")
     @app.get("/api/")
