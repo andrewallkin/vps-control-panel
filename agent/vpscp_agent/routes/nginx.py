@@ -99,3 +99,19 @@ def post_refresh_cloudflare_ips(request: Request) -> dict[str, str]:
             force_fetch=True,
         )
     return {"status": "ok"}
+
+
+@router.post("/v1/nginx/ensure-base")
+def post_ensure_base(request: Request) -> dict[str, str]:
+    db = request.app.state.db
+    settings = request.app.state.settings
+    runner = request.app.state.runner
+    fetch = _cloudflare_fetcher(request)
+    with audit.audited(db, "nginx.base.ensure", {}):
+        ensure_base_config(
+            settings=settings,
+            runner=runner,
+            db=db,
+            fetch=fetch,
+        )
+    return {"status": "ok"}

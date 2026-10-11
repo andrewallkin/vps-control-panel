@@ -377,3 +377,21 @@ def test_get_nginx_sites_lists_hostnames(nginx_client):
     response = client.get("/v1/nginx/sites")
     assert response.status_code == 200
     assert response.json() == [{"site_id": "budget", "hostnames": ["budget.example.com"]}]
+
+
+def test_post_nginx_ensure_base_audited(nginx_client):
+    client, _runner, _db, _letsencrypt = nginx_client
+    settings = client.app.state.settings
+
+    def fake_fetch():
+        return ["203.0.113.0/24"], ["2001:db8::/32"]
+
+    client.app.state.cloudflare_ip_fetcher = fake_fetch
+    response = client.post("/v1/nginx/ensure-base")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+    realip = settings.nginx_dir / "conf.d" / "vpscp-realip.conf"
+    assert "203.0.113.0/24" in realip.read_text()
+    audit = client.get("/v1/audit?limit=5").json()
+    assert audit[0]["operation"] == "nginx.base.ensure"
+    assert audit[0]["ok"] is True
