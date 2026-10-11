@@ -36,6 +36,7 @@ class FakeRunner:
                 "input_data": input_data,
                 "extra_env": extra_env,
                 "cwd": cwd,
+                "timeout": timeout,
             }
         )
         for predicate, response in self.responses:

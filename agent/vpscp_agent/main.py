@@ -24,6 +24,7 @@ from vpscp_agent.routes import dns as dns_routes
 from vpscp_agent.routes import docker as docker_routes
 from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.routes import nginx as nginx_routes
+from vpscp_agent.routes import projects as projects_routes
 from vpscp_agent.routes import restore as restore_routes
 from vpscp_agent.routes import server as server_routes
 from vpscp_agent.routes import tls as tls_routes
@@ -102,6 +103,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
                 "/v1/dns",
                 "/v1/tls",
                 "/v1/nginx",
+                "/v1/projects",
             )
         ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -125,6 +127,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(dns_routes.router)
     app.include_router(tls_routes.router)
     app.include_router(nginx_routes.router)
+    app.include_router(projects_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
