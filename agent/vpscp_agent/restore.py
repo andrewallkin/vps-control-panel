@@ -2,17 +2,18 @@ from __future__ import annotations
 
 import gzip
 import hashlib
-import io
 import json
 import os
 import re
 import shutil
+import tempfile
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, BinaryIO
 
 from vpscp_agent.config import Settings
 from vpscp_agent.db_ops import list_databases, list_roles
@@ -89,10 +90,8 @@ def validate_dump(
         raise ValueError("unsupported dump extension")
 
     try:
-        block = b"".join(
-            _load_dump_sql_stream(path, passphrase=passphrase, name=name)
-        )
-        header_ok, roles, databases = _scan_dump_stream(io.BytesIO(block))
+        with _open_dump_sql_stream(path, passphrase=passphrase, name=name) as stream:
+            header_ok, roles, databases = _scan_dump_stream(stream)
     except (EOFError, gzip.BadGzipFile) as exc:
         if kind == "gzip":
             raise ValueError("corrupt gzip") from exc
@@ -153,14 +152,17 @@ def _dump_passphrase(settings) -> str | None:
     return read_env(settings.stack_env_path).get("BACKUP_ARCHIVE_PASSPHRASE") or None
 
 
-def _load_dump_sql_stream(
+@contextmanager
+def _open_dump_sql_stream(
     path: Path, *, passphrase: str | None, name: str | None = None
-) -> Iterator[bytes]:
-    """Yield decompressed SQL bytes for a dump file.
+) -> Iterator[BinaryIO]:
+    """Open a dump as a streaming reader of decompressed SQL.
 
-    Backups uploaded to GCS are age-encrypted (a dump contains every app row
-    and role hash); decrypt with the archive passphrase first. Plaintext
-    dumps (migration-day cutover files) pass through unchanged.
+    Cutover dumps are multi-GB decompressed; the SQL must stream (gzip
+    member reads) and never be materialized whole. Backups uploaded to GCS
+    are age-encrypted — pyrage decrypt is bytes-in/bytes-out, so the inner
+    payload is staged to a temp file and then streamed from disk; the
+    decompressed SQL still never lands in RAM.
     """
     display = name if name is not None else path.name
     if display.endswith(".age"):
@@ -171,16 +173,29 @@ def _load_dump_sql_stream(
         from pyrage import passphrase as pyrage_passphrase
 
         try:
-            data = pyrage_passphrase.decrypt(path.read_bytes(), passphrase)
+            inner = pyrage_passphrase.decrypt(path.read_bytes(), passphrase)
         except Exception as exc:
             raise ValueError("dump decryption failed: wrong passphrase?") from exc
+        tmp_name: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, dir=path.parent, suffix=".inner") as tmp:
+                tmp.write(inner)
+                tmp_name = tmp.name
+            del inner
+            with _open_plain_or_gzip(Path(tmp_name), display) as stream:
+                yield stream
+        finally:
+            if tmp_name is not None:
+                os.unlink(tmp_name)
     else:
-        data = path.read_bytes()
+        with _open_plain_or_gzip(path, display) as stream:
+            yield stream
 
+
+def _open_plain_or_gzip(path: Path, display: str) -> BinaryIO:
     if display.endswith((".sql.gz", ".sql.gz.age")):
-        yield gzip.decompress(data)
-    else:
-        yield data
+        return gzip.open(path, "rb")
+    return path.open("rb")
 
 
 def _scan_for_dangerous_statements(
@@ -193,8 +208,7 @@ def _scan_for_dangerous_statements(
     \unrestrict/\echo/\pset meta-commands — everything else is refused.
     """
     violations: list[str] = []
-    block = b"".join(_load_dump_sql_stream(path, passphrase=passphrase, name=name))
-    with io.BytesIO(block) as stream:
+    with _open_dump_sql_stream(path, passphrase=passphrase, name=name) as stream:
         for lineno, line in enumerate(_iter_dump_lines(stream), start=1):
             stripped = line.strip()
             if not stripped:
@@ -342,10 +356,10 @@ class UploadStore:
 
     def _artifact_paths(self, upload_id: str, filename: str) -> list[Path]:
         paths = [self._part_path(upload_id)]
-        if filename.endswith(".sql.gz"):
-            paths.append(self._dir / f"{upload_id}.sql.gz")
-        elif filename.endswith(".sql"):
-            paths.append(self._dir / f"{upload_id}.sql")
+        try:
+            paths.append(self._dir / f"{upload_id}{_stored_suffix(filename)}")
+        except ValueError:
+            pass
         return paths
 
     def _part_path(self, upload_id: str) -> Path:
@@ -452,9 +466,12 @@ def _attachment_slugs(db: StateDB) -> list[str]:
 
 
 def _dump_byte_chunks(path: Path, *, passphrase: str | None = None) -> Iterator[bytes]:
-    for block in _load_dump_sql_stream(path, passphrase=passphrase):
-        for start in range(0, len(block), 1024 * 1024):
-            yield block[start : start + 1024 * 1024]
+    with _open_dump_sql_stream(path, passphrase=passphrase, name=path.name) as stream:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            yield chunk
 
 
 def _safety_dump_path(restore_dir: Path) -> Path:
@@ -479,7 +496,9 @@ def _write_safety_dump(
         "-U",
         admin,
     ]
-    runner.stream_to_gzip_file(args, path, 120)
+    # A real pg_dumpall takes minutes on a 5-app cluster; 120s aborted the
+    # overwrite path mid-safety-dump (Task 19).
+    runner.stream_to_gzip_file(args, path, 3600)
     os.chmod(path, 0o600)
     return path
 
@@ -543,10 +562,16 @@ def restore_cluster(
     ]
     error_lines: list[str] = []
 
+    fatal_estimate = 0
+
     def on_line(line: str) -> None:
+        nonlocal fatal_estimate
         ctx.log(line)
-        if "ERROR:" in line and len(error_lines) < 200:
-            error_lines.append(line)
+        if "ERROR:" in line:
+            if len(error_lines) < 200:
+                error_lines.append(line)
+            else:
+                fatal_estimate += 1
 
     returncode = 0
     try:
@@ -555,20 +580,26 @@ def restore_cluster(
         )
     finally:
         # A failed or interrupted load must not strand stopped project
-        # containers or leave the admin password as the dump set it.
-        reset_admin_password(psql, settings)
-        for slug in stopped_slugs:
-            project_dir = safe_project_path(settings.apps_dir, slug)
-            args = ["docker", "compose", "-p", slug, "start"]
-            ctx.log(f"compose start: {slug}")
-            runner(args, cwd=project_dir, check=True)
+        # containers or leave the admin password as the dump set it. The
+        # restarts run even if the password reset itself fails.
+        try:
+            reset_admin_password(psql, settings)
+        finally:
+            for slug in stopped_slugs:
+                project_dir = safe_project_path(settings.apps_dir, slug)
+                args = ["docker", "compose", "-p", slug, "start"]
+                ctx.log(f"compose start: {slug}")
+                runner(args, cwd=project_dir, check=True)
 
     fatal, benign = _classify_load_errors(error_lines, admin)
     if returncode != 0:
         raise ValueError(f"restore failed: psql exited with code {returncode}")
-    if fatal:
-        preview = "; ".join(fatal[:5])
-        raise ValueError(f"restore failed: {len(fatal)} error(s) during load: {preview}")
+    if fatal or fatal_estimate:
+        # fatal_estimate counts ERROR lines beyond the 200-line capture cap so
+        # 200 benign lines cannot mask later fatal ones.
+        total = len(fatal) + fatal_estimate
+        preview = "; ".join(fatal[:5]) or "(errors beyond capture cap)"
+        raise ValueError(f"restore failed: {total} error(s) during load: {preview}")
 
     databases_out = list_databases(psql, db)
     roles_out = list_roles(psql)

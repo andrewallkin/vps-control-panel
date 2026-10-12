@@ -329,14 +329,18 @@ def test_restore_overwrite_drops_objects_then_loads(restore_job_env):
 
 REAL_DUMP_META = (
     b"--\n-- PostgreSQL database cluster dump\n--\n"
-    rb"\restrict abc123" + b"\n"
+    rb"\restrict abc123"
+    + b"\n"
     + b"SET default_transaction_read_only = off;\n"
     + b"CREATE ROLE appuser;\n"
     + b"ALTER ROLE pgadmin WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN PASSWORD 'x';\n"
-    + rb"\unrestrict abc123" + b"\n"
-    + rb"\connect template1" + b"\n"
+    + rb"\unrestrict abc123"
+    + b"\n"
+    + rb"\connect template1"
+    + b"\n"
     + b"CREATE DATABASE appdb WITH TEMPLATE = template0 ENCODING = 'UTF8';\n"
-    + rb"\connect appdb" + b"\n"
+    + rb"\connect appdb"
+    + b"\n"
 )
 
 
@@ -381,9 +385,7 @@ def test_prescan_rejects_dangerous_statements(restore_job_env, payload):
     settings, runner, db, psql, store = restore_job_env
     import gzip
 
-    dump = (
-        b"--\n-- PostgreSQL database cluster dump\n--\n" + payload + b"\n"
-    )
+    dump = b"--\n-- PostgreSQL database cluster dump\n--\n" + payload + b"\n"
     upload_id = _complete_upload(store, gzip.compress(dump))
 
     with pytest.raises(Exception, match="forbidden"):
@@ -440,7 +442,9 @@ def test_restore_failure_still_restarts_projects_and_resets_admin(restore_job_en
         "stopped projects must be restarted even when the load fails"
     )
     reset_sql_calls = [
-        c for c in runner.calls if isinstance(c.get("input_data"), str) and "ALTER ROLE" in c["input_data"]
+        c
+        for c in runner.calls
+        if isinstance(c.get("input_data"), str) and "ALTER ROLE" in c["input_data"]
     ]
     assert reset_sql_calls, "admin password must be reset even when the load fails"
     assert project.exists()
@@ -465,6 +469,106 @@ def test_job_records_survive_agent_restart(restore_job_env):
     assert recovered.status == "succeeded"
     listing = reborn.list()
     assert any(j.id == job.id for j in listing)
+
+
+def test_safety_dump_uses_generous_timeout(restore_job_env):
+    """pg_dumpall of a real cluster takes minutes; the old 120s hard cap
+    aborted the overwrite path mid-safety-dump (Task 19: raise the cap)."""
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    _compose_project(settings.apps_dir, "budgethq")
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO db_attachment (db_name, db_user, slug, attached_at) VALUES (?, ?, ?, ?)",
+            ("budgethq", "budgethq_user", "budgethq", "2020-01-01T00:00:00+00:00"),
+        )
+    runner.on("d.datname FROM pg_database", stdout="appdb\n")
+    runner.on("r.rolname FROM pg_roles", stdout="appuser\n")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(lines=[], returncode=0)
+
+    restore_cluster(
+        _ctx(db),
+        settings=settings,
+        psql=psql,
+        runner=runner,
+        db=db,
+        upload_id=upload_id,
+        overwrite=True,
+    )
+    assert runner.stream_gzip_calls, "safety dump expected"
+    timeout = runner.stream_gzip_calls[0]["timeout"]
+    assert timeout >= 1800, f"safety dump timeout too small: {timeout}"
+
+
+def test_reset_failure_still_restarts_projects(restore_job_env):
+    """Nested finally: even if the admin password reset raises, stopped
+    project containers must be restarted."""
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    _compose_project(settings.apps_dir, "budgethq")
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO db_attachment (db_name, db_user, slug, attached_at) VALUES (?, ?, ?, ?)",
+            ("budgethq", "budgethq_user", "budgethq", "2020-01-01T00:00:00+00:00"),
+        )
+    runner.on("d.datname FROM pg_database", stdout="appdb\n")
+    runner.on("r.rolname FROM pg_roles", stdout="appuser\n")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(lines=[], returncode=0)
+
+    # simulate missing POSTGRES_PASSWORD: reset_admin_password raises
+    settings.stack_env_path.write_text("POSTGRES_USER=pgadmin\n")
+
+    with pytest.raises(ValueError, match="POSTGRES_PASSWORD"):
+        restore_cluster(
+            _ctx(db),
+            settings=settings,
+            psql=psql,
+            runner=runner,
+            db=db,
+            upload_id=upload_id,
+            overwrite=True,
+        )
+    args_seen = [c["args"] for c in runner.calls]
+    assert any(a[:5] == ["docker", "compose", "-p", "budgethq", "start"] for a in args_seen), (
+        "projects must restart even when the admin password reset fails"
+    )
+
+
+def test_restore_run_refuses_while_deploy_locked(settings):
+    """Review-focus: a deploy with migrations during a cluster restore runs
+    Alembic against a half-loaded cluster (and its connection can block the
+    overwrite's DROP DATABASE). The two must be mutually exclusive."""
+    from fastapi.testclient import TestClient
+
+    from tests.fakes import FakeRunner
+    from vpscp_agent.main import create_app
+    from vpscp_agent.state import StateDB
+
+    settings.stack_dir.mkdir(parents=True)
+    settings.stack_env_path.write_text("POSTGRES_USER=pgadmin\nPOSTGRES_PASSWORD=secret\n")
+    runner = FakeRunner()
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    store = UploadStore(settings)
+    upload_id = _complete_upload(store, TINY_DUMP)
+
+    with TestClient(create_app(settings, runner=runner)) as client:
+        mgr = client.app.state.jobs
+        gate = threading.Event()
+        mgr.start("project.deploy", {}, lambda _ctx: gate.wait(timeout=30), lock_key="deploy:myapp")
+        try:
+            resp = client.post(
+                "/v1/restore/run",
+                json={"upload_id": upload_id, "confirm": "RESTORE"},
+            )
+            assert resp.status_code == 409
+            assert "deploy" in resp.text.lower()
+        finally:
+            gate.set()
 
 
 def test_wrong_confirm_returns_400(settings):

@@ -524,23 +524,18 @@ def _parse_ss_line(line: str, *, proto: str) -> dict[str, Any] | None:
     return {"address": addr, "port": port, "process": process, "proto": proto, "v6": v6}
 
 
-def _direct_web_exposure(ufw_rules: list[dict[str, Any]], port: int, proto: str, *, v6: bool) -> bool:
+def _direct_web_exposure(
+    db: StateDB, ufw_rules: list[dict[str, Any]], port: int, proto: str, *, v6: bool
+) -> bool:
     """True when the port is allowed to non-Cloudflare sources (direct exposure)."""
     for rule in ufw_rules:
         if rule["proto"] != proto or rule["v6"] != v6 or rule["action"] != "ALLOW IN":
             continue
         if not _port_matches_to(rule["to"], port):
             continue
-        if not _is_cf_source_label(rule.get("from", "")):
+        if not _source_is_in_cf_ranges(db, rule.get("from", "")):
             return True
     return False
-
-
-def _is_cf_source_label(source: str) -> bool:
-    """Static helper for report rows: 'is this source one of the CF cidrs' is
-    answered with the cached ranges; this variant only rejects the obvious
-    internet-wide labels to avoid a db round-trip per row."""
-    return source not in ("Anywhere", "Anywhere (v6)", "any")
 
 
 def exposure_report(runner: Runner, db: StateDB) -> list[dict[str, Any]]:
@@ -564,7 +559,7 @@ def exposure_report(runner: Runner, db: StateDB) -> list[dict[str, Any]]:
             if cf_only and external and port in (80, 443):
                 # Under Cloudflare-only, web traffic must come from CF ranges;
                 # direct exposure means the mode is silently false.
-                expected = not _direct_web_exposure(ufw_rules, port, proto, v6=v6)
+                expected = not _direct_web_exposure(db, ufw_rules, port, proto, v6=v6)
             rows.append(
                 {
                     "address": addr,

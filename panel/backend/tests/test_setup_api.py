@@ -215,6 +215,7 @@ def test_failed_restore_job_clears_and_allows_retry(panel_settings, frozen_time,
 def test_vanished_restore_job_cleared_in_state(panel_settings, frozen_time, admin_user):
     """If the agent restarts and the job record is gone, the setup sync must
     not leave restore_job_id set forever (wizard stuck at 'pending')."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(404, json={"detail": "job not found"})
 

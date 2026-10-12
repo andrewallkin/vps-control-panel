@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from vpscp_panel.agent_client import AgentClient
+from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.models import Deploy, Project, ProjectService
 
 
@@ -175,6 +175,8 @@ async def run_deploy(
     try:
         start = await agent.post(f"/v1/projects/{project.slug}/deploy", json=agent_body)
         job_id = start["job_id"]
+        deploy.job_id = job_id
+        db.commit()
         log_lines, end_data = await consume_job_events(agent, job_id)
         _apply_end_event(db, deploy, project, log_lines, end_data, clock())
     except BaseException as exc:
@@ -195,14 +197,95 @@ async def run_deploy(
     return deploy
 
 
+async def reconcile_deploy_jobs(
+    session_factory, agent: AgentClient, clock: Callable[[], datetime]
+) -> None:
+    """Finalize 'running' deploys whose agent job reached a terminal state.
+
+    A panel restart mid-deploy leaves the row 'running' while the agent job
+    keeps running and switches containers on its own. Mass-failing the row
+    would lie about what shipped; instead consult the agent (job records are
+    persistent) and finalize to its state. A vanished job is 'failed'.
+    """
+    from vpscp_panel.models import Deploy, Project
+
+    reattached: list[tuple[int, str, str]] = []
+    with session_factory() as db:
+        rows = db.scalars(select(Deploy).where(Deploy.status == "running")).all()
+        for row in rows:
+            if not row.job_id:
+                row.status = "failed"
+                row.finished_at = clock()
+                row.log = (row.log + "\n" + "interrupted: no agent job recorded").strip()
+                continue
+            try:
+                job = await agent.get(f"/v1/jobs/{row.job_id}")
+            except AgentError as exc:
+                if exc.status == 404:
+                    row.status = "failed"
+                    row.finished_at = clock()
+                    row.log = (row.log + "\n" + "interrupted: agent job vanished").strip()
+                continue
+            status = job.get("status")
+            if status in ("succeeded", "failed"):
+                project = db.get(Project, row.project_slug)
+                end_data = {
+                    "status": status,
+                    "result": job.get("result"),
+                    "error": job.get("error"),
+                }
+                if project is not None:
+                    _apply_end_event(db, row, project, [], end_data, clock())
+                else:
+                    row.status = "failed"
+                    row.finished_at = clock()
+            else:
+                # Still running: re-attach to the agent job stream so the row
+                # finalizes when the job does, instead of running forever.
+                reattached.append((row.id, row.project_slug, row.job_id))
+        db.commit()
+
+    for deploy_id, project_slug, job_id in reattached:
+        asyncio.create_task(
+            _reattach_deploy(session_factory, agent, deploy_id, project_slug, job_id, clock)
+        )
+
+
+async def _reattach_deploy(
+    session_factory,
+    agent: AgentClient,
+    deploy_id: int,
+    project_slug: str,
+    job_id: str,
+    clock: Callable[[], datetime],
+) -> None:
+    from vpscp_panel.models import Deploy, Project
+
+    try:
+        log_lines, end_data = await consume_job_events(agent, job_id)
+    except Exception as exc:  # noqa: BLE001
+        with session_factory() as db:
+            row = db.get(Deploy, deploy_id)
+            if row is not None:
+                row.status = "failed"
+                row.finished_at = clock()
+                row.log = (row.log + "\n" + str(exc)).strip()
+                db.commit()
+        return
+    with session_factory() as db:
+        row = db.get(Deploy, deploy_id)
+        project = db.get(Project, project_slug)
+        if row is not None and project is not None:
+            _apply_end_event(db, row, project, log_lines, end_data, clock())
+            db.commit()
+
+
 def reconcile_stuck_work(db: DbSession, clock: Callable[[], datetime]) -> None:
-    """Mark deploys and creations stranded in 'running' by a dead process as
-    failed so they stop blocking new deploys and retries."""
-    stuck_deploys = db.scalars(select(Deploy).where(Deploy.status == "running")).all()
-    for deploy in stuck_deploys:
-        deploy.status = "failed"
-        deploy.finished_at = clock()
-        deploy.log = (deploy.log + "\n" + "interrupted: panel restarted while running").strip()
+    """Mark creations stranded in 'running' by a dead process as failed so
+    retries work. Deploy rows are NOT mass-failed here: the agent job may
+    still be running — reconcile_deploy_jobs finalizes each row from the
+    agent's own terminal state instead of guessing (a mass-fail would lie
+    about containers that actually switched)."""
 
     from vpscp_panel.models import Project
 
@@ -215,5 +298,5 @@ def reconcile_stuck_work(db: DbSession, clock: Callable[[], datetime]) -> None:
             state["error"] = "interrupted: panel restarted while creating"
             project.creation_state = json.dumps(state)
             changed = True
-    if stuck_deploys or changed:
+    if changed:
         db.commit()

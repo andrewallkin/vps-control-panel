@@ -398,9 +398,7 @@ def test_comment_cf_is_not_authority_for_cf_classification(settings):
     db.migrate()
     _seed_cf_ips(db)
     # forged: comment claims cf but source is the whole internet
-    forged = UFW_STATUS_BASE + (
-        "[10] 443/tcp  ALLOW IN  Anywhere  # cf\n"
-    )
+    forged = UFW_STATUS_BASE + ("[10] 443/tcp  ALLOW IN  Anywhere  # cf\n")
     runner = UfwFakeRunner(forged)
     # while CF-only is on, the forged rule must be swept like any non-CF web allow
     with db.connect() as conn:
@@ -415,9 +413,7 @@ def test_comment_cf_is_not_authority_for_cf_classification(settings):
     rules = list_rules(runner)
     forged_rule = next(r for r in rules if r["comment"] == "cf" and r["from"] == "Anywhere")
     assert not _is_cf_rule(db, forged_rule)
-    real_cf = {
-        (r["from"], r["to"]) for r in rules if _is_cf_rule(db, r)
-    }
+    real_cf = {(r["from"], r["to"]) for r in rules if _is_cf_rule(db, r)}
     assert ("Anywhere", "443/tcp") not in real_cf
 
 
@@ -493,6 +489,37 @@ def test_exposure_report_cf_only_flags_direct_web_exposure(settings):
     web_rows = [r for r in report if r["port"] == 80 and r["external"]]
     assert web_rows, "expected an externally exposed 80 row"
     assert any(not row["expected"] for row in web_rows)
+
+
+def test_exposure_cf_only_flags_non_cf_cidr_allow(settings):
+    """Under CF-only, a 443 allow from an arbitrary public CIDR is direct
+    exposure and must not read 'expected' — the report must consult the CF
+    ranges, not just reject 'Anywhere'."""
+    forged = (
+        "Status: active\n"
+        "     To                         Action      From\n"
+        "     --                         ------      ----\n"
+        "[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh\n"
+        "[ 2] 80/tcp                     ALLOW IN    8.8.8.0/24                 # cf\n"
+    )
+    runner = UfwFakeRunner(forged)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    _seed_cf_ips(db)
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
+            ("firewall_cloudflare_only", "true"),
+        )
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-tlnp"], stdout=SS_TCP)
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-ulnp"], stdout="")
+
+    report = exposure_report(runner, db)
+    web_rows = [r for r in report if r["port"] == 80 and r["external"]]
+    assert web_rows, "expected an externally exposed 80 row (v4 listener)"
+    assert any(not row["expected"] for row in web_rows), (
+        "a non-CF CIDR allow must be flagged red under Cloudflare-only"
+    )
 
 
 def test_cloudflare_only_on_adds_cf_rules_then_removes_generic(settings):

@@ -23,6 +23,7 @@ import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
+import { ACCEPT, isAcceptedDump } from '../lib/dumpFile'
 import {
   adoptDatabase,
   databaseDumpDownloadUrl,
@@ -42,12 +43,7 @@ import {
   type UploadCompleteInfo,
 } from '../lib/setupApi'
 
-const ACCEPT = '.sql,.sql.gz'
 
-function isAcceptedDump(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return name.endsWith('.sql') || name.endsWith('.sql.gz')
-}
 
 type PendingStepUp =
   | { kind: 'upload'; file: File }

@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 from starlette.responses import StreamingResponse
@@ -74,7 +74,7 @@ class HostnameInput(BaseModel):
 
 class RouteInput(BaseModel):
     path_prefix: RoutePath
-    port_env_var: EnvKey
+    port_env_var: Annotated[EnvKey, AfterValidator(_reject_managed_port_env_var)]
     max_body_mb: int = Field(25, ge=1, le=10240)
     read_timeout_s: int = Field(60, ge=1, le=3600)
     send_timeout_s: int = Field(60, ge=1, le=3600)
@@ -102,6 +102,16 @@ def _validate_unique_services(services: list[ServiceInput]) -> None:
     env_vars = [row.image_env_var for row in services]
     if len(env_vars) != len(set(env_vars)):
         raise ValueError("duplicate image_env_var")
+
+
+def _reject_managed_port_env_var(value: str) -> str:
+    from vpscp_panel.project_env import MANAGED_ENV_KEYS
+
+    if value in MANAGED_ENV_KEYS:
+        raise ValueError(
+            f"port_env_var {value!r} is a panel-managed key and cannot be a route port"
+        )
+    return value
 
 
 def _validated_migration_command(value: str | None) -> str | None:
@@ -237,7 +247,7 @@ class RoutingHostnameInput(BaseModel):
 
 class RoutingRouteInput(BaseModel):
     path_prefix: RoutePath
-    port_env_var: EnvKey
+    port_env_var: Annotated[EnvKey, AfterValidator(_reject_managed_port_env_var)]
     max_body_mb: int = Field(25, ge=1, le=10240)
     read_timeout_s: int = Field(60, ge=1, le=3600)
     send_timeout_s: int = Field(60, ge=1, le=3600)
@@ -756,7 +766,7 @@ async def patch_project_env(
     )
 
 
-@router.delete("/{slug}", status_code=204)
+@router.delete("/{slug}")
 async def delete_project(
     slug: str,
     body: DeleteProjectBody,
@@ -779,11 +789,13 @@ async def delete_project(
     try:
         await agent.delete(f"/v1/projects/{slug}", json={"confirm": slug})
     except AgentError as exc:
-        # Already deleted agent-side (retry after partial failure): keep going
-        # so the panel rows are always cleaned up and the slug is reusable.
-        if exc.status != 404:
-            raise
-        warnings.append("agent project already removed")
+        # Already deleted agent-side (retry after partial failure), or a
+        # transient agent error: keep going so the panel rows (secrets) are
+        # always cleaned up and the slug is reusable. Failures are reported.
+        if exc.status == 404:
+            warnings.append("agent project already removed")
+        else:
+            warnings.append(f"agent delete failed: {exc.detail}")
 
     if body.drop_database and project.db_name:
         try:
@@ -813,7 +825,7 @@ async def delete_project(
     db.execute(delete(ProjectService).where(ProjectService.project_slug == slug))
     db.delete(project)
     db.commit()
-    return Response(status_code=204)
+    return {"status": "deleted", "warnings": warnings}
 
 
 @router.put("/{slug}/routing")
@@ -902,7 +914,10 @@ async def put_routing(
 
     await _build_nginx_and_apply(db, agent, project)
 
-    for fqdn in new_fqdns - old_fqdns:
+    # Upsert every current fqdn (not just the diff): a Cloudflare outage on
+    # the first save must be recoverable by re-saving, instead of the empty
+    # diff leaving the A record missing forever.
+    for fqdn in sorted(new_fqdns):
         await agent.post("/v1/dns/records/upsert", json={"fqdn": fqdn, "adopt": False})
 
     for fqdn in old_fqdns - new_fqdns:

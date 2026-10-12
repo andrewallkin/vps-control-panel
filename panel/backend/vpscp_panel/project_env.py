@@ -40,9 +40,7 @@ def build_project_env_content(
     # database (or no DATABASE_URL write), a user-supplied DATABASE_URL or
     # POSTGRES_* is theirs and must survive — silently dropping it loses
     # configuration. When the panel does write the block, its values win.
-    panel_writes_pg = (
-        database_mode != "none" and db_name and db_user and db_password is not None
-    )
+    panel_writes_pg = database_mode != "none" and db_name and db_user and db_password is not None
     skip_keys = set(port_keys)
     if panel_writes_pg:
         skip_keys.update(

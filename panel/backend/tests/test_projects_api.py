@@ -529,7 +529,7 @@ def test_delete_retries_and_cleans_rows_when_agent_already_gone(
             headers=_csrf(auth),
             json={"confirm": "imgapp", "drop_database": False, "remove_dns": False},
         )
-    assert resp.status_code == 204, resp.text
+    assert resp.status_code == 200, resp.text
     with db_module.SessionLocal() as session:
         assert session.get(_Project, "imgapp") is None
         assert session.query(_PR).count() == 0
@@ -567,6 +567,7 @@ def test_backup_service_account_clear_requires_step_up(
     client_factory, admin_user, frozen_time, db_session
 ):
     """Setting credentials needs step-up; clearing them must too."""
+
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={})
 
@@ -680,9 +681,7 @@ def test_migrate_endpoint_409_when_unconfigured(
     assert resp.status_code == 409
 
 
-def test_create_project_accepts_route_options(
-    client_factory, admin_user, frozen_time, db_session
-):
+def test_create_project_accepts_route_options(client_factory, admin_user, frozen_time, db_session):
     """Route proxy options (streaming for Strava MCP routes) must be
     accepted at creation and persisted."""
     from vpscp_panel.models import ProjectRoute as _PR
@@ -712,9 +711,7 @@ def test_create_project_accepts_route_options(
                 "compose_file": "docker-compose.yml",
                 "deploy_mode": "build",
                 "database_mode": "none",
-                "hostnames": [
-                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
-                ],
+                "hostnames": [{"domain": "example.com", "subdomain": "", "kind": "primary"}],
                 "routes": [
                     {
                         "path_prefix": "/mcp",
@@ -763,9 +760,7 @@ def test_create_project_rejects_streaming_and_websocket(
                 "compose_file": "docker-compose.yml",
                 "deploy_mode": "build",
                 "database_mode": "none",
-                "hostnames": [
-                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
-                ],
+                "hostnames": [{"domain": "example.com", "subdomain": "", "kind": "primary"}],
                 "routes": [
                     {
                         "path_prefix": "/",
@@ -778,6 +773,109 @@ def test_create_project_rejects_streaming_and_websocket(
             headers=_csrf(auth),
         )
     assert resp.status_code == 422
+
+
+def test_routes_reject_managed_key_port_env_var(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """A route whose port_env_var is POSTGRES_PASSWORD would have put_routing
+    write {'POSTGRES_PASSWORD': '10001'} over the live DB password via the
+    panel's internal env path. Reject the name at the API."""
+    _ready_imgapp(db_session, frozen_time)
+
+    with client_factory() as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.put(
+            "/api/projects/imgapp/routing",
+            json={
+                "hostnames": [{"domain": "example.com", "subdomain": "", "kind": "primary"}],
+                "routes": [
+                    {"path_prefix": "/", "port_env_var": "POSTGRES_PASSWORD"},
+                ],
+            },
+            headers=_csrf(auth),
+        )
+    assert resp.status_code == 422, resp.text
+
+
+def test_put_routing_upserts_all_current_dns(client_factory, admin_user, frozen_time, db_session):
+    """A Cloudflare outage during the first upsert must be recoverable:
+    re-saving routing must retry the upsert for existing hostnames, not only
+    the diff (an empty diff after a failed upsert left the A record missing
+    forever)."""
+    _ready_imgapp(db_session, frozen_time)
+
+    upserts = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/ports/allocate" and request.method == "POST":
+            return httpx.Response(200, json={"port": 10001})
+        if path == "/v1/projects/imgapp/env" and request.method == "PATCH":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/nginx/sites" and request.method == "POST":
+            return httpx.Response(200, json={"site_id": "imgapp"})
+        if path == "/v1/dns/records/upsert" and request.method == "POST":
+            upserts.append(json.loads(request.content.decode()))
+            return httpx.Response(200, json={"fqdn": "example.com"})
+        return httpx.Response(404, json={"detail": "unexpected"})
+
+    body = {
+        "hostnames": [{"domain": "example.com", "subdomain": "", "kind": "primary"}],
+        "routes": [{"path_prefix": "/", "port_env_var": "WEB_PORT"}],
+    }
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.put(
+            "/api/projects/imgapp/routing",
+            json=body,
+            headers=_csrf(auth),
+        )
+        assert resp.status_code == 200, resp.text
+        # second save: no hostnames changed — the upsert must be retried anyway
+        resp = client.put(
+            "/api/projects/imgapp/routing",
+            json=body,
+            headers=_csrf(auth),
+        )
+        assert resp.status_code == 200, resp.text
+
+    assert len(upserts) == 2, f"expected idempotent upsert on every save, got {upserts}"
+
+
+def test_delete_reports_partial_failures_and_cleans_rows(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """Transient agent failures during delete must not leave panel rows
+    (secrets) behind; the response reports what failed."""
+    from datetime import timedelta
+
+    import pyotp
+
+    from vpscp_panel.models import Project as _Project
+
+    _ready_imgapp(db_session, frozen_time)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, json={"detail": "agent exploded"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        step_time = frozen_time + timedelta(seconds=31)
+        client.app.state.clock = lambda: step_time
+        code = pyotp.TOTP(admin_user["totp_secret"]).at(step_time)
+        client.post("/api/auth/step-up", json={"code": code}, headers=_csrf(auth))
+        resp = client.request(
+            "DELETE",
+            "/api/projects/imgapp",
+            headers=_csrf(auth),
+            json={"confirm": "imgapp", "drop_database": False, "remove_dns": False},
+        )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["warnings"], "partial failures must be reported"
+    with db_module.SessionLocal() as session:
+        assert session.get(_Project, "imgapp") is None
 
 
 def test_put_routing_writes_allocated_ports_to_env(

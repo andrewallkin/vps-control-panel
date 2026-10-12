@@ -22,6 +22,7 @@ import { SetupStepper } from '../components/setup/SetupStepper'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
+import { ACCEPT, isAcceptedDump } from '../lib/dumpFile'
 import { ApiError } from '../lib/api'
 import { fetchCloudflareZones, fetchDomains, fetchServerSettings } from '../lib/domainsApi'
 import {
@@ -41,12 +42,7 @@ import {
 } from '../lib/setupSession'
 import { resolveActiveStep } from '../lib/setupWizard'
 
-const ACCEPT = '.sql,.sql.gz'
 
-function isAcceptedDump(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return name.endsWith('.sql') || name.endsWith('.sql.gz')
-}
 
 function stepStatus(steps: SetupStep[], id: SetupStep['id']): string {
   return steps.find((step) => step.id === id)?.status ?? 'pending'

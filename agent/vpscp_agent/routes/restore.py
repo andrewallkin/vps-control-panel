@@ -80,6 +80,12 @@ def run_restore(body: RestoreRunBody, request: Request) -> dict[str, str]:
     db = request.app.state.db
     jobs = request.app.state.jobs
 
+    if jobs.has_lock_prefix("deploy:"):
+        raise HTTPException(
+            status_code=409,
+            detail="a deploy is running; wait for it before restoring the cluster",
+        )
+
     databases, roles = cluster_objects(psql)
     if (databases or roles) and not body.overwrite:
         raise HTTPException(
