@@ -27,6 +27,9 @@ function shouldRedirectOn401(path: string): boolean {
   if (path === '/api/account/password') {
     return false
   }
+  if (path === '/api/account/totp/confirm') {
+    return false
+  }
   return true
 }
 
