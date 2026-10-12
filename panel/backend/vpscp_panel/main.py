@@ -12,13 +12,19 @@ from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import router as auth_router
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.db import init_db, run_migrations
+from vpscp_panel.routes.account_api import router as account_api_router
+from vpscp_panel.routes.audit import router as audit_router
+from vpscp_panel.routes.backups_api import router as backups_api_router
 from vpscp_panel.routes.dashboard import router as dashboard_router
+from vpscp_panel.routes.database_api import router as database_api_router
 from vpscp_panel.routes.deploys_api import router as deploys_api_router
 from vpscp_panel.routes.domains_api import router as domains_api_router
+from vpscp_panel.routes.firewall import router as firewall_router
 from vpscp_panel.routes.jobs import router as jobs_router
 from vpscp_panel.routes.metrics import router as metrics_router
 from vpscp_panel.routes.projects_api import router as projects_api_router
 from vpscp_panel.routes.projects_api import utility_router as projects_utility_router
+from vpscp_panel.routes.settings_api import router as settings_api_router
 from vpscp_panel.routes.setup import router as setup_router
 
 CONTENT_SECURITY_POLICY = (
@@ -89,6 +95,12 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
     app.include_router(metrics_router)
     app.include_router(jobs_router)
     app.include_router(dashboard_router)
+    app.include_router(audit_router)
+    app.include_router(firewall_router)
+    app.include_router(backups_api_router)
+    app.include_router(database_api_router)
+    app.include_router(account_api_router)
+    app.include_router(settings_api_router)
     app.include_router(setup_router)
     app.include_router(domains_api_router)
     app.include_router(projects_api_router)

@@ -53,18 +53,21 @@ class AgentClient:
             raise AgentError(503, "agent unavailable") from exc
         if response.is_error:
             raise AgentError(response.status_code, _detail_from_response(response))
+        if response.status_code == 204:
+            return None
         return response.json()
 
     async def delete(
         self,
         path: str,
         json: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
     ) -> None:
         try:
             if json is None:
-                response = await self._client.delete(path)
+                response = await self._client.delete(path, params=params)
             else:
-                response = await self._client.request("DELETE", path, json=json)
+                response = await self._client.request("DELETE", path, json=json, params=params)
         except (httpx.ConnectError, httpx.TimeoutException) as exc:
             raise AgentError(503, "agent unavailable") from exc
         if response.is_error:

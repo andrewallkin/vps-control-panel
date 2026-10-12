@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session as DbSession
 import vpscp_panel.db as db_module
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.models import AdminUser, Session
+from vpscp_panel.panel_events import record_panel_event
 from vpscp_panel.security import (
     dummy_password_hash,
     new_token,
@@ -222,6 +223,14 @@ def login(
     admin = db.scalar(select(AdminUser).where(AdminUser.username == body.username))
 
     if admin is not None and admin.locked_until is not None and _as_utc(admin.locked_until) > now:
+        record_panel_event(
+            db,
+            "auth.lockout",
+            {"username": body.username},
+            ok=False,
+            duration_ms=0,
+            ts=now,
+        )
         return _locked_json(admin, now)
 
     password_hash = admin.password_hash if admin is not None else dummy_password_hash()
@@ -231,16 +240,56 @@ def login(
         if admin is not None:
             locked = _register_failed_attempt(admin, now, db)
             if locked is not None:
+                record_panel_event(
+                    db,
+                    "auth.lockout",
+                    {"username": body.username},
+                    ok=False,
+                    duration_ms=0,
+                    ts=now,
+                )
                 return locked
+        record_panel_event(
+            db,
+            "auth.login_failure",
+            {"username": body.username},
+            ok=False,
+            duration_ms=0,
+            ts=now,
+        )
         raise HTTPException(status_code=401, detail="invalid_credentials")
 
     if not verify_totp(admin, body.code, now, settings=settings):
         locked = _register_failed_attempt(admin, now, db)
         if locked is not None:
+            record_panel_event(
+                db,
+                "auth.lockout",
+                {"username": body.username},
+                ok=False,
+                duration_ms=0,
+                ts=now,
+            )
             return locked
+        record_panel_event(
+            db,
+            "auth.login_failure",
+            {"username": body.username},
+            ok=False,
+            duration_ms=0,
+            ts=now,
+        )
         raise HTTPException(status_code=401, detail="invalid_credentials")
 
     _clear_lockout_state(admin, db)
+    record_panel_event(
+        db,
+        "auth.login_success",
+        {"username": admin.username},
+        ok=True,
+        duration_ms=0,
+        ts=now,
+    )
     raw_token, row = _create_session(db, admin, request, now)
     response.set_cookie(value=raw_token, **_cookie_kwargs(settings))
     return {"username": admin.username, "csrf_token": row.csrf_token}
@@ -290,7 +339,23 @@ def step_up(
     if admin is None:
         raise HTTPException(status_code=401, detail="unauthorized")
     if not verify_totp(admin, body.code, now, settings=settings):
+        record_panel_event(
+            db,
+            "auth.step_up_failure",
+            {"username": admin.username},
+            ok=False,
+            duration_ms=0,
+            ts=now,
+        )
         raise HTTPException(status_code=401, detail="invalid_credentials")
     session.stepped_up_at = now
     db.commit()
+    record_panel_event(
+        db,
+        "auth.step_up_success",
+        {"username": admin.username},
+        ok=True,
+        duration_ms=0,
+        ts=now,
+    )
     return {"stepped_up_until": _stepped_up_until(session, now)}
