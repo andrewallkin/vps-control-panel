@@ -244,11 +244,20 @@ def _parse_cidr_lines(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
+# www.cloudflare.com sits behind bot protection: bare Python-urllib gets
+# HTTP 403 (seen on a real install). Send a real User-Agent.
+_USER_AGENT = "vpscp-agent/0.1 (+https://github.com/andrewallkin/vps-control-panel)"
+
+
+def _urlopen_text(url: str) -> str:
+    request = urllib.request.Request(url, headers={"User-Agent": _USER_AGENT})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return response.read().decode()
+
+
 def default_fetch_cloudflare_ips() -> tuple[list[str], list[str]]:
-    with urllib.request.urlopen(CF_IPV4_URL, timeout=30) as response:
-        ipv4 = _parse_cidr_lines(response.read().decode())
-    with urllib.request.urlopen(CF_IPV6_URL, timeout=30) as response:
-        ipv6 = _parse_cidr_lines(response.read().decode())
+    ipv4 = _parse_cidr_lines(_urlopen_text(CF_IPV4_URL))
+    ipv6 = _parse_cidr_lines(_urlopen_text(CF_IPV6_URL))
     return ipv4, ipv6
 
 

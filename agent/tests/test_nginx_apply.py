@@ -13,6 +13,7 @@ from vpscp_agent.main import create_app
 from vpscp_agent.nginx_apply import (
     NginxTestError,
     apply_site,
+    default_fetch_cloudflare_ips,
     ensure_base_config,
     remove_site,
     site_conf_path,
@@ -74,6 +75,42 @@ def _site_spec(site_id: str = "budget") -> SiteSpec:
         ],
         routes=[RouteSpec(path="/", port=10000)],
     )
+
+
+def test_default_fetch_sends_user_agent(monkeypatch):
+    """www.cloudflare.com sits behind bot protection: bare Python-urllib
+    gets HTTP 403 (caught on a real Netcup install). The fetch must send a
+    real User-Agent."""
+    import urllib.request
+
+    captured = {}
+
+    class FakeResp:
+        def __init__(self, text: str) -> None:
+            self._text = text
+
+        def read(self) -> bytes:
+            return self._text.encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        captured["req"] = req
+        return FakeResp("173.245.48.0/20\n")
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    ipv4, ipv6 = default_fetch_cloudflare_ips()
+
+    assert ipv4 == ["173.245.48.0/20"]
+    assert ipv6 == ["173.245.48.0/20"]
+    req = captured["req"]
+    ua = req.get_header("User-agent") if hasattr(req, "get_header") else None
+    assert ua, "must send a User-Agent header"
+    assert "Python-urllib" not in ua
 
 
 def test_verify_certificates_missing(nginx_env):
