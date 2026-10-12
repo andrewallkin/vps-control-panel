@@ -608,6 +608,86 @@ def test_delete_route_invalid_client_ip_400(fw_client):
     assert resp.status_code == 400
 
 
+def test_delete_cf_comment_https_blocked_while_cf_only_off(settings):
+    status = """Status: active
+[ 1] 443/tcp                    ALLOW IN    173.245.48.0/20            # cf
+"""
+    runner = UfwFakeRunner(status)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    expected = {
+        "to": "443/tcp",
+        "proto": "tcp",
+        "action": "ALLOW IN",
+        "from": "173.245.48.0/20",
+        "v6": False,
+        "comment": "cf",
+    }
+    with pytest.raises(ConflictError, match="443/tcp"):
+        delete_rule(runner, db=db, number=1, client_ip="203.0.113.1", expected=expected)
+
+
+def test_cloudflare_only_off_still_deletes_cf_rules_internally(settings):
+    runner = UfwFakeRunner(UFW_CF_ONLY)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
+            ("firewall_cloudflare_only", "true"),
+        )
+    cloudflare_only(runner, db, on=False)
+    assert any(c["args"][:3] == ["ufw", "--force", "delete"] for c in runner.calls)
+
+
+def test_exposure_not_external_with_cidr_only_allow(settings):
+    status = """Status: active
+[ 1] 9000/tcp                   ALLOW IN    10.0.0.0/8                 # internal
+"""
+    runner = UfwFakeRunner(status)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    ss = '0 128 0.0.0.0:9000 0.0.0.0:* users:(("node",pid=1,fd=3))\n'
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-tlnp"], stdout=ss)
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-ulnp"], stdout="")
+    report = exposure_report(runner, db)
+    row = next(r for r in report if r["port"] == 9000)
+    assert row["external"] is False
+
+
+def test_exposure_deny_before_allow_blocks(settings):
+    status = """Status: active
+[ 1] 9000/tcp                   DENY IN     Anywhere                   # deny
+[ 2] 9000/tcp                   ALLOW IN    Anywhere                   # allow
+"""
+    runner = UfwFakeRunner(status)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    ss = '0 128 0.0.0.0:9000 0.0.0.0:* users:(("node",pid=1,fd=3))\n'
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-tlnp"], stdout=ss)
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-ulnp"], stdout="")
+    report = exposure_report(runner, db)
+    row = next(r for r in report if r["port"] == 9000)
+    assert row["external"] is False
+
+
+def test_exposure_allow_before_deny_is_external(settings):
+    status = """Status: active
+[ 1] 9000/tcp                   ALLOW IN    Anywhere                   # allow
+[ 2] 9000/tcp                   DENY IN     Anywhere                   # deny
+"""
+    runner = UfwFakeRunner(status)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    ss = '0 128 0.0.0.0:9000 0.0.0.0:* users:(("node",pid=1,fd=3))\n'
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-tlnp"], stdout=ss)
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-ulnp"], stdout="")
+    report = exposure_report(runner, db)
+    row = next(r for r in report if r["port"] == 9000)
+    assert row["external"] is True
+    assert row["expected"] is False
+
+
 def test_delete_cidr_https_route_409(fw_client):
     client, runner, db, _settings = fw_client
     runner.ufw_status = UFW_CIDR_HTTPS

@@ -177,10 +177,14 @@ def _port_from_to(to_field: str) -> int | None:
 
 
 def _is_web_port_allow(rule: dict[str, Any]) -> bool:
-    if rule["action"] != "ALLOW IN" or rule["comment"] == "cf":
+    if rule["action"] != "ALLOW IN":
         return False
     port = _port_from_to(rule["to"])
     return port in (80, 443)
+
+
+def _is_non_cf_web_port_allow(rule: dict[str, Any]) -> bool:
+    return _is_web_port_allow(rule) and rule.get("comment") != "cf"
 
 
 def _is_ssh_allow_rule(rule: dict[str, Any]) -> bool:
@@ -329,7 +333,7 @@ def cloudflare_only(
                     source=cidr,
                     comment="cf",
                 )
-        _delete_rules_by_predicate(runner, db, _is_web_port_allow)
+        _delete_rules_by_predicate(runner, db, _is_non_cf_web_port_allow)
         _set_setting(db, SETTING_CF_ONLY, "true")
     else:
         for port, comment in ((80, "http"), (443, "https")):
@@ -352,13 +356,33 @@ def _is_public_bind(address: str, public_ipv4: str | None) -> bool:
     return not ip.is_loopback
 
 
-def _ufw_allows_port(rules: list[dict[str, Any]], port: int, proto: str, *, v6: bool) -> bool:
-    for rule in rules:
-        if rule["action"] != "ALLOW IN" or rule["v6"] != v6:
+_INTERNET_WIDE_SOURCES = frozenset({"Anywhere", "0.0.0.0/0", "::/0"})
+
+
+def _is_internet_wide_source(from_field: str) -> bool:
+    return from_field in _INTERNET_WIDE_SOURCES
+
+
+def _port_matches_to(to_field: str, port: int) -> bool:
+    port_part = to_field.split("/", 1)[0]
+    if ":" in port_part:
+        start_s, end_s = port_part.split(":", 1)
+        return int(start_s) <= port <= int(end_s)
+    return int(port_part) == port
+
+
+def _ufw_internet_allowed(rules: list[dict[str, Any]], port: int, proto: str, *, v6: bool) -> bool:
+    for rule in sorted(rules, key=lambda item: item["number"]):
+        if rule["proto"] != proto or rule["v6"] != v6:
             continue
-        rule_port = _port_from_to(rule["to"])
-        if rule_port == port and rule["proto"] == proto:
+        if not _port_matches_to(rule["to"], port):
+            continue
+        if not _is_internet_wide_source(rule["from"]):
+            continue
+        if rule["action"] == "ALLOW IN":
             return True
+        if rule["action"] == "DENY IN":
+            return False
     return False
 
 
@@ -420,7 +444,7 @@ def exposure_report(runner: Runner, db: StateDB) -> list[dict[str, Any]]:
             port = parsed["port"]
             v6 = parsed["v6"]
             public = _is_public_bind(addr, public_ipv4)
-            allowed = _ufw_allows_port(ufw_rules, port, proto, v6=v6)
+            allowed = _ufw_internet_allowed(ufw_rules, port, proto, v6=v6)
             external = public and allowed
             expected = external and port in EXPECTED_EXTERNAL_PORTS
             rows.append(
