@@ -37,8 +37,9 @@ Fill in your new apex domain wherever you see `<new-domain>` (do not commit real
 
 ## 3. Panel setup wizard (global)
 
-- [ ] **Database:** choose **Start empty** and continue. Do **not** upload the cutover dump in the wizard—the full **Database** page (including **Cluster restore**) is only available **after setup is complete**.
+- [ ] **Database:** you may **Start empty** and continue, or upload a dump directly in the wizard (restore-in-wizard is supported). Either way the final cutover dump is best loaded from **Database → Cluster restore** after setup, as late as possible before go-live. Cluster restore now **refuses a non-empty cluster** unless you tick **Overwrite existing data** — the dialog lists exactly what would be dropped first. A restore that hits errors **fails loudly** instead of reporting success; the wizard shows **Try again** if it does.
 - [ ] **Cloudflare:** Create an API token with **Zone:Read** and **DNS:Edit** on the zones you will use (**Zone Settings:Read** is optional). Paste it in the wizard; confirm zones list loads.
+- [ ] **ACME email:** the wizard's Cloudflare step collects the Let's Encrypt contact email. Set it **before** registering any domain — certificate issuance fails without it. The same field lives in **Settings → Server** after setup.
 - [ ] **Domains:** Register **`andrewallkin.cloud`** and **`<new-domain>`** (apex). Wait until at least one certificate shows **valid** before continuing.
 - [ ] **Panel hostname:** Choose the FQDN where the control panel itself will live (e.g. `panel.<new-domain>` or a subdomain on `andrewallkin.cloud`). Complete TLS issuance for that hostname.
 - [ ] **Docker Hub:** Save registry credentials the host will use to pull private images (username + access token).
@@ -66,9 +67,9 @@ Take this dump as late as possible before restore on the new Netcup host (minimi
 
 Setup must be finished before this step.
 
-- [ ] In the panel, open **Database → Cluster restore** (sidebar **Database** page, not the setup wizard).
+- [ ] In the panel, open **Database → Cluster restore** (sidebar **Database** page).
 - [ ] Upload `cutover.sql.gz` (gzip-compressed `pg_dumpall`).
-- [ ] Run restore; watch the job log until it completes.
+- [ ] Run restore; watch the job log until it completes. If the cluster already contains databases (e.g. from a test restore), tick **Overwrite existing data** after reviewing the drop list. Restores fail on any load error except the expected `role "pgadmin" already exists` collision; re-run with overwrite if a previous attempt left objects behind.
 - [ ] Expect restored DB roles to keep passwords from the dump until you **rotate** per project (below).
 - [ ] Confirm `gmail_manager` (and other DBs) appear in the database list; leave `gmail_manager` **unattached**.
 
@@ -107,6 +108,8 @@ Repeat for: **Budget HQ**, **Strava Automation**, **SplitEasy**, **Health Tracke
   - `POSTGRES_PASSWORD`
   - `DATABASE_URL`
 - [ ] Map compose **services** to **Docker Hub** repositories and `DOCKER_IMAGE_*` env vars in the wizard.
+- [ ] **Compose ports:** each route in the wizard maps a path to a **port env var** (e.g. `FRONTEND_PORT`, `BACKEND_PORT`). The panel allocates a host port (10000–19999) and writes it into `/srv/apps/<slug>/.env`. Your compose file must bind it, e.g. `ports: ["127.0.0.1:${FRONTEND_PORT}:3000"]` (container port 3000 is whatever your UI listens on). Multi-service projects use one env var per service.
+- [ ] **Migrations:** set **Migration service** + **Migration command** in the wizard (or project Settings later), e.g. service `backend`, command `bash /app/run_migrations.sh` (the script must exist inside the image — copy it in the Dockerfile, like SplitEasy's `backend/run_migrations.sh`). The command runs in a one-off container (`docker compose run --rm --no-deps <service> <cmd>`) **after** the image is pulled and **before** containers switch — same order as your old CI's `run_migrations.sh` step, but migrate-before-up so a failed migration keeps the old containers serving. It runs on **every** deploy (checkbox "Run database migrations" is pre-ticked; untick to skip). Notes: no shell features in the command (use `sh -c '…'` if needed), 10-minute job cap, and a standalone **Run migrations** button on the project page runs it without deploying.
 - [ ] **DNS:** when you deploy or upsert records from the project, the panel **upserts Cloudflare A records** to the new server’s public IPv4 (no manual A-record edits unless you intentionally adopt foreign records).
 
 ## 8. Copy application `data/` directories
@@ -157,3 +160,7 @@ Update third-party URLs that still target the old host:
 | App data on new host | `/srv/apps/<slug>/data/` |
 | Cutover dump (old host) | `docker exec postgres-central pg_dumpall -U pgadmin \| gzip > cutover.sql.gz` |
 | Cluster restore | Panel → **Database** → **Cluster restore** |
+| In-place upgrade | `sudo ./update.sh` (snapshots `pgdata` + `panel_data` to `/var/lib/vpscp/update-snapshots/<ts>/` before rebuilding) |
+| Create admin (recovery) | `docker compose exec panel python -m vpscp_panel.cli create-admin <user>` (from `stack/`) |
+| Safety dumps | `/var/lib/vpscp/restore/safety-*.sql.gz` — pre-restore snapshots; keep until confident, delete manually |
+| Restore errors | Restore jobs fail on load errors; job log shows the failing lines. Re-run with **Overwrite existing data** if a partial restore left objects behind |
