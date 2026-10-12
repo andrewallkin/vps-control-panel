@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 from starlette.responses import StreamingResponse
@@ -186,9 +186,9 @@ class RoutingHostnameInput(BaseModel):
 class RoutingRouteInput(BaseModel):
     path_prefix: RoutePath
     port_env_var: EnvKey
-    max_body_mb: int = 25
-    read_timeout_s: int = 60
-    send_timeout_s: int = 60
+    max_body_mb: int = Field(25, ge=1, le=10240)
+    read_timeout_s: int = Field(60, ge=1, le=3600)
+    send_timeout_s: int = Field(60, ge=1, le=3600)
     streaming: bool = False
     websocket: bool = False
     pass_authorization: bool = False
@@ -205,6 +205,12 @@ class PutRoutingBody(BaseModel):
             raise ValueError("exactly one primary hostname required")
         if len(self.routes) < 1:
             raise ValueError("at least one route required")
+        paths = [route.path_prefix for route in self.routes]
+        if len(paths) != len(set(paths)):
+            raise ValueError("duplicate route path")
+        for route in self.routes:
+            if route.streaming and route.websocket:
+                raise ValueError("route cannot be both streaming and websocket")
         return self
 
 
@@ -779,6 +785,18 @@ async def put_routing(
             )
             db.add(allocation)
             existing_ports[route.port_env_var] = allocation
+
+    # Every allocated route port must exist in the project .env: compose binds
+    # ${PORT_VAR} and nginx proxies to the allocated host port. Skipping this
+    # leaves the route pointing at an unbound port (silent 502).
+    env_sets: dict[str, str] = {}
+    for route in body.routes:
+        allocation = existing_ports[route.port_env_var]
+        env_sets[route.port_env_var] = str(allocation.host_port)
+    await agent.patch(
+        f"/v1/projects/{slug}/env",
+        json={"set": env_sets, "unset": []},
+    )
 
     db.commit()
 

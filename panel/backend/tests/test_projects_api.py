@@ -354,6 +354,110 @@ def test_put_services_replace_and_preserve_current_tag(
     assert data["services"][0]["current_tag"] == "backend-main-abc"
 
 
+def _ready_imgapp(db_session, frozen_time):
+    from datetime import UTC, datetime
+
+    from vpscp_panel.project_creation import initial_creation_state
+
+    db_session.add(
+        Domain(
+            name="example.com",
+            zone_id="zone-1",
+            cert_status="missing",
+            cert_expires_at=None,
+        )
+    )
+    state = initial_creation_state()
+    state["status"] = "ready"
+    db_session.add(
+        Project(
+            slug="imgapp",
+            display_name="Image App",
+            repo_url="https://github.com/acme/imgapp.git",
+            branch="main",
+            compose_file="docker-compose.yml",
+            deploy_mode="image",
+            docker_hub_repo="acme/imgapp",
+            database_mode="none",
+            db_name=None,
+            db_user=None,
+            write_database_url=False,
+            migration_command=None,
+            migration_service=None,
+            health_check_url=None,
+            user_env=None,
+            creation_state=json.dumps(state),
+            created_at=datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC),
+        )
+    )
+    db_session.commit()
+
+
+def test_put_routing_writes_allocated_ports_to_env(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """Adding a route with a new port env var must write the allocated host
+    port into the project .env — nginx proxies to it and compose binds it."""
+    _ready_imgapp(db_session, frozen_time)
+
+    env_patches = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/ports/allocate" and request.method == "POST":
+            return httpx.Response(200, json={"port": 10001})
+        if path == "/v1/projects/imgapp/env" and request.method == "PATCH":
+            env_patches.append(json.loads(request.content.decode()))
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/nginx/sites" and request.method == "POST":
+            return httpx.Response(200, json={"site_id": "imgapp"})
+        if path == "/v1/dns/records/upsert" and request.method == "POST":
+            return httpx.Response(200, json={"fqdn": request.url.path})
+        return httpx.Response(404, json={"detail": f"unexpected {path}"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.put(
+            "/api/projects/imgapp/routing",
+            json={
+                "hostnames": [
+                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
+                ],
+                "routes": [
+                    {"path_prefix": "/", "port_env_var": "WEB_PORT"},
+                ],
+            },
+            headers=_csrf(auth),
+        )
+        assert response.status_code == 200, response.text
+
+    assert len(env_patches) == 1
+    assert env_patches[0]["set"] == {"WEB_PORT": "10001"}
+
+
+def test_put_routing_rejects_duplicate_paths(
+    client_factory, admin_user, frozen_time, db_session
+):
+    _ready_imgapp(db_session, frozen_time)
+
+    with client_factory() as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.put(
+            "/api/projects/imgapp/routing",
+            json={
+                "hostnames": [
+                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
+                ],
+                "routes": [
+                    {"path_prefix": "/api", "port_env_var": "A_PORT"},
+                    {"path_prefix": "/api", "port_env_var": "B_PORT"},
+                ],
+            },
+            headers=_csrf(auth),
+        )
+    assert response.status_code == 422
+
+
 def test_put_services_409_when_deploy_running(client_factory, admin_user, frozen_time, db_session):
     from datetime import UTC, datetime
 
