@@ -4,6 +4,7 @@ import { useState } from 'react'
 import {
   fetchCloudflareZones,
   postCloudflareToken,
+  updateServerSettings,
   type CloudflareZone,
 } from '../../lib/domainsApi'
 
@@ -12,23 +13,47 @@ export interface CloudflareSetupStepProps {
   zones: CloudflareZone[]
   zonesLoading?: boolean
   zonesError?: string | null
+  acmeEmail?: string
   onTokenSaved: () => void
   onContinue: () => void
 }
+
+const ACME_EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export function CloudflareSetupStep({
   configured,
   zones,
   zonesLoading = false,
   zonesError = null,
+  acmeEmail = '',
   onTokenSaved,
   onContinue,
 }: CloudflareSetupStepProps) {
-  const continueDisabled = zonesLoading
   const queryClient = useQueryClient()
   const [token, setToken] = useState('')
   const [tokenSaved, setTokenSaved] = useState(configured)
   const [error, setError] = useState<string | null>(null)
+  const [acmeEmailValue, setAcmeEmailValue] = useState(acmeEmail)
+  const [savingEmail, setSavingEmail] = useState(false)
+
+  const emailValid = ACME_EMAIL_RE.test(acmeEmailValue.trim())
+  const emailDirty = acmeEmailValue.trim() !== acmeEmail.trim()
+  const continueDisabled = zonesLoading || !emailValid || savingEmail
+
+  async function handleContinue() {
+    if (emailDirty && emailValid) {
+      setSavingEmail(true)
+      try {
+        await updateServerSettings({ acme_email: acmeEmailValue.trim() })
+      } catch {
+        setError('Could not save the ACME email.')
+        setSavingEmail(false)
+        return
+      }
+      setSavingEmail(false)
+    }
+    onContinue()
+  }
 
   const showConfigured = configured || tokenSaved
 
@@ -62,6 +87,28 @@ export function CloudflareSetupStep({
         Settings:Read is optional and enables SSL mode warnings on the Domains page.
       </p>
 
+      <div className="space-y-2">
+        <label htmlFor="setup-acme-email" className="text-sm font-medium">
+          ACME email
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Let's Encrypt expiry and account notices for certificate issuance.
+        </p>
+        <input
+          id="setup-acme-email"
+          type="email"
+          autoComplete="email"
+          value={acmeEmailValue}
+          placeholder="ops@example.com"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          onChange={(event) => setAcmeEmailValue(event.target.value)}
+        />
+        {acmeEmailValue.trim() && !emailValid ? (
+          <p className="text-sm text-destructive">Enter a valid email address.</p>
+        ) : null}
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      </div>
+
       {showConfigured ? (
         <div className="space-y-3">
           <p className="inline-flex items-center gap-2 text-sm text-accent">
@@ -91,7 +138,7 @@ export function CloudflareSetupStep({
             type="button"
             disabled={continueDisabled}
             className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={onContinue}
+            onClick={handleContinue}
           >
             Continue
           </button>
@@ -109,7 +156,6 @@ export function CloudflareSetupStep({
             className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
             onChange={(event) => setToken(event.target.value)}
           />
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <button
             type="button"
             disabled={!token.trim() || mutation.isPending}

@@ -19,7 +19,7 @@ import { SetupStepper } from '../components/setup/SetupStepper'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
-import { fetchCloudflareZones, fetchDomains } from '../lib/domainsApi'
+import { fetchCloudflareZones, fetchDomains, fetchServerSettings } from '../lib/domainsApi'
 import {
   completeSetup,
   fetchSetupState,
@@ -78,6 +78,12 @@ export function SetupPage() {
       cloudflareZonesRequested ||
       isCloudflareContinuePending() ||
       stepStatus(setupQuery.data?.steps ?? [], 'cloudflare') === 'done',
+    refetchIntervalInBackground: false,
+  })
+
+  const serverSettingsQuery = useQuery({
+    queryKey: ['server-settings'],
+    queryFn: fetchServerSettings,
     refetchIntervalInBackground: false,
   })
 
@@ -350,6 +356,7 @@ export function SetupPage() {
               ? 'Could not load Cloudflare zones.'
               : null
           }
+          acmeEmail={serverSettingsQuery.data?.acme_email ?? ''}
           onTokenSaved={() => {
             setCloudflareZonesRequested(true)
             setAwaitingCloudflareContinue(true)

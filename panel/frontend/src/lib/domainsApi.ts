@@ -49,7 +49,7 @@ export async function fetchDomains(): Promise<DomainRow[]> {
 export async function registerDomain(payload: {
   name: string
   zone_id: string
-}): Promise<{ job_id: string }> {
+}): Promise<{ job_id: string | null; issue_error: string | null }> {
   return apiJson('/api/domains', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

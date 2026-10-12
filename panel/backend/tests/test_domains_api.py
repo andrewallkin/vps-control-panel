@@ -105,6 +105,8 @@ def _domains_transport(agent_requests, agent_state):
             agent_state["domains"] = [d for d in agent_state["domains"] if d.get("name") != name]
             return httpx.Response(204)
         if path == "/v1/tls/issue" and method == "POST":
+            if agent_state.get("issue_error"):
+                return httpx.Response(400, json={"detail": agent_state["issue_error"]})
             return httpx.Response(202, json={"job_id": "job-tls-1"})
         if path == "/v1/tls/status" and method == "GET":
             return httpx.Response(200, json=agent_state["tls"])
@@ -219,8 +221,50 @@ def test_register_domain_returns_job_id(domains_client, auth, agent_state):
     _post_token(domains_client, auth)
     response = _register_domain(domains_client, auth)
     assert response.status_code == 200
-    assert response.json() == {"job_id": "job-tls-1"}
+    assert response.json() == {"job_id": "job-tls-1", "issue_error": None}
     assert len(agent_state["domains"]) == 1
+
+
+def test_server_settings_accept_acme_email_during_setup(domains_client, auth, agent_requests):
+    """acme_email must be settable before setup completes (the wizard needs it
+    before the first cert issuance)."""
+    response = domains_client.put(
+        "/api/server-settings",
+        json={"acme_email": "ops@example.com"},
+        headers=csrf_headers(auth),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["acme_email"] == "ops@example.com"
+    assert any(r.url.path == "/v1/server/settings" for r in agent_requests)
+
+
+def test_register_domain_tolerates_issue_failure(domains_client, auth, agent_state):
+    """Domain must be registered even when cert issuance fails (e.g. acme_email missing).
+
+    The old behavior raised and returned 400/500 after the domain was already
+    created agent-side, erasing the fact it was registered and dead-locking the
+    wizard (the only fix was SettingsPage, which is unreachable during setup).
+    """
+    _post_token(domains_client, auth)
+    agent_state["issue_error"] = "acme_email is not configured"
+    response = _register_domain(domains_client, auth)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["job_id"] is None
+    assert "acme_email" in body["issue_error"]
+    assert len(agent_state["domains"]) == 1
+    listed = domains_client.get("/api/domains")
+    assert listed.status_code == 200
+    assert listed.json()[0]["name"] == DOMAIN
+
+
+def test_register_domain_reports_issue_job_on_success(domains_client, auth, agent_state):
+    _post_token(domains_client, auth)
+    response = _register_domain(domains_client, auth)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job_id"] == "job-tls-1"
+    assert body.get("issue_error") is None
 
 
 def test_delete_refused_when_panel_hostname_uses_domain(domains_client, auth):
