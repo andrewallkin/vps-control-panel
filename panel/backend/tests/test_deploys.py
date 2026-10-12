@@ -205,6 +205,79 @@ def test_deploy_finished_at_uses_end_clock(
         assert row.finished_at != frozen_time.replace(tzinfo=None)
 
 
+def test_run_deploy_cancellation_finalizes_row(client_factory, admin_user, frozen_time, db_session):
+    """A cancelled deploy (client disconnect / panel shutdown) must not leave
+    status='running' forever — that bricks deploys for the project."""
+    import asyncio
+
+    from vpscp_panel import deploy_ops
+
+    _ready_project(db_session)
+
+    async def cancelled_consume(agent, job_id):
+        raise asyncio.CancelledError
+
+    class StubAgent:
+        async def post(self, path, json=None):
+            return {"job_id": "job-1"}
+
+    original = deploy_ops.consume_job_events
+    deploy_ops.consume_job_events = cancelled_consume
+    try:
+        with db_module.SessionLocal() as session:
+            project = session.get(Project, "myapp")
+            with pytest.raises(asyncio.CancelledError):
+                asyncio.run(
+                    deploy_ops.run_deploy(
+                        session,
+                        StubAgent(),
+                        project,
+                        tags={"DOCKER_IMAGE_WEB": "x"},
+                        trigger="deploy",
+                        clock=lambda: frozen_time,
+                    )
+                )
+        with db_module.SessionLocal() as session:
+            row = session.scalars(select(Deploy).where(Deploy.project_slug == "myapp")).one()
+            assert row.status == "failed"
+            assert row.finished_at is not None
+    finally:
+        deploy_ops.consume_job_events = original
+
+
+def test_reconcile_stuck_work_marks_orphans_failed(db_session, frozen_time):
+    """Startup reconciliation: deploys and creations stuck in 'running' from a
+    previous process must be marked failed so they stop blocking new work."""
+    from vpscp_panel.deploy_ops import reconcile_stuck_work
+
+    _ready_project(db_session)
+    db_session.add(
+        Deploy(
+            project_slug="myapp",
+            started_at=frozen_time,
+            finished_at=None,
+            status="running",
+            tags_json="{}",
+            log="",
+            trigger="deploy",
+            commit=None,
+        )
+    )
+    project = db_session.get(Project, "myapp")
+    state = json.loads(project.creation_state)
+    state["status"] = "running"
+    project.creation_state = json.dumps(state)
+    db_session.commit()
+
+    reconcile_stuck_work(db_session, lambda: frozen_time)
+
+    row = db_session.scalars(select(Deploy).where(Deploy.project_slug == "myapp")).one()
+    assert row.status == "failed"
+    assert row.finished_at is not None
+    project = db_session.get(Project, "myapp")
+    assert json.loads(project.creation_state)["status"] == "failed"
+
+
 def test_only_one_running_deploy_per_slug(db_session):
     _ready_project(db_session)
     started = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)

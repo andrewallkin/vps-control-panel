@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable
 from datetime import datetime
@@ -170,12 +171,43 @@ async def run_deploy(
         job_id = start["job_id"]
         log_lines, end_data = await consume_job_events(agent, job_id)
         _apply_end_event(db, deploy, project, log_lines, end_data, clock())
-    except Exception as exc:  # noqa: BLE001
+    except BaseException as exc:
+        # A cancelled deploy (client disconnect, panel shutdown) must never
+        # leave status='running' behind: it 409s every future deploy.
         deploy.status = "failed"
         deploy.finished_at = clock()
         prefix = deploy.log
-        msg = str(exc)
+        msg = str(exc) if str(exc) else type(exc).__name__
         deploy.log = f"{prefix}\n{msg}".strip() if prefix else msg
+        db.commit()
+        db.refresh(deploy)
+        if isinstance(exc, (asyncio.CancelledError, KeyboardInterrupt, SystemExit)):
+            raise
+        return deploy
     db.commit()
     db.refresh(deploy)
     return deploy
+
+
+def reconcile_stuck_work(db: DbSession, clock: Callable[[], datetime]) -> None:
+    """Mark deploys and creations stranded in 'running' by a dead process as
+    failed so they stop blocking new deploys and retries."""
+    stuck_deploys = db.scalars(select(Deploy).where(Deploy.status == "running")).all()
+    for deploy in stuck_deploys:
+        deploy.status = "failed"
+        deploy.finished_at = clock()
+        deploy.log = (deploy.log + "\n" + "interrupted: panel restarted while running").strip()
+
+    from vpscp_panel.models import Project
+
+    projects = db.scalars(select(Project)).all()
+    changed = False
+    for project in projects:
+        state = json.loads(project.creation_state)
+        if state.get("status") == "running":
+            state["status"] = "failed"
+            state["error"] = "interrupted: panel restarted while creating"
+            project.creation_state = json.dumps(state)
+            changed = True
+    if stuck_deploys or changed:
+        db.commit()

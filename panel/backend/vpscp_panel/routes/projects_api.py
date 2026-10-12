@@ -54,6 +54,8 @@ from vpscp_panel.validation import (
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 utility_router = APIRouter(prefix="/api", tags=["projects"])
 
+_creation_tasks: dict[str, asyncio.Task] = {}
+
 
 def _agent(request: Request) -> AgentClient:
     return request.app.state.agent
@@ -384,10 +386,14 @@ async def create_project(
     async def _background_creation() -> None:
         if db_module.SessionLocal is None:
             return
-        with db_module.SessionLocal() as session:
-            await run_creation(session, agent, body.slug)
+        try:
+            with db_module.SessionLocal() as session:
+                await run_creation(session, agent, body.slug)
+        finally:
+            _creation_tasks.pop(body.slug, None)
 
-    asyncio.create_task(_background_creation())
+    task = asyncio.create_task(_background_creation())
+    _creation_tasks[body.slug] = task
 
     return {"slug": body.slug, "creation_state": state}
 
@@ -549,7 +555,7 @@ async def download_dump(
     )
 
 
-@router.post("/{slug}/retry-create")
+@router.post("/{slug}/retry-create", status_code=202)
 async def retry_create(
     slug: str,
     db: Annotated[DbSession, Depends(get_db)],
@@ -560,10 +566,24 @@ async def retry_create(
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     state = json.loads(project.creation_state)
-    if state.get("status") in ("ready", "running"):
+    if state.get("status") == "ready":
         raise HTTPException(status_code=409, detail="creation not retryable")
-    await run_creation(db, agent, slug)
-    db.refresh(project)
+    if state.get("status") == "running" and slug in _creation_tasks:
+        raise HTTPException(status_code=409, detail="creation not retryable")
+    if slug in _creation_tasks:
+        raise HTTPException(status_code=409, detail="creation not retryable")
+
+    async def _background_retry() -> None:
+        if db_module.SessionLocal is None:
+            return
+        try:
+            with db_module.SessionLocal() as session:
+                await run_creation(session, agent, slug)
+        finally:
+            _creation_tasks.pop(slug, None)
+
+    task = asyncio.create_task(_background_retry())
+    _creation_tasks[slug] = task
     return {"slug": slug, "creation_state": json.loads(project.creation_state)}
 
 

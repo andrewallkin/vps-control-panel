@@ -44,6 +44,45 @@ def db_session(panel_settings):
         yield session
 
 
+def test_retry_create_unblocks_stranded_running(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """A creation_state stuck at 'running' with no live task (panel restarted
+    mid-creation) must be retryable instead of 409ing forever."""
+    from vpscp_panel.models import Project
+
+    db_session.add(
+        Project(
+            slug="myapp",
+            display_name="My App",
+            repo_url="git@github.com:me/myapp.git",
+            branch="main",
+            compose_file="docker-compose.yml",
+            deploy_mode="build",
+            docker_hub_repo=None,
+            database_mode="none",
+            db_name=None,
+            db_user=None,
+            write_database_url=False,
+            migration_command=None,
+            migration_service=None,
+            health_check_url=None,
+            user_env="",
+            creation_state=json.dumps({"status": "running", "steps": []}),
+            created_at=frozen_time,
+        )
+    )
+    db_session.commit()
+
+    client = client_factory()
+    auth = login(client, admin_user, frozen_time)
+    resp = client.post(
+        "/api/projects/myapp/retry-create",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+    )
+    assert resp.status_code == 202, resp.text
+
+
 def test_create_project_persists_docker_hub_repo(
     client_factory, admin_user, frozen_time, db_session
 ):
@@ -318,7 +357,6 @@ def test_put_services_replace_and_preserve_current_tag(
 def test_put_services_409_when_deploy_running(client_factory, admin_user, frozen_time, db_session):
     from datetime import UTC, datetime
 
-    from vpscp_panel.models import Deploy
     from vpscp_panel.project_creation import initial_creation_state
 
     db_session.add(
@@ -352,22 +390,30 @@ def test_put_services_409_when_deploy_running(client_factory, admin_user, frozen
             created_at=datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC),
         )
     )
-    db_session.flush()
-    db_session.add(
-        Deploy(
-            project_slug="imgapp",
-            started_at=datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC),
-            finished_at=None,
-            status="running",
-            tags_json="{}",
-            log="",
-            trigger="deploy",
-            commit=None,
-        )
-    )
     db_session.commit()
 
     with client_factory() as client:
+        # The running deploy must be inserted after app startup: a 'running'
+        # row present at startup is an orphan and is reconciled to failed.
+        from datetime import UTC
+        from datetime import datetime as _dt
+
+        from vpscp_panel.models import Deploy as _Deploy
+
+        with db_module.SessionLocal() as session:
+            session.add(
+                _Deploy(
+                    project_slug="imgapp",
+                    started_at=_dt(2025, 6, 15, 12, 0, 0, tzinfo=UTC),
+                    finished_at=None,
+                    status="running",
+                    tags_json="{}",
+                    log="",
+                    trigger="deploy",
+                    commit=None,
+                )
+            )
+            session.commit()
         auth = login(client, admin_user, frozen_time)
         response = client.put(
             "/api/projects/imgapp/services",
