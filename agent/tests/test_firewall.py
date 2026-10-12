@@ -538,6 +538,45 @@ def test_validation_error_returns_400(fw_client):
     assert resp.status_code == 400
 
 
+@pytest.mark.parametrize(
+    "port",
+    ["5430:5440", "7979:8081", "1:65535", "5432:5432", "8080:9000", "20:25"],
+)
+def test_port_ranges_spanning_reserved_ports_rejected(fw_client, port):
+    """A range whose span covers 5432/8080 or privileged ports must be
+    rejected even when the endpoints are fine: '5430:5440' would expose the
+    central Postgres, '20:25' silently opens SSH-adjacent privileged ports."""
+    client, _runner, _db, _settings = fw_client
+    resp = client.post(
+        "/v1/firewall/rules",
+        json={
+            "port": port,
+            "proto": "tcp",
+            "action": "allow",
+            "source": "any",
+            "comment": "bad",
+        },
+    )
+    assert resp.status_code == 400, resp.text
+
+
+@pytest.mark.parametrize("port", ["20000:20100", "10000:19999"])
+def test_port_ranges_without_reserved_ports_accepted(fw_client, port):
+    client, runner, _db, _settings = fw_client
+    runner.ufw_status = UFW_STATUS_BASE
+    resp = client.post(
+        "/v1/firewall/rules",
+        json={
+            "port": port,
+            "proto": "tcp",
+            "action": "allow",
+            "source": "203.0.113.0/24",
+            "comment": "ok",
+        },
+    )
+    assert resp.status_code in (200, 201), resp.text
+
+
 def test_ssh_cidr_covers_client():
     net = ipaddress.ip_network("203.0.113.0/24")
     assert ipaddress.ip_address("203.0.113.50") in net

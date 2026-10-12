@@ -184,8 +184,8 @@ def test_restore_fails_on_unexpected_errors(restore_job_env):
     runner.on("pg_roles", stdout="pgadmin\n")
     runner.set_pipe_through(
         lines=[
-            "psql:<stdin>:98: ERROR:  database \"appdb\" already exists",
-            "psql:<stdin>:16: ERROR:  role \"appuser\" already exists",
+            'psql:<stdin>:98: ERROR:  database "appdb" already exists',
+            'psql:<stdin>:16: ERROR:  role "appuser" already exists',
         ],
         returncode=0,
     )
@@ -214,7 +214,7 @@ def test_restore_allows_admin_role_collision(restore_job_env):
     runner.set_pipe_through(
         lines=[
             "CREATE ROLE",
-            "psql:<stdin>:18: ERROR:  role \"pgadmin\" already exists",
+            'psql:<stdin>:18: ERROR:  role "pgadmin" already exists',
             "ALTER ROLE",
         ],
         returncode=0,
@@ -281,7 +281,7 @@ def test_restore_overwrite_drops_objects_then_loads(restore_job_env):
     runner.on("ORDER BY 1", stdout="")
     runner.on("pg_roles", stdout="pgadmin\n")
     runner.set_pipe_through(
-        lines=["psql:<stdin>:18: ERROR:  role \"pgadmin\" already exists"],
+        lines=['psql:<stdin>:18: ERROR:  role "pgadmin" already exists'],
         returncode=0,
     )
 
@@ -296,9 +296,7 @@ def test_restore_overwrite_drops_objects_then_loads(restore_job_env):
     )
 
     assert result["safety_dump"] is not None
-    drop_calls = [
-        c for c in runner.calls if "DROP" in (c.get("input_data") or "")
-    ]
+    drop_calls = [c for c in runner.calls if "DROP" in (c.get("input_data") or "")]
     drop_sql = " ".join(c["input_data"] for c in drop_calls)
     assert "DROP DATABASE IF EXISTS" in drop_sql and "appdb" in drop_sql
     assert "DROP ROLE IF EXISTS" in drop_sql and "appuser" in drop_sql
@@ -312,14 +310,14 @@ def test_restore_overwrite_drops_objects_then_loads(restore_job_env):
                 return index
         raise AssertionError("expected runner call not found")
 
-    stop_i = _call_index(
-        lambda c: c["args"][:5] == ["docker", "compose", "-p", "budgethq", "stop"]
-    )
+    stop_i = _call_index(lambda c: c["args"][:5] == ["docker", "compose", "-p", "budgethq", "stop"])
     drop_i = _call_index(lambda c: "DROP DATABASE" in (c.get("input_data") or ""))
     reset_i = _call_index(
-        lambda c: isinstance(c.get("input_data"), str)
-        and "ALTER ROLE" in c["input_data"]
-        and "PASSWORD" in c["input_data"]
+        lambda c: (
+            isinstance(c.get("input_data"), str)
+            and "ALTER ROLE" in c["input_data"]
+            and "PASSWORD" in c["input_data"]
+        )
     )
     start_i = _call_index(
         lambda c: c["args"][:5] == ["docker", "compose", "-p", "budgethq", "start"]

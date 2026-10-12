@@ -466,9 +466,8 @@ def restore_cluster(
 
     def on_line(line: str) -> None:
         ctx.log(line)
-        if "ERROR:" in line:
-            if len(error_lines) < 200:
-                error_lines.append(line)
+        if "ERROR:" in line and len(error_lines) < 200:
+            error_lines.append(line)
 
     returncode = runner.pipe_through(load_args, _dump_byte_chunks(dump_path), on_line, 120)
     reset_admin_password(psql, settings)

@@ -87,6 +87,13 @@ def _validate_port(port: int | str) -> str:
             for value in (start, end):
                 if value in RESERVED_PORTS or not 1 <= value <= 65535:
                     raise ValueError(f"invalid port: {value}")
+            # Endpoints passing is not enough: a range whose span covers a
+            # reserved port (e.g. "5430:5440" over 5432) must be rejected too.
+            for reserved in RESERVED_PORTS:
+                if start <= reserved <= end:
+                    raise ValueError(f"port range {port!r} spans reserved port {reserved}")
+            if start <= 1023:
+                raise ValueError(f"port range {port!r} spans privileged ports (<= 1023)")
             return port
         value = int(port)
     else:
