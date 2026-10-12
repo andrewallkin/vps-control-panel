@@ -425,9 +425,7 @@ def test_create_project_accepts_migration_fields(
                 "compose_file": "docker-compose.yml",
                 "deploy_mode": "build",
                 "database_mode": "none",
-                "hostnames": [
-                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
-                ],
+                "hostnames": [{"domain": "example.com", "subdomain": "", "kind": "primary"}],
                 "routes": [{"path_prefix": "/", "port_env_var": "WEB_PORT"}],
                 "migration_service": "backend",
                 "migration_command": "bash /app/run_migrations.sh",
@@ -486,6 +484,58 @@ def test_migrate_endpoint_proxies_agent(client_factory, admin_user, frozen_time,
         )
 
 
+def test_delete_retries_and_cleans_rows_when_agent_already_gone(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """Delete after a prior partial delete must complete: agent 404 is treated
+    as success and panel rows (incl. secrets) are always removed."""
+    from vpscp_panel.models import (
+        PortAllocation as _PA,
+    )
+    from vpscp_panel.models import (
+        Project as _Project,
+    )
+    from vpscp_panel.models import (
+        ProjectRoute as _PR,
+    )
+
+    _ready_imgapp(db_session, frozen_time)
+    with db_module.SessionLocal() as session:
+        session.add(_PR(project_slug="imgapp", path_prefix="/", port_env_var="WEB_PORT"))
+        session.add(_PA(project_slug="imgapp", env_var="WEB_PORT", host_port=10001))
+        session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "project not found"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        # step-up first (delete requires it)
+        from datetime import timedelta
+
+        import pyotp
+
+        step_time = frozen_time + timedelta(seconds=31)
+        client.app.state.clock = lambda: step_time
+        code = pyotp.TOTP(admin_user["totp_secret"]).at(step_time)
+        client.post(
+            "/api/auth/step-up",
+            json={"code": code},
+            headers=_csrf(auth),
+        )
+        resp = client.request(
+            "DELETE",
+            "/api/projects/imgapp",
+            headers=_csrf(auth),
+            json={"confirm": "imgapp", "drop_database": False, "remove_dns": False},
+        )
+    assert resp.status_code == 204, resp.text
+    with db_module.SessionLocal() as session:
+        assert session.get(_Project, "imgapp") is None
+        assert session.query(_PR).count() == 0
+        assert session.query(_PA).count() == 0
+
+
 def test_migrate_endpoint_409_when_unconfigured(
     client_factory, admin_user, frozen_time, db_session
 ):
@@ -526,9 +576,7 @@ def test_put_routing_writes_allocated_ports_to_env(
         response = client.put(
             "/api/projects/imgapp/routing",
             json={
-                "hostnames": [
-                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
-                ],
+                "hostnames": [{"domain": "example.com", "subdomain": "", "kind": "primary"}],
                 "routes": [
                     {"path_prefix": "/", "port_env_var": "WEB_PORT"},
                 ],
@@ -541,9 +589,7 @@ def test_put_routing_writes_allocated_ports_to_env(
     assert env_patches[0]["set"] == {"WEB_PORT": "10001"}
 
 
-def test_put_routing_rejects_duplicate_paths(
-    client_factory, admin_user, frozen_time, db_session
-):
+def test_put_routing_rejects_duplicate_paths(client_factory, admin_user, frozen_time, db_session):
     _ready_imgapp(db_session, frozen_time)
 
     with client_factory() as client:
@@ -551,9 +597,7 @@ def test_put_routing_rejects_duplicate_paths(
         response = client.put(
             "/api/projects/imgapp/routing",
             json={
-                "hostnames": [
-                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
-                ],
+                "hostnames": [{"domain": "example.com", "subdomain": "", "kind": "primary"}],
                 "routes": [
                     {"path_prefix": "/api", "port_env_var": "A_PORT"},
                     {"path_prefix": "/api", "port_env_var": "B_PORT"},

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session as DbSession
 from starlette.responses import StreamingResponse
 
 import vpscp_panel.db as db_module
-from vpscp_panel.agent_client import AgentClient
+from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import current_session, get_db, require_csrf, require_step_up
 from vpscp_panel.deploy_ops import has_running_deploy
 from vpscp_panel.models import (
@@ -200,9 +200,7 @@ class PatchProjectBody(BaseModel):
         if value is None:
             return None
         if not re.fullmatch(r"http://127\.0\.0\.1:(\d+)(/.*)?", value):
-            raise ValueError(
-                "health_check_url must look like http://127.0.0.1:<port>/path"
-            )
+            raise ValueError("health_check_url must look like http://127.0.0.1:<port>/path")
         return value
 
 
@@ -731,22 +729,36 @@ async def delete_project(
         select(ProjectHostname).where(ProjectHostname.project_slug == slug)
     ).all()
 
-    await agent.delete(f"/v1/projects/{slug}", json={"confirm": slug})
+    warnings: list[str] = []
+    try:
+        await agent.delete(f"/v1/projects/{slug}", json={"confirm": slug})
+    except AgentError as exc:
+        # Already deleted agent-side (retry after partial failure): keep going
+        # so the panel rows are always cleaned up and the slug is reusable.
+        if exc.status != 404:
+            raise
+        warnings.append("agent project already removed")
 
     if body.drop_database and project.db_name:
-        await agent.post(
-            "/v1/db/drop",
-            json={
-                "db_name": project.db_name,
-                "confirm": project.db_name,
-                "drop_role": True,
-            },
-        )
+        try:
+            await agent.post(
+                "/v1/db/drop",
+                json={
+                    "db_name": project.db_name,
+                    "confirm": project.db_name,
+                    "drop_role": True,
+                },
+            )
+        except AgentError as exc:
+            warnings.append(f"database drop failed: {exc.detail}")
 
     if body.remove_dns:
         for row in hostnames:
             fqdn = hostname_fqdn(row.domain, row.subdomain)
-            await agent.post("/v1/dns/records/delete", json={"fqdn": fqdn})
+            try:
+                await agent.post("/v1/dns/records/delete", json={"fqdn": fqdn})
+            except AgentError as exc:
+                warnings.append(f"dns delete failed for {fqdn}: {exc.detail}")
 
     db.execute(delete(ProjectHostname).where(ProjectHostname.project_slug == slug))
     db.execute(delete(ProjectRoute).where(ProjectRoute.project_slug == slug))
