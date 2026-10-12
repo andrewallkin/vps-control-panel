@@ -24,6 +24,10 @@ Check the agent:
 sudo curl --unix-socket /run/vpscp/agent.sock http://agent/v1/health
 ```
 
+## Migration
+
+Step-by-step checklist for moving an existing VPS workload onto a fresh panel install: [docs/migration.md](docs/migration.md).
+
 ## Agent API (Plan 2)
 
 Mutating routes are audited; long-running work returns a `job_id` (poll `/v1/jobs`).
