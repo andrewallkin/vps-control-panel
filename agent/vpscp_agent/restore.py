@@ -548,16 +548,20 @@ def restore_cluster(
         if "ERROR:" in line and len(error_lines) < 200:
             error_lines.append(line)
 
-    returncode = runner.pipe_through(
-        load_args, _dump_byte_chunks(dump_path, passphrase=passphrase), on_line, 120
-    )
-    reset_admin_password(psql, settings)
-
-    for slug in stopped_slugs:
-        project_dir = safe_project_path(settings.apps_dir, slug)
-        args = ["docker", "compose", "-p", slug, "start"]
-        ctx.log(f"compose start: {slug}")
-        runner(args, cwd=project_dir, check=True)
+    returncode = 0
+    try:
+        returncode = runner.pipe_through(
+            load_args, _dump_byte_chunks(dump_path, passphrase=passphrase), on_line, 120
+        )
+    finally:
+        # A failed or interrupted load must not strand stopped project
+        # containers or leave the admin password as the dump set it.
+        reset_admin_password(psql, settings)
+        for slug in stopped_slugs:
+            project_dir = safe_project_path(settings.apps_dir, slug)
+            args = ["docker", "compose", "-p", slug, "start"]
+            ctx.log(f"compose start: {slug}")
+            runner(args, cwd=project_dir, check=True)
 
     fatal, benign = _classify_load_errors(error_lines, admin)
     if returncode != 0:

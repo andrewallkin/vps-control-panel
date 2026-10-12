@@ -398,6 +398,75 @@ def test_prescan_rejects_dangerous_statements(restore_job_env, payload):
     assert runner.pipe_through_calls == []
 
 
+def test_restore_failure_still_restarts_projects_and_resets_admin(restore_job_env):
+    """try/finally: a load that raises must not strand stopped project
+    containers or leave the admin password as the dump set it."""
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    project = _compose_project(settings.apps_dir, "budgethq")
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO db_attachment (db_name, db_user, slug, attached_at) VALUES (?, ?, ?, ?)",
+            ("budgethq", "budgethq_user", "budgethq", "2020-01-01T00:00:00+00:00"),
+        )
+
+    runner.on("d.datname FROM pg_database", stdout="appdb\n")
+    runner.on("r.rolname FROM pg_roles", stdout="appuser\n")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    # the load itself blows up (e.g. psql dies mid-stream)
+    runner.pipe_through_calls  # noqa: B018 - clarity
+    from tests.fakes import CommandResult  # noqa: F401
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("psql died")
+
+    runner.pipe_through = explode  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="psql died"):
+        restore_cluster(
+            _ctx(db),
+            settings=settings,
+            psql=psql,
+            runner=runner,
+            db=db,
+            upload_id=upload_id,
+            overwrite=True,
+        )
+
+    args_seen = [c["args"] for c in runner.calls]
+    assert any(a[:5] == ["docker", "compose", "-p", "budgethq", "stop"] for a in args_seen)
+    assert any(a[:5] == ["docker", "compose", "-p", "budgethq", "start"] for a in args_seen), (
+        "stopped projects must be restarted even when the load fails"
+    )
+    reset_sql_calls = [
+        c for c in runner.calls if isinstance(c.get("input_data"), str) and "ALTER ROLE" in c["input_data"]
+    ]
+    assert reset_sql_calls, "admin password must be reset even when the load fails"
+    assert project.exists()
+
+
+def test_job_records_survive_agent_restart(restore_job_env):
+    """JobManager keeps jobs in memory only: an agent restart (e.g. update.sh)
+    loses the record and the setup wizard hangs at 'pending'. Terminal job
+    records must round-trip through state.db."""
+    from vpscp_agent.jobs import JobManager
+
+    _settings, _runner, db, _psql, _store = restore_job_env
+
+    manager = JobManager(db)
+    job = manager.start("db.restore_cluster", {"upload_id": "abc"}, lambda _ctx: {"ok": True})
+    manager.wait(job.id, timeout=5)
+
+    # simulate agent restart: a fresh manager over the same state.db
+    reborn = JobManager(db)
+    recovered = reborn.get(job.id)
+    assert recovered is not None, "job record must survive an agent restart"
+    assert recovered.status == "succeeded"
+    listing = reborn.list()
+    assert any(j.id == job.id for j in listing)
+
+
 def test_wrong_confirm_returns_400(settings):
     settings.stack_dir.mkdir(parents=True)
     settings.stack_env_path.write_text("POSTGRES_USER=pgadmin\n")

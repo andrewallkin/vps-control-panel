@@ -1,3 +1,5 @@
+import json
+import sqlite3
 import threading
 import time
 import uuid
@@ -70,6 +72,58 @@ class JobManager:
         self._jobs: dict[str, Job] = {}
         self._lock_keys: dict[str, str] = {}
         self._lock = threading.Lock()
+        self._recover_persisted()
+
+    def _persist(self, job: Job) -> None:
+        with self._db.connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO job "
+                "(id, kind, params_json, status, result_json, error, started_at, finished_at, log) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    job.id,
+                    job.kind,
+                    json.dumps(job.params),
+                    job.status,
+                    json.dumps(job.result) if job.result is not None else None,
+                    job.error,
+                    job.started_at,
+                    job.finished_at,
+                    "\n".join(job.lines),
+                ),
+            )
+
+    def _recover_persisted(self) -> None:
+        """Reload job records from state.db so a restart does not strand
+        consumers (the setup wizard tracks restore jobs across refreshes).
+        A row still marked 'running' belonged to a dead process: finalize it
+        as failed rather than leaving it running forever."""
+        try:
+            with self._db.connect() as conn:
+                rows = conn.execute("SELECT * FROM job ORDER BY started_at").fetchall()
+        except sqlite3.OperationalError:
+            # JobManager is built in create_app before migrate() runs; there is
+            # nothing to recover on a fresh database anyway.
+            return
+        for row in rows:
+            job = Job(
+                id=row["id"],
+                kind=row["kind"],
+                params=json.loads(row["params_json"]),
+                status=row["status"],
+                started_at=row["started_at"],
+                finished_at=row["finished_at"],
+                result=json.loads(row["result_json"]) if row["result_json"] else None,
+                error=row["error"],
+            )
+            for line in (row["log"] or "").splitlines():
+                job.lines.append(line)
+            if job.status == "running":
+                job.status = "failed"
+                job.error = "interrupted: agent restarted while running"
+                job.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
+                self._persist(job)
+            self._jobs[job.id] = job
 
     def start(
         self,
@@ -91,6 +145,7 @@ class JobManager:
             self._jobs[job.id] = job
             if lock_key is not None:
                 self._lock_keys[lock_key] = job.id
+        self._persist(job)
 
         def run() -> None:
             start = time.monotonic()
@@ -118,6 +173,7 @@ class JobManager:
                 job.status = "succeeded" if ok else "failed"
                 job.result = result
                 job.error = error
+                self._persist(job)
                 with self._lock:
                     if lock_key is not None and self._lock_keys.get(lock_key) == job.id:
                         del self._lock_keys[lock_key]
@@ -147,7 +203,24 @@ class JobManager:
 
     def get(self, job_id: str) -> Job | None:
         with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+        if job is not None:
+            return job
+        with self._db.connect() as conn:
+            row = conn.execute("SELECT * FROM job WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return None
+        recovered = Job(
+            id=row["id"],
+            kind=row["kind"],
+            params=json.loads(row["params_json"]),
+            status=row["status"] if row["status"] != "running" else "failed",
+            started_at=row["started_at"],
+            finished_at=row["finished_at"],
+            result=json.loads(row["result_json"]) if row["result_json"] else None,
+            error=row["error"],
+        )
+        return recovered
 
     def list(self) -> list[Job]:
         with self._lock:

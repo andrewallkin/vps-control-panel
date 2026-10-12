@@ -78,7 +78,14 @@ async def _maybe_sync_restore_job(
         return setup
     try:
         job = await agent.get(f"/v1/jobs/{job_id}")
-    except AgentError:
+    except AgentError as exc:
+        if exc.status == 404:
+            # Job record gone (agent restarted before persistence existed, or
+            # the id is stale): clear it so the wizard is retryable instead of
+            # hanging at 'pending' forever.
+            setup = dict(setup)
+            setup.pop("restore_job_id", None)
+            _save_setup(db, setup)
         return setup
     status = job.get("status")
     if status == "succeeded":

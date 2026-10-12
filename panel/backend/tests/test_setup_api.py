@@ -212,6 +212,29 @@ def test_failed_restore_job_clears_and_allows_retry(panel_settings, frozen_time,
         assert body["steps"][1]["status"] == "pending"
 
 
+def test_vanished_restore_job_cleared_in_state(panel_settings, frozen_time, admin_user):
+    """If the agent restarts and the job record is gone, the setup sync must
+    not leave restore_job_id set forever (wizard stuck at 'pending')."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "job not found"})
+
+    transport = httpx.MockTransport(handler)
+    agent = AgentClient("/fake.sock", transport=transport)
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        auth = login(client, admin_user, frozen_time)
+        assert db_module.SessionLocal is not None
+        with db_module.SessionLocal() as db:
+            set_setting(db, "setup", {"database": "pending", "restore_job_id": "gone-job"})
+            db.commit()
+        resp = client.get("/api/setup/state", headers=csrf_headers(auth))
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["restore_job_id"] is None
+        assert body["steps"][1]["status"] == "pending"
+
+
 def test_get_state_job_success_marks_restored(
     panel_settings, frozen_time, admin_user, agent_requests
 ):
