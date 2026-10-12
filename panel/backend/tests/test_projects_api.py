@@ -588,6 +588,85 @@ def test_backup_service_account_clear_requires_step_up(
         assert resp.json()["detail"] == "step_up_required"
 
 
+def test_patch_env_rejects_managed_keys(client_factory, admin_user, frozen_time, db_session):
+    """POSTGRES_PASSWORD/POSTGRES_* and DATABASE_URL are written by the panel;
+    a PATCH must not be able to clobber them (the EnvEditor lock is UI-only)."""
+    _ready_imgapp(db_session, frozen_time)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        for key in ("POSTGRES_PASSWORD", "POSTGRES_HOST", "DATABASE_URL"):
+            resp = client.patch(
+                "/api/projects/imgapp/env",
+                json={"set": {key: "x"}, "unset": []},
+                headers=_csrf(auth),
+            )
+            assert resp.status_code == 400, (key, resp.text)
+        resp = client.patch(
+            "/api/projects/imgapp/env",
+            json={"set": {"POSTGRES_PASSWORD": "x"}, "unset": []},
+            headers=_csrf(auth),
+        )
+        assert "POSTGRES_PASSWORD" in resp.json()["detail"]
+
+
+def test_put_env_rejects_managed_keys(client_factory, admin_user, frozen_time, db_session):
+    _ready_imgapp(db_session, frozen_time)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.put(
+            "/api/projects/imgapp/env",
+            json={"content": "POSTGRES_PASSWORD=hacked\nAPI_KEY=ok\n"},
+            headers=_csrf(auth),
+        )
+        assert resp.status_code == 400
+        assert "POSTGRES_PASSWORD" in resp.json()["detail"]
+
+
+def test_creation_keeps_user_db_keys_when_panel_writes_none():
+    """database_mode=none: the panel writes no POSTGRES_*/DATABASE_URL, so a
+    user-supplied DATABASE_URL must be kept, not silently dropped."""
+    from vpscp_panel.project_env import build_project_env_content
+
+    content = build_project_env_content(
+        user_env="DATABASE_URL=postgresql://x\nAPI_KEY=ok\n",
+        database_mode="none",
+        db_name=None,
+        db_user=None,
+        db_password=None,
+        write_database_url=False,
+        ports={},
+    )
+    assert "DATABASE_URL=postgresql://x" in content
+    assert "API_KEY=ok" in content
+
+
+def test_creation_still_overwrites_panel_written_keys():
+    """When the panel writes the POSTGRES block, its values win over pasted
+    ones (the runbook says don't paste them)."""
+    from vpscp_panel.project_env import build_project_env_content
+
+    content = build_project_env_content(
+        user_env="POSTGRES_PASSWORD=pasted\nAPI_KEY=ok\n",
+        database_mode="new",
+        db_name="app_db",
+        db_user="app_user",
+        db_password="generated",
+        write_database_url=True,
+        ports={},
+    )
+    assert "POSTGRES_PASSWORD=generated" in content
+    assert "POSTGRES_PASSWORD=pasted" not in content
+    assert "API_KEY=ok" in content
+
+
 def test_migrate_endpoint_409_when_unconfigured(
     client_factory, admin_user, frozen_time, db_session
 ):

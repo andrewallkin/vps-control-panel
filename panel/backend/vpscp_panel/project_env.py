@@ -36,7 +36,26 @@ def build_project_env_content(
     ports: dict[str, int],
 ) -> str:
     port_keys = set(ports.keys())
-    skip_keys = MANAGED_ENV_KEYS | port_keys
+    # Skip only keys the panel actually writes below: when the project has no
+    # database (or no DATABASE_URL write), a user-supplied DATABASE_URL or
+    # POSTGRES_* is theirs and must survive — silently dropping it loses
+    # configuration. When the panel does write the block, its values win.
+    panel_writes_pg = (
+        database_mode != "none" and db_name and db_user and db_password is not None
+    )
+    skip_keys = set(port_keys)
+    if panel_writes_pg:
+        skip_keys.update(
+            {
+                "POSTGRES_HOST",
+                "POSTGRES_PORT",
+                "POSTGRES_DB",
+                "POSTGRES_USER",
+                "POSTGRES_PASSWORD",
+            }
+        )
+        if write_database_url:
+            skip_keys.add("DATABASE_URL")
 
     lines: list[str] = []
     if user_env:
@@ -53,7 +72,7 @@ def build_project_env_content(
     for env_var, port in sorted(ports.items()):
         lines.append(f"{env_var}={port}")
 
-    if database_mode != "none" and db_name and db_user and db_password is not None:
+    if panel_writes_pg:
         lines.extend(
             [
                 "POSTGRES_HOST=postgres-central",

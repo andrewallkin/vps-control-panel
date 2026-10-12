@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Iterable
 from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import quote
@@ -699,6 +699,31 @@ async def get_project_env(
     return await agent.get(f"/v1/projects/{slug}/env")
 
 
+def _managed_env_keys(db: DbSession, slug: str) -> frozenset[str]:
+    """Keys the panel writes itself: Postgres connection settings and every
+    allocated route port. User env edits must not clobber them — the .env
+    would silently diverge from PortAllocation/nginx (502s)."""
+    from vpscp_panel.project_env import MANAGED_ENV_KEYS
+
+    port_keys = {
+        row.env_var
+        for row in db.scalars(
+            select(PortAllocation).where(PortAllocation.project_slug == slug)
+        ).all()
+    }
+    return frozenset(MANAGED_ENV_KEYS | port_keys)
+
+
+def _reject_managed_env_keys(db: DbSession, slug: str, keys: Iterable[str]) -> None:
+    managed = _managed_env_keys(db, slug)
+    offending = sorted({key for key in keys if key in managed})
+    if offending:
+        raise HTTPException(
+            status_code=400,
+            detail=f"managed env keys cannot be edited: {', '.join(offending)}",
+        )
+
+
 @router.put("/{slug}/env")
 async def put_project_env(
     slug: str,
@@ -709,6 +734,8 @@ async def put_project_env(
 ) -> Any:
     if db.get(Project, slug) is None:
         raise HTTPException(status_code=404, detail="project not found")
+    keys = [line.split("=", 1)[0].strip() for line in body.content.splitlines() if "=" in line]
+    _reject_managed_env_keys(db, slug, keys)
     return await agent.put(f"/v1/projects/{slug}/env", json={"content": body.content})
 
 
@@ -722,6 +749,7 @@ async def patch_project_env(
 ) -> Any:
     if db.get(Project, slug) is None:
         raise HTTPException(status_code=404, detail="project not found")
+    _reject_managed_env_keys(db, slug, list(body.set) + list(body.unset))
     return await agent.patch(
         f"/v1/projects/{slug}/env",
         json={"set": body.set, "unset": body.unset},
