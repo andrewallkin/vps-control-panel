@@ -131,6 +131,36 @@ def auth(ops_client, admin_user, frozen_time):
     return login(ops_client, admin_user, frozen_time)
 
 
+def test_firewall_delete_ignores_forged_cf_connecting_ip(
+    ops_client, auth, admin_user, frozen_time, agent_requests
+):
+    """CF-Connecting-IP is caller-controlled and passes through nginx unchanged;
+    trusting it lets a session thief spoof the SSH-lockout guardrail's idea of
+    the client's source IP. Only the nginx-set X-Real-IP counts."""
+    step_up(ops_client, auth, admin_user, frozen_time + timedelta(seconds=31))
+    response = ops_client.request(
+        "DELETE",
+        "/api/firewall/rules/2",
+        headers={
+            **csrf_headers(auth),
+            "X-Real-IP": "198.51.100.2",
+            "CF-Connecting-IP": "203.0.113.99",
+        },
+        json={
+            "to": "any",
+            "proto": "tcp",
+            "action": "ALLOW",
+            "from": "any",
+            "v6": False,
+            "comment": "",
+        },
+    )
+    assert response.status_code in (200, 204, 409)
+    for request in agent_requests:
+        if request.url.path.endswith("/firewall/rules/2") and request.method == "DELETE":
+            assert request.url.params.get("client_ip") == "198.51.100.2"
+
+
 def test_firewall_delete_injects_client_ip(
     ops_client, auth, admin_user, frozen_time, agent_requests
 ):
