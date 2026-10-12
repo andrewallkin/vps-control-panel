@@ -5,6 +5,7 @@ import { isAuthenticated, useAuthMe } from '../hooks/useAuthMe'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DomainsPage } from '../pages/DomainsPage'
 import { BackupsPage } from '../pages/BackupsPage'
+import { DatabasePage } from '../pages/DatabasePage'
 import { FirewallPage } from '../pages/FirewallPage'
 import { LoginPage } from '../pages/LoginPage'
 import { NewProjectWizardPage } from '../pages/NewProjectWizardPage'
@@ -106,6 +107,14 @@ function BackupsEntry() {
   )
 }
 
+function DatabaseEntry() {
+  return (
+    <RequireSetupComplete>
+      <DatabasePage />
+    </RequireSetupComplete>
+  )
+}
+
 function SettingsEntry() {
   return (
     <RequireSetupComplete>
@@ -143,6 +152,7 @@ export function AppRoutes() {
           <Route path="domains" element={<DomainsEntry />} />
           <Route path="firewall" element={<FirewallEntry />} />
           <Route path="backups" element={<BackupsEntry />} />
+          <Route path="database" element={<DatabaseEntry />} />
           <Route path="settings" element={<SettingsEntry />} />
         </Route>
         <Route path="setup" element={<SetupEntry />} />

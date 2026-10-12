@@ -1,4 +1,14 @@
-import { CloudArrowUp, Gauge, Globe, Gear, List, Shield, Stack, X } from '@phosphor-icons/react'
+import {
+  CloudArrowUp,
+  Database,
+  Gauge,
+  Globe,
+  Gear,
+  List,
+  Shield,
+  Stack,
+  X,
+} from '@phosphor-icons/react'
 import { useEffect, useId, useState } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
 
@@ -48,6 +58,10 @@ export function Layout() {
       <NavLink to="/backups" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <CloudArrowUp weight="regular" aria-hidden className="size-5 shrink-0" />
         Backups
+      </NavLink>
+      <NavLink to="/database" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+        <Database weight="regular" aria-hidden className="size-5 shrink-0" />
+        Database
       </NavLink>
       <NavLink to="/settings" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <Gear weight="regular" aria-hidden className="size-5 shrink-0" />
