@@ -6,20 +6,21 @@ import httpx
 
 
 class AgentError(Exception):
-    def __init__(self, status: int, detail: str) -> None:
+    def __init__(self, status: int, detail: str | dict) -> None:
         self.status = status
         self.detail = detail
-        super().__init__(detail)
+        super().__init__(str(detail))
 
 
-def _detail_from_response(response: httpx.Response) -> str:
+def _detail_from_response(response: httpx.Response) -> str | dict:
     text = response.text
     try:
         body = json.loads(text)
     except json.JSONDecodeError:
         return text
     if isinstance(body, dict) and "detail" in body:
-        return str(body["detail"])
+        detail = body["detail"]
+        return detail if isinstance(detail, dict) else str(detail)
     return text
 
 

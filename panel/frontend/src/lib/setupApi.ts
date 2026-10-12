@@ -101,11 +101,12 @@ export async function deleteSetupUpload(uploadId: string): Promise<void> {
 
 export async function startSetupRestore(
   uploadId: string,
+  overwrite = false,
 ): Promise<{ job_id: string }> {
   return apiJson('/api/setup/restore', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ upload_id: uploadId, confirm: 'RESTORE' }),
+    body: JSON.stringify({ upload_id: uploadId, confirm: 'RESTORE', overwrite }),
   })
 }
 

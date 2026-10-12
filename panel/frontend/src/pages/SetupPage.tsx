@@ -13,12 +13,16 @@ import { LogViewer } from '../components/setup/LogViewer'
 import { OptionalSetupStep } from '../components/setup/OptionalSetupStep'
 import { PanelHostnameSetupStep } from '../components/setup/PanelHostnameSetupStep'
 import { ProgressBar } from '../components/setup/ProgressBar'
-import { RestoreConfirmDialog } from '../components/setup/RestoreConfirmDialog'
+import {
+  RestoreConfirmDialog,
+  type RestoreConflict,
+} from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { SetupStepper } from '../components/setup/SetupStepper'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
+import { ApiError } from '../lib/api'
 import { fetchCloudflareZones, fetchDomains, fetchServerSettings } from '../lib/domainsApi'
 import {
   completeSetup,
@@ -104,6 +108,7 @@ export function SetupPage() {
   const [uploading, setUploading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmDialogKey, setConfirmDialogKey] = useState(0)
+  const [restoreConflict, setRestoreConflict] = useState<RestoreConflict | null>(null)
   const [restoreJobId, setRestoreJobId] = useState<string | null>(null)
   const [jobEnd, setJobEnd] = useState<JobEndPayload | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -151,10 +156,27 @@ export function SetupPage() {
   })
 
   const restoreMutation = useMutation({
-    mutationFn: (id: string) => startSetupRestore(id),
+    mutationFn: ({ id, overwrite }: { id: string; overwrite: boolean }) =>
+      startSetupRestore(id, overwrite),
     onSuccess: (result) => {
       setRestoreJobId(result.job_id)
       setConfirmOpen(false)
+      setRestoreConflict(null)
+    },
+    onError: (err) => {
+      const detail =
+        err instanceof ApiError && err.body && typeof err.body === 'object'
+          ? (err.body as { detail?: unknown }).detail
+          : null
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        (detail as { code?: string }).code === 'cluster_not_empty'
+      ) {
+        setRestoreConflict(detail as unknown as RestoreConflict)
+        setConfirmDialogKey((value) => value + 1)
+        setConfirmOpen(true)
+      }
     },
   })
 
@@ -425,10 +447,11 @@ export function SetupPage() {
         key={confirmDialogKey}
         open={confirmOpen}
         busy={restoreMutation.isPending}
+        conflict={restoreConflict}
         onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => {
+        onConfirm={(overwrite) => {
           if (uploadId) {
-            restoreMutation.mutate(uploadId)
+            restoreMutation.mutate({ id: uploadId, overwrite })
           }
         }}
       />

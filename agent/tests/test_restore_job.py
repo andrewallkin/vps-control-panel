@@ -91,11 +91,12 @@ def test_nonempty_cluster_stop_safety_load_reset_start(restore_job_env):
             ("budgethq", "budgethq_user", "budgethq", "2020-01-01T00:00:00+00:00"),
         )
 
-    runner.on("LIMIT 1", stdout="1\n")
+    runner.on("d.datname FROM pg_database", stdout="appdb\n")
+    runner.on("r.rolname FROM pg_roles", stdout="appuser\n")
     runner.on("ORDER BY 1", stdout="")
     runner.on("pg_roles", stdout="pgadmin\n")
     runner.set_pipe_through(
-        lines=["NOTICE: ok", "ERROR: role exists", "ERROR: skipped"],
+        lines=["NOTICE: ok", 'psql:<stdin>:18: ERROR:  role "pgadmin" already exists'],
         returncode=0,
     )
 
@@ -106,6 +107,7 @@ def test_nonempty_cluster_stop_safety_load_reset_start(restore_job_env):
         runner=runner,
         db=db,
         upload_id=upload_id,
+        overwrite=True,
     )
 
     dump_args = runner.stream_gzip_calls[0]["args"]
@@ -115,8 +117,8 @@ def test_nonempty_cluster_stop_safety_load_reset_start(restore_job_env):
     assert safety_path.name.startswith("safety-") and safety_path.name.endswith(".sql.gz")
     assert result["safety_dump"] is not None
     assert result["safety_dump"].endswith(".sql.gz")
-    assert result["error_count"] == 2
-    assert result["errors"] == ["ERROR: role exists", "ERROR: skipped"]
+    assert result["error_count"] == 0
+    assert result["benign_errors"] == 1
 
     admin_sql = f"\\getenv pw VPSCP_PW\nALTER ROLE {quote_ident('pgadmin')} WITH PASSWORD :'pw';\n"
 
@@ -147,6 +149,184 @@ def test_nonempty_cluster_stop_safety_load_reset_start(restore_job_env):
     )
     assert stop_i < reset_i < start_i
     assert runner.stream_gzip_calls and runner.pipe_through_calls
+
+
+def test_restore_fails_on_nonzero_psql_returncode(restore_job_env):
+    """A non-zero psql exit must fail the job, not be silently ignored."""
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    runner.on("LIMIT 1", stdout="")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(lines=["NOTICE: fine"], returncode=3)
+
+    with pytest.raises(Exception, match="restore failed"):
+        restore_cluster(
+            _ctx(db),
+            settings=settings,
+            psql=psql,
+            runner=runner,
+            db=db,
+            upload_id=upload_id,
+        )
+
+
+def test_restore_fails_on_unexpected_errors(restore_job_env):
+    """Any ERROR line other than the benign admin-role collision fails the job.
+
+    This is the silent mis-application bug: a re-restore produced
+    'already exists' errors for every object while reporting success.
+    """
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    runner.on("LIMIT 1", stdout="")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(
+        lines=[
+            "psql:<stdin>:98: ERROR:  database \"appdb\" already exists",
+            "psql:<stdin>:16: ERROR:  role \"appuser\" already exists",
+        ],
+        returncode=0,
+    )
+
+    with pytest.raises(Exception, match="restore failed"):
+        restore_cluster(
+            _ctx(db),
+            settings=settings,
+            psql=psql,
+            runner=runner,
+            db=db,
+            upload_id=upload_id,
+        )
+
+
+def test_restore_allows_admin_role_collision(restore_job_env):
+    """Real pg_dumpall output always contains CREATE ROLE <admin>, which
+    collides with the stack's admin role. That single collision is benign
+    (verified against postgres:16) and must not fail an otherwise clean load.
+    """
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    runner.on("LIMIT 1", stdout="")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(
+        lines=[
+            "CREATE ROLE",
+            "psql:<stdin>:18: ERROR:  role \"pgadmin\" already exists",
+            "ALTER ROLE",
+        ],
+        returncode=0,
+    )
+
+    result = restore_cluster(
+        _ctx(db),
+        settings=settings,
+        psql=psql,
+        runner=runner,
+        db=db,
+        upload_id=upload_id,
+    )
+
+    assert result["error_count"] == 0
+    assert result["benign_errors"] == 1
+
+
+def test_restore_refuses_nonempty_cluster_without_overwrite(restore_job_env):
+    """Restoring over an existing cluster must refuse with the drop list
+    instead of silently mis-applying the dump."""
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    runner.on("LIMIT 1", stdout="1\n")
+    runner.on("d.datname FROM pg_database", stdout="appdb\ngmail_manager\n")
+    runner.on("r.rolname FROM pg_roles", stdout="appuser\ngmail_user\n")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+
+    with pytest.raises(Exception, match="cluster is not empty") as excinfo:
+        restore_cluster(
+            _ctx(db),
+            settings=settings,
+            psql=psql,
+            runner=runner,
+            db=db,
+            upload_id=upload_id,
+        )
+    message = str(excinfo.value)
+    assert "appdb" in message
+    assert "gmail_manager" in message
+    assert "appuser" in message
+    # nothing was loaded, dropped, or dumped: refusal happens before any mutation
+    assert runner.pipe_through_calls == []
+    assert runner.stream_gzip_calls == []
+    assert not any("DROP" in (c.get("input_data") or "") for c in runner.calls)
+
+
+def test_restore_overwrite_drops_objects_then_loads(restore_job_env):
+    """overwrite=True drops the non-system databases and roles (except the
+    admin) before loading, so the dump applies cleanly."""
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    project = _compose_project(settings.apps_dir, "budgethq")
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO db_attachment (db_name, db_user, slug, attached_at) VALUES (?, ?, ?, ?)",
+            ("budgethq", "budgethq_user", "budgethq", "2020-01-01T00:00:00+00:00"),
+        )
+
+    runner.on("LIMIT 1", stdout="1\n")
+    runner.on("d.datname FROM pg_database", stdout="appdb\n")
+    runner.on("r.rolname FROM pg_roles", stdout="pgadmin\nappuser\n")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(
+        lines=["psql:<stdin>:18: ERROR:  role \"pgadmin\" already exists"],
+        returncode=0,
+    )
+
+    result = restore_cluster(
+        _ctx(db),
+        settings=settings,
+        psql=psql,
+        runner=runner,
+        db=db,
+        upload_id=upload_id,
+        overwrite=True,
+    )
+
+    assert result["safety_dump"] is not None
+    drop_calls = [
+        c for c in runner.calls if "DROP" in (c.get("input_data") or "")
+    ]
+    drop_sql = " ".join(c["input_data"] for c in drop_calls)
+    assert "DROP DATABASE IF EXISTS" in drop_sql and "appdb" in drop_sql
+    assert "DROP ROLE IF EXISTS" in drop_sql and "appuser" in drop_sql
+    # admin role must never be dropped
+    assert "pgadmin" not in drop_sql
+    assert result["error_count"] == 0
+
+    def _call_index(match) -> int:
+        for index, call in enumerate(runner.calls):
+            if match(call):
+                return index
+        raise AssertionError("expected runner call not found")
+
+    stop_i = _call_index(
+        lambda c: c["args"][:5] == ["docker", "compose", "-p", "budgethq", "stop"]
+    )
+    drop_i = _call_index(lambda c: "DROP DATABASE" in (c.get("input_data") or ""))
+    reset_i = _call_index(
+        lambda c: isinstance(c.get("input_data"), str)
+        and "ALTER ROLE" in c["input_data"]
+        and "PASSWORD" in c["input_data"]
+    )
+    start_i = _call_index(
+        lambda c: c["args"][:5] == ["docker", "compose", "-p", "budgethq", "start"]
+    )
+    assert stop_i < drop_i < reset_i < start_i
+    assert runner.pipe_through_calls
+    assert project.exists()
 
 
 def test_wrong_confirm_returns_400(settings):
@@ -185,6 +365,40 @@ def test_concurrent_db_create_returns_409(db_client):
         assert resp.status_code == 409
     finally:
         gate.set()
+
+
+def test_restore_run_refuses_nonempty_without_overwrite(settings):
+    """The route pre-checks emptiness and returns 409 with the drop list so the
+    UI can show what overwrite would remove."""
+    settings.stack_dir.mkdir(parents=True)
+    settings.stack_env_path.write_text("POSTGRES_USER=pgadmin\nPOSTGRES_PASSWORD=secret\n")
+    runner = FakeRunner()
+    runner.on("LIMIT 1", stdout="1\n")
+    runner.on("d.datname FROM pg_database", stdout="appdb\n")
+    runner.on("r.rolname FROM pg_roles", stdout="pgadmin\nappuser\n")
+    store = UploadStore(settings)
+    upload_id = _complete_upload(store, TINY_DUMP)
+
+    with TestClient(create_app(settings, runner=runner)) as client:
+        resp = client.post(
+            "/v1/restore/run",
+            json={"upload_id": upload_id, "confirm": "RESTORE"},
+        )
+        assert resp.status_code == 409
+        detail = resp.json()["detail"]
+        assert detail["code"] == "cluster_not_empty"
+        assert detail["databases"] == ["appdb"]
+        assert detail["roles"] == ["appuser"]
+        assert runner.pipe_through_calls == []
+
+        runner.set_pipe_through(lines=[], returncode=0)
+        runner.on("ORDER BY 1", stdout="")
+        runner.on("pg_roles", stdout="pgadmin\n")
+        resp = client.post(
+            "/v1/restore/run",
+            json={"upload_id": upload_id, "confirm": "RESTORE", "overwrite": True},
+        )
+        assert resp.status_code == 202
 
 
 def test_restore_run_starts_job(settings):

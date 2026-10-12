@@ -65,6 +65,7 @@ class UploadCompleteBody(BaseModel):
 class RestoreBody(BaseModel):
     upload_id: str
     confirm: str
+    overwrite: bool = False
 
 
 async def _maybe_sync_restore_job(
@@ -183,10 +184,19 @@ async def run_restore(
 ) -> dict[str, str]:
     if body.confirm != "RESTORE":
         raise HTTPException(status_code=400, detail="confirm must be RESTORE")
-    result = await agent.post(
-        "/v1/restore/run",
-        json={"upload_id": body.upload_id, "confirm": body.confirm},
-    )
+    try:
+        result = await agent.post(
+            "/v1/restore/run",
+            json={
+                "upload_id": body.upload_id,
+                "confirm": body.confirm,
+                "overwrite": body.overwrite,
+            },
+        )
+    except AgentError as exc:
+        if exc.status == 409:
+            raise HTTPException(status_code=409, detail=exc.detail) from exc
+        raise
     setup = _load_setup(db)
     setup["restore_job_id"] = result["job_id"]
     _save_setup(db, setup)

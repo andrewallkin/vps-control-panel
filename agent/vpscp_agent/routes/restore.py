@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from vpscp_agent import audit
-from vpscp_agent.restore import UploadInfo, UploadStore, restore_cluster
+from vpscp_agent.restore import UploadInfo, UploadStore, cluster_objects, restore_cluster
 
 router = APIRouter(prefix="/v1/restore", tags=["restore"])
 
@@ -19,6 +19,7 @@ class CompleteUploadBody(BaseModel):
 class RestoreRunBody(BaseModel):
     upload_id: str
     confirm: str
+    overwrite: bool = False
 
 
 def _store(request: Request) -> UploadStore:
@@ -79,6 +80,17 @@ def run_restore(body: RestoreRunBody, request: Request) -> dict[str, str]:
     db = request.app.state.db
     jobs = request.app.state.jobs
 
+    databases, roles = cluster_objects(psql)
+    if (databases or roles) and not body.overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "cluster_not_empty",
+                "databases": databases,
+                "roles": roles,
+            },
+        )
+
     def body_fn(ctx):
         return restore_cluster(
             ctx,
@@ -87,11 +99,12 @@ def run_restore(body: RestoreRunBody, request: Request) -> dict[str, str]:
             runner=runner,
             db=db,
             upload_id=body.upload_id,
+            overwrite=body.overwrite,
         )
 
     job = jobs.start(
         "db.restore_cluster",
-        {"upload_id": body.upload_id},
+        {"upload_id": body.upload_id, "overwrite": body.overwrite},
         body_fn,
         lock_key="postgres",
     )

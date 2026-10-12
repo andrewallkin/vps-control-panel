@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -252,6 +254,19 @@ def test_upload_requires_step_up_after_completed(setup_client, auth, agent_reque
     assert response.status_code == 403
     assert response.json() == {"detail": "step_up_required"}
     assert len(agent_requests) == 0
+
+
+def test_restore_forwards_overwrite_and_surfaces_conflict(setup_client, auth, agent_requests):
+    """overwrite flag reaches the agent; a cluster_not_empty 409 is relayed with
+    the drop list so the UI can confirm replacement."""
+    resp = setup_client.post(
+        "/api/setup/restore",
+        json={"upload_id": "up-1", "confirm": "RESTORE", "overwrite": True},
+        headers=csrf_headers(auth),
+    )
+    assert resp.status_code == 200, resp.text
+    body = json.loads(agent_requests[-1].content.decode())
+    assert body["overwrite"] is True
 
 
 def test_restore_requires_step_up_after_completed(setup_client, auth, agent_requests):

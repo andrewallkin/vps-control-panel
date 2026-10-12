@@ -24,9 +24,14 @@ if TYPE_CHECKING:
     from vpscp_agent.jobs import JobContext
     from vpscp_agent.state import StateDB
 
-_CLUSTER_EMPTY_SQL = """
-SELECT 1 FROM pg_database d
-WHERE NOT d.datistemplate AND d.datname <> 'postgres' LIMIT 1;
+_CLUSTER_DBS_SQL = """
+SELECT d.datname FROM pg_database d
+WHERE NOT d.datistemplate AND d.datname <> 'postgres' ORDER BY 1;
+""".strip()
+
+_CLUSTER_ROLES_SQL = """
+SELECT r.rolname FROM pg_roles r
+WHERE r.rolname !~ '^pg_' ORDER BY 1;
 """.strip()
 
 _MAX_CHUNK_BYTES = 16 * 1024 * 1024
@@ -296,8 +301,47 @@ class UploadStore:
         )
 
 
+def cluster_objects(psql: Psql) -> tuple[list[str], list[str]]:
+    """Non-system databases and roles currently in the cluster.
+
+    The admin role is excluded from the roles list: it pre-exists on every
+    stack and a pg_dumpall restore always collides on it benignly.
+    """
+    admin = psql.admin_user()
+    databases = [row[0] for row in psql.query_rows(_CLUSTER_DBS_SQL) if row]
+    roles = [row[0] for row in psql.query_rows(_CLUSTER_ROLES_SQL) if row and row[0] != admin]
+    return databases, roles
+
+
 def cluster_is_empty(psql: Psql) -> bool:
-    return not bool(psql.query_rows(_CLUSTER_EMPTY_SQL))
+    databases, roles = cluster_objects(psql)
+    return not databases and not roles
+
+
+def _drop_objects(psql: Psql, databases: list[str], roles: list[str]) -> None:
+    statements = [f"DROP DATABASE IF EXISTS {quote_ident(name)};" for name in databases]
+    statements.extend(f"DROP ROLE IF EXISTS {quote_ident(name)};" for name in roles)
+    if not statements:
+        return
+    psql.exec_sql("\n".join(statements), database="postgres")
+
+
+def _classify_load_errors(lines: list[str], admin: str) -> tuple[list[str], int]:
+    """Split ERROR lines into (fatal, benign_count).
+
+    A real pg_dumpall always contains `CREATE ROLE <admin>` and therefore
+    always collides with the stack's admin role; that single collision is
+    benign. Every other ERROR line means the dump did not apply as intended.
+    """
+    benign_re = re.compile(rf'ERROR:\s+role "{re.escape(admin)}" already exists')
+    fatal: list[str] = []
+    benign = 0
+    for line in lines:
+        if benign_re.search(line):
+            benign += 1
+        else:
+            fatal.append(line)
+    return fatal, benign
 
 
 def reset_admin_password(psql: Psql, settings: Settings) -> None:
@@ -373,9 +417,17 @@ def restore_cluster(
     runner: Runner,
     db: StateDB,
     upload_id: str,
+    overwrite: bool = False,
 ) -> dict:
     dump_path = UploadStore(settings).completed_path(upload_id)
-    empty = cluster_is_empty(psql)
+    databases, roles = cluster_objects(psql)
+    empty = not databases and not roles
+    if not empty and not overwrite:
+        listing = ", ".join(databases + roles)
+        raise ValueError(
+            f"cluster is not empty (would be replaced: {listing}); "
+            "re-run with overwrite=true to replace it"
+        )
     stopped_slugs: list[str] = []
     safety_dump: Path | None = None
 
@@ -391,6 +443,9 @@ def restore_cluster(
 
         safety_dump = _write_safety_dump(settings, psql, runner, settings.restore_dir)
         ctx.log(f"safety dump: {safety_dump}")
+        if overwrite:
+            ctx.log(f"dropping existing objects: {', '.join(databases + roles)}")
+            _drop_objects(psql, databases, roles)
 
     admin = psql.admin_user()
     load_args = [
@@ -407,18 +462,15 @@ def restore_cluster(
         "-d",
         "postgres",
     ]
-    errors: list[str] = []
-    error_count = 0
+    error_lines: list[str] = []
 
     def on_line(line: str) -> None:
-        nonlocal error_count
         ctx.log(line)
         if "ERROR:" in line:
-            error_count += 1
-            if len(errors) < 200:
-                errors.append(line)
+            if len(error_lines) < 200:
+                error_lines.append(line)
 
-    runner.pipe_through(load_args, _dump_byte_chunks(dump_path), on_line, 120)
+    returncode = runner.pipe_through(load_args, _dump_byte_chunks(dump_path), on_line, 120)
     reset_admin_password(psql, settings)
 
     for slug in stopped_slugs:
@@ -427,12 +479,20 @@ def restore_cluster(
         ctx.log(f"compose start: {slug}")
         runner(args, cwd=project_dir, check=True)
 
-    databases = list_databases(psql, db)
-    roles = list_roles(psql)
+    fatal, benign = _classify_load_errors(error_lines, admin)
+    if returncode != 0:
+        raise ValueError(f"restore failed: psql exited with code {returncode}")
+    if fatal:
+        preview = "; ".join(fatal[:5])
+        raise ValueError(f"restore failed: {len(fatal)} error(s) during load: {preview}")
+
+    databases_out = list_databases(psql, db)
+    roles_out = list_roles(psql)
     return {
-        "databases": [d.model_dump() for d in databases],
-        "roles": roles,
-        "error_count": error_count,
-        "errors": errors,
+        "databases": [d.model_dump() for d in databases_out],
+        "roles": roles_out,
+        "error_count": 0,
+        "errors": [],
+        "benign_errors": benign,
         "safety_dump": str(safety_dump) if safety_dump is not None else None,
     }
