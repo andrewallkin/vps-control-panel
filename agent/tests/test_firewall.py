@@ -265,6 +265,7 @@ def test_delete_guardrails_http_https_and_cf(settings, cf_only, rule_number, exp
     runner = UfwFakeRunner(status)
     db = StateDB(settings.state_db_path)
     db.migrate()
+    _seed_cf_ips(db)
     with db.connect() as conn:
         conn.execute(
             "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
@@ -388,6 +389,112 @@ def test_delete_ssh_allowed_when_range_covers_client(settings):
     assert ["ufw", "--force", "delete", "1"] in [c["args"] for c in runner.calls]
 
 
+def test_comment_cf_is_not_authority_for_cf_classification(settings):
+    """A rule 'allow 443 from any comment cf' must not be treated as a
+    Cloudflare rule: the comment is caller-controlled. Classification comes
+    from the stored CF ranges."""
+    runner = UfwFakeRunner(UFW_STATUS_BASE)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    _seed_cf_ips(db)
+    # forged: comment claims cf but source is the whole internet
+    forged = UFW_STATUS_BASE + (
+        "[10] 443/tcp  ALLOW IN  Anywhere  # cf\n"
+    )
+    runner = UfwFakeRunner(forged)
+    # while CF-only is on, the forged rule must be swept like any non-CF web allow
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
+            ("firewall_cloudflare_only", "true"),
+        )
+    _seed_cf_ips(db)
+
+    from vpscp_agent.firewall import _is_cf_rule, list_rules
+
+    rules = list_rules(runner)
+    forged_rule = next(r for r in rules if r["comment"] == "cf" and r["from"] == "Anywhere")
+    assert not _is_cf_rule(db, forged_rule)
+    real_cf = {
+        (r["from"], r["to"]) for r in rules if _is_cf_rule(db, r)
+    }
+    assert ("Anywhere", "443/tcp") not in real_cf
+
+
+def test_cf_only_on_rejects_non_cf_web_allows(settings):
+    """While Cloudflare-only is on, adding an 80/443 allow from anything that
+    is not a current CF range must be rejected."""
+    runner = UfwFakeRunner(UFW_CF_ONLY)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    _seed_cf_ips(db)
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
+            ("firewall_cloudflare_only", "true"),
+        )
+
+    with pytest.raises(ValueError, match="[Cc]loudflare-only"):
+        add_rule(
+            runner,
+            port=443,
+            proto="tcp",
+            action="allow",
+            source="any",
+            comment="cf",
+            db=db,
+        )
+    # and a non-CF public CIDR is refused too
+    with pytest.raises(ValueError, match="[Cc]loudflare-only"):
+        add_rule(
+            runner,
+            port=80,
+            proto="tcp",
+            action="allow",
+            source="203.0.113.0/24",
+            comment="partner",
+            db=db,
+        )
+    # CF ranges themselves are still fine
+    add_rule(
+        runner,
+        port=443,
+        proto="tcp",
+        action="allow",
+        source="173.245.48.0/20",
+        comment="cf",
+        db=db,
+    )
+
+
+def test_exposure_report_cf_only_flags_direct_web_exposure(settings):
+    """Under Cloudflare-only, direct (non-CF) exposure of 80/443 is a lie in
+    progress: flag it red instead of 'expected'."""
+    forged = (
+        "Status: active\n"
+        "     To                         Action      From\n"
+        "     --                         ------      ----\n"
+        "[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh\n"
+        "[ 2] 80/tcp                     ALLOW IN    Anywhere                   # cf\n"
+    )
+    runner = UfwFakeRunner(forged)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    _seed_cf_ips(db)
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
+            ("firewall_cloudflare_only", "true"),
+        )
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-tlnp"], stdout=SS_TCP)
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-ulnp"], stdout="")
+
+    report = exposure_report(runner, db)
+    web_rows = [r for r in report if r["port"] == 80 and r["external"]]
+    assert web_rows, "expected an externally exposed 80 row"
+    assert any(not row["expected"] for row in web_rows)
+
+
 def test_cloudflare_only_on_adds_cf_rules_then_removes_generic(settings):
     runner = UfwFakeRunner(UFW_STATUS_BASE)
     db = StateDB(settings.state_db_path)
@@ -406,6 +513,7 @@ def test_cloudflare_only_off_restores_generic_then_drops_cf(settings):
     runner = UfwFakeRunner(UFW_CF_ONLY)
     db = StateDB(settings.state_db_path)
     db.migrate()
+    _seed_cf_ips(db)
     with db.connect() as conn:
         conn.execute(
             "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
@@ -728,6 +836,7 @@ def test_cloudflare_only_off_still_deletes_cf_rules_internally(settings):
     runner = UfwFakeRunner(UFW_CF_ONLY)
     db = StateDB(settings.state_db_path)
     db.migrate()
+    _seed_cf_ips(db)
     with db.connect() as conn:
         conn.execute(
             "INSERT INTO agent_setting (key, value) VALUES (?, ?)",

@@ -142,12 +142,25 @@ def add_rule(
     action: str,
     source: str,
     comment: str,
+    db: StateDB | None = None,
 ) -> None:
     port_s = _validate_port(port)
     proto_s = _validate_proto(proto)
     action_s = _validate_action(action)
     source_s = _validate_source(source)
     comment_s = _validate_comment(comment)
+    if db is not None and action_s == "allow" and _cloudflare_only_enabled(db):
+        web = False
+        if ":" in port_s:
+            start_s, end_s = port_s.split(":", 1)
+            web = int(start_s) <= 80 <= int(end_s) or int(start_s) <= 443 <= int(end_s)
+        else:
+            web = int(port_s) in (80, 443)
+        if web and not _source_is_in_cf_ranges(db, source_s):
+            raise ValueError(
+                f"source {source_s!r} is not a Cloudflare range: "
+                "Cloudflare-only mode only allows 80/443 from Cloudflare IPs"
+            )
     runner(
         [
             "ufw",
@@ -190,8 +203,57 @@ def _is_web_port_allow(rule: dict[str, Any]) -> bool:
     return _port_matches_to(to_field, 80) or _port_matches_to(to_field, 443)
 
 
-def _is_non_cf_web_port_allow(rule: dict[str, Any]) -> bool:
-    return _is_web_port_allow(rule) and rule.get("comment") != "cf"
+def _cf_networks(db: StateDB) -> list[ipaddress._BaseNetwork]:
+    """Cached Cloudflare ranges; empty when none are known.
+
+    Deliberately reads the cache only (no fetch): classification must not
+    have network side effects.
+    """
+    from vpscp_agent.nginx_apply import SETTING_CF_IPV4, SETTING_CF_IPV6
+
+    nets: list[ipaddress._BaseNetwork] = []
+    for key in (SETTING_CF_IPV4, SETTING_CF_IPV6):
+        with db.connect() as conn:
+            row = conn.execute("SELECT value FROM agent_setting WHERE key = ?", (key,)).fetchone()
+        if row is None or not row["value"]:
+            continue
+        for line in str(row["value"]).splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                nets.append(ipaddress.ip_network(line, strict=False))
+            except ValueError:
+                continue
+    return nets
+
+
+def _source_is_in_cf_ranges(db: StateDB, source: str) -> bool:
+    if source in ("Anywhere", "Anywhere (v6)", "any"):
+        return False
+    try:
+        if "/" in source:
+            net = ipaddress.ip_network(source, strict=False)
+        else:
+            addr = ipaddress.ip_address(source)
+            net = ipaddress.ip_network(f"{addr}/{addr.max_prefixlen}", strict=False)
+    except ValueError:
+        return False
+    for cf_net in _cf_networks(db):
+        if net.version == cf_net.version and net.subnet_of(cf_net):
+            return True
+    return False
+
+
+def _is_cf_rule(db: StateDB, rule: dict[str, Any]) -> bool:
+    """A Cloudflare rule is a web-port allow whose source sits inside the
+    known Cloudflare ranges. The ufw comment is caller-controlled metadata
+    and is never authority."""
+    return _is_web_port_allow(rule) and _source_is_in_cf_ranges(db, rule.get("from", ""))
+
+
+def _is_non_cf_web_port_allow(db: StateDB, rule: dict[str, Any]) -> bool:
+    return _is_web_port_allow(rule) and not _is_cf_rule(db, rule)
 
 
 def _is_ssh_allow_rule(rule: dict[str, Any]) -> bool:
@@ -205,10 +267,6 @@ def _validate_client_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Add
         return ipaddress.ip_address(value)
     except ValueError as exc:
         raise ValueError(f"invalid client_ip: {value!r}") from exc
-
-
-def _is_cf_rule(rule: dict[str, Any]) -> bool:
-    return rule.get("comment") == "cf"
 
 
 def _client_covered_by_ssh(
@@ -249,7 +307,7 @@ def _check_delete_guardrails(
     cf_only = _cloudflare_only_enabled(db)
     if not cf_only and _is_web_port_allow(rule):
         raise ConflictError(f"cannot delete {rule['to']} while Cloudflare-only mode is off")
-    if cf_only and _is_cf_rule(rule):
+    if cf_only and _is_cf_rule(db, rule):
         raise ConflictError(
             "cannot delete individual Cloudflare (cf) rules while Cloudflare-only is on"
         )
@@ -339,12 +397,15 @@ def cloudflare_only(
                     source=cidr,
                     comment="cf",
                 )
-        _delete_rules_by_predicate(runner, db, _is_non_cf_web_port_allow)
+        _delete_rules_by_predicate(runner, db, lambda r: _is_non_cf_web_port_allow(db, r))
         _set_setting(db, SETTING_CF_ONLY, "true")
     else:
+        # Load CF ranges (cache-hit normally) so the sweep can identify which
+        # rules are Cloudflare rules by their source, not their comment.
+        fetch_cloudflare_ips_cached(db, fetch=fetch)
         for port, comment in ((80, "http"), (443, "https")):
             add_rule(runner, port=port, proto="tcp", action="allow", source="any", comment=comment)
-        _delete_rules_by_predicate(runner, db, _is_cf_rule)
+        _delete_rules_by_predicate(runner, db, lambda r: _is_cf_rule(db, r))
         _set_setting(db, SETTING_CF_ONLY, "false")
 
 
@@ -463,8 +524,28 @@ def _parse_ss_line(line: str, *, proto: str) -> dict[str, Any] | None:
     return {"address": addr, "port": port, "process": process, "proto": proto, "v6": v6}
 
 
+def _direct_web_exposure(ufw_rules: list[dict[str, Any]], port: int, proto: str, *, v6: bool) -> bool:
+    """True when the port is allowed to non-Cloudflare sources (direct exposure)."""
+    for rule in ufw_rules:
+        if rule["proto"] != proto or rule["v6"] != v6 or rule["action"] != "ALLOW IN":
+            continue
+        if not _port_matches_to(rule["to"], port):
+            continue
+        if not _is_cf_source_label(rule.get("from", "")):
+            return True
+    return False
+
+
+def _is_cf_source_label(source: str) -> bool:
+    """Static helper for report rows: 'is this source one of the CF cidrs' is
+    answered with the cached ranges; this variant only rejects the obvious
+    internet-wide labels to avoid a db round-trip per row."""
+    return source not in ("Anywhere", "Anywhere (v6)", "any")
+
+
 def exposure_report(runner: Runner, db: StateDB) -> list[dict[str, Any]]:
     public_ipv4 = _get_setting(db, SETTING_PUBLIC_IPV4)
+    cf_only = _cloudflare_only_enabled(db)
     ufw_rules = list_rules(runner)
     rows: list[dict[str, Any]] = []
     for ss_args, proto in ((["ss", "-H", "-tlnp"], "tcp"), (["ss", "-H", "-ulnp"], "udp")):
@@ -480,6 +561,10 @@ def exposure_report(runner: Runner, db: StateDB) -> list[dict[str, Any]]:
             allowed = _ufw_internet_allowed(ufw_rules, port, proto, v6=v6)
             external = public and allowed
             expected = external and port in EXPECTED_EXTERNAL_PORTS
+            if cf_only and external and port in (80, 443):
+                # Under Cloudflare-only, web traffic must come from CF ranges;
+                # direct exposure means the mode is silently false.
+                expected = not _direct_web_exposure(ufw_rules, port, proto, v6=v6)
             rows.append(
                 {
                     "address": addr,

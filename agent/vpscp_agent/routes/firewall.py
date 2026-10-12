@@ -90,6 +90,7 @@ def post_rule(body: AddRuleBody, request: Request) -> dict[str, str]:
             action=body.action,
             source=body.source,
             comment=body.comment,
+            db=db,
         )
     return {"status": "ok"}
 
