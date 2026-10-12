@@ -57,7 +57,10 @@ async def put_backup_settings(
     agent: Annotated[AgentClient, Depends(_agent)],
 ) -> dict[str, Any]:
     payload = body.model_dump()
-    needs_step_up = bool(payload.get("service_account")) or bool(payload.get("archive_passphrase"))
+    unset_fields = body.model_dump(exclude_unset=True)
+    needs_step_up = bool(unset_fields.get("service_account")) or (
+        "archive_passphrase" in unset_fields
+    )
     if needs_step_up:
         await require_step_up(request, session)
     audit_params = {k: v for k, v in payload.items() if v is not None}

@@ -192,6 +192,23 @@ def test_backup_put_credentials_requires_step_up(ops_client, auth):
     assert response.status_code == 403
 
 
+def test_backup_clear_passphrase_requires_step_up(ops_client, auth):
+    response = ops_client.put(
+        "/api/backups/settings",
+        headers=csrf_headers(auth),
+        json={
+            "bucket": "my-bucket",
+            "schedule_hours": "0",
+            "schedule_minute": 0,
+            "timezone": "UTC",
+            "retention_days": 30,
+            "archive_passphrase": "",
+        },
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "step_up_required"
+
+
 def test_database_databases_lists_attached(ops_client, auth):
     response = ops_client.get("/api/database/databases")
     assert response.status_code == 200
