@@ -25,6 +25,7 @@ from vpscp_agent.routes import database as database_routes
 from vpscp_agent.routes import deploy as deploy_routes
 from vpscp_agent.routes import dns as dns_routes
 from vpscp_agent.routes import docker as docker_routes
+from vpscp_agent.routes import firewall as firewall_routes
 from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.routes import nginx as nginx_routes
 from vpscp_agent.routes import projects as projects_routes
@@ -115,6 +116,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
                 "/v1/nginx",
                 "/v1/projects",
                 "/v1/registry",
+                "/v1/firewall",
             )
         ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -125,7 +127,9 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         status = (
-            400 if request.url.path.startswith(("/v1/db", "/v1/restore", "/v1/backup")) else 422
+            400
+            if request.url.path.startswith(("/v1/db", "/v1/restore", "/v1/backup", "/v1/firewall"))
+            else 422
         )
         return JSONResponse(status_code=status, content={"detail": jsonable_encoder(exc.errors())})
 
@@ -142,6 +146,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(compose_routes.router)
     app.include_router(deploy_routes.router)
     app.include_router(registry_routes.router)
+    app.include_router(firewall_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:
