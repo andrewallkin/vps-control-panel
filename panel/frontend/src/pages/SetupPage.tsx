@@ -111,6 +111,10 @@ export function SetupPage() {
   const [restoreConflict, setRestoreConflict] = useState<RestoreConflict | null>(null)
   const [restoreJobId, setRestoreJobId] = useState<string | null>(null)
   const [jobEnd, setJobEnd] = useState<JobEndPayload | null>(null)
+
+  // Resume a restore that is still running after a page refresh.
+  const stateRestoreJobId = setupQuery.data?.restore_job_id ?? null
+  const effectiveRestoreJobId = restoreJobId ?? stateRestoreJobId
   const [dragOver, setDragOver] = useState(false)
 
   const steps = useMemo(() => setupQuery.data?.steps ?? [], [setupQuery.data?.steps])
@@ -123,7 +127,7 @@ export function SetupPage() {
 
   const activeStep = useMemo(
     () =>
-      resolveActiveStep(steps, hasValidCert, restoreJobId, uploading, uploadInfo, {
+      resolveActiveStep(steps, hasValidCert, effectiveRestoreJobId, uploading, uploadInfo, {
         cloudflareAcknowledged,
         panelHostnameAcknowledged,
         optionalAcknowledged,
@@ -131,7 +135,7 @@ export function SetupPage() {
     [
       steps,
       hasValidCert,
-      restoreJobId,
+      effectiveRestoreJobId,
       uploading,
       uploadInfo,
       cloudflareAcknowledged,
@@ -239,6 +243,7 @@ export function SetupPage() {
   const handleJobEnd = useCallback(
     (payload: JobEndPayload) => {
       setJobEnd(payload)
+      setRestoreJobId(null)
       void setupQuery.refetch()
     },
     [setupQuery],
@@ -262,7 +267,7 @@ export function SetupPage() {
         <p className="text-sm text-destructive">Could not load setup status.</p>
       ) : null}
 
-      {activeStep === 'database' && databaseStatus === 'pending' && !restoreJobId ? (
+      {activeStep === 'database' && databaseStatus === 'pending' && !effectiveRestoreJobId ? (
         <section className="space-y-4" aria-labelledby="database-step-heading">
           <h2 id="database-step-heading" className="text-base font-semibold">
             Database
@@ -358,17 +363,33 @@ export function SetupPage() {
         </section>
       ) : null}
 
-      {restoreJobId ? (
+      {effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="restore-log-heading">
           <h2 id="restore-log-heading" className="text-base font-semibold">
             Restore progress
           </h2>
-          <LogViewer key={restoreJobId} jobId={restoreJobId} onEnd={handleJobEnd} />
-          {jobEnd ? <RestoreResultSummary end={jobEnd} /> : null}
+          <LogViewer key={effectiveRestoreJobId} jobId={effectiveRestoreJobId} onEnd={handleJobEnd} />
         </section>
       ) : null}
 
-      {activeStep === 'cloudflare' && !restoreJobId ? (
+      {!effectiveRestoreJobId && jobEnd ? (
+        <RestoreResultSummary
+          end={jobEnd}
+          onContinue={() => {
+            setJobEnd(null)
+            void setupQuery.refetch()
+          }}
+          onRetry={() => {
+            setJobEnd(null)
+            setRestoreJobId(null)
+            setUploadInfo(null)
+            setUploadId(null)
+            void setupQuery.refetch()
+          }}
+        />
+      ) : null}
+
+      {activeStep === 'cloudflare' && !effectiveRestoreJobId ? (
         <CloudflareSetupStep
           configured={cloudflareConfigured}
           zones={zonesQuery.data?.zones ?? []}
@@ -392,11 +413,11 @@ export function SetupPage() {
         />
       ) : null}
 
-      {activeStep === 'domains' && !restoreJobId ? (
+      {activeStep === 'domains' && !effectiveRestoreJobId ? (
         <DomainsSetupStep onCertReady={refreshSetup} />
       ) : null}
 
-      {activeStep === 'panel_hostname' && !restoreJobId ? (
+      {activeStep === 'panel_hostname' && !effectiveRestoreJobId ? (
         <PanelHostnameSetupStep
           onSaved={() => {
             setAwaitingPanelHostnameContinue(true)
@@ -409,14 +430,14 @@ export function SetupPage() {
         />
       ) : null}
 
-      {activeStep === 'optional' && !restoreJobId ? (
+      {activeStep === 'optional' && !effectiveRestoreJobId ? (
         <OptionalSetupStep
           onContinueToFinish={() => setOptionalAcknowledged(true)}
           onSkipped={() => finishMutation.mutate()}
         />
       ) : null}
 
-      {activeStep === 'finish' && !restoreJobId ? (
+      {activeStep === 'finish' && !effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="finish-heading">
           <h2 id="finish-heading" className="text-base font-semibold">
             Finish

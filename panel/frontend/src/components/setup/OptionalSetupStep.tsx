@@ -21,6 +21,8 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
   const [registryError, setRegistryError] = useState<string | null>(null)
   const [registrySuccess, setRegistrySuccess] = useState<string | null>(null)
   const [stepUpOpen, setStepUpOpen] = useState(false)
+  const [registryHidden, setRegistryHidden] = useState(false)
+  const [backupHidden, setBackupHidden] = useState(false)
   const [pendingRegistry, setPendingRegistry] = useState<{ username: string; token: string } | null>(
     null,
   )
@@ -81,14 +83,25 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
         </p>
       </div>
 
+      {registryHidden ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-3">
+          <p className="text-sm text-muted-foreground">Docker Hub skipped.</p>
+          <button
+            type="button"
+            className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
+            onClick={() => setRegistryHidden(false)}
+          >
+            Configure instead
+          </button>
+        </div>
+      ) : (
       <div className="space-y-3 rounded-lg border border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Docker Hub</h3>
           <button
             type="button"
             className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
-            onClick={() => skipMutation.mutate()}
-            disabled={skipMutation.isPending}
+            onClick={() => setRegistryHidden(true)}
           >
             Skip section
           </button>
@@ -148,15 +161,27 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
           Save Docker Hub credentials
         </button>
       </div>
+      )}
 
+      {backupHidden ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-3">
+          <p className="text-sm text-muted-foreground">Backups skipped.</p>
+          <button
+            type="button"
+            className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
+            onClick={() => setBackupHidden(false)}
+          >
+            Configure instead
+          </button>
+        </div>
+      ) : (
       <div className="space-y-3 rounded-lg border border-border bg-card p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3 className="text-sm font-semibold">Backups</h3>
           <button
             type="button"
             className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
-            onClick={() => skipMutation.mutate()}
-            disabled={skipMutation.isPending}
+            onClick={() => setBackupHidden(true)}
           >
             Skip section
           </button>
@@ -174,6 +199,7 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
           <p className="text-sm text-muted-foreground">Loading backup settings…</p>
         )}
       </div>
+      )}
 
       <div className="flex flex-wrap gap-2">
         <button

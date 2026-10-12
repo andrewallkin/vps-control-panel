@@ -17,6 +17,7 @@ export interface SetupStep {
 export interface SetupState {
   steps: SetupStep[]
   completed: boolean
+  restore_job_id: string | null
 }
 
 export interface UploadCompleteInfo {

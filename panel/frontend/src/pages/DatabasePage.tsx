@@ -222,6 +222,7 @@ export function DatabasePage() {
   const handleJobEnd = useCallback(
     (payload: JobEndPayload) => {
       setJobEnd(payload)
+      setRestoreJobId(null)
       void invalidateDatabaseData()
     },
     [invalidateDatabaseData],
@@ -747,9 +748,24 @@ export function DatabasePage() {
         ) : (
           <div className="space-y-3">
             <LogViewer key={restoreJobId} jobId={restoreJobId} onEnd={handleJobEnd} />
-            {jobEnd ? <RestoreResultSummary end={jobEnd} /> : null}
           </div>
         )}
+        {!restoreJobId && jobEnd ? (
+          <div className="mt-3">
+            <RestoreResultSummary
+              end={jobEnd}
+              onContinue={() => {
+                setJobEnd(null)
+                void invalidateDatabaseData()
+              }}
+              onRetry={() => {
+                setJobEnd(null)
+                setUploadInfo(null)
+                setUploadId(null)
+              }}
+            />
+          </div>
+        ) : null}
       </section>
 
       <RestoreConfirmDialog

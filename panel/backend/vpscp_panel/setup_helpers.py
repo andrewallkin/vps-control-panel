@@ -58,6 +58,7 @@ def public_setup_state(setup: dict[str, Any], db: DbSession) -> dict[str, Any]:
             },
         ],
         "completed": setup["completed"],
+        "restore_job_id": setup.get("restore_job_id"),
     }
 
 

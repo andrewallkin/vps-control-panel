@@ -76,4 +76,17 @@ describe('OptionalSetupStep', () => {
       expect(onSkipped).toHaveBeenCalled()
     })
   })
+
+  it('per-card Skip section collapses the card without completing setup', async () => {
+    // onSkipped (the outer spy) fires whenever POST /api/setup/complete happens;
+    // a per-card skip must not hit that endpoint at all.
+    const user = userEvent.setup()
+    renderWithProviders(
+      <OptionalSetupStep onContinueToFinish={() => {}} onSkipped={() => {}} />,
+    )
+    const skips = screen.getAllByRole('button', { name: /skip section/i })
+    await user.click(skips[0])
+    await user.click(skips[1])
+    expect(onSkipped).not.toHaveBeenCalled()
+  })
 })

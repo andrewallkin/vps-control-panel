@@ -74,15 +74,21 @@ async def _maybe_sync_restore_job(
     setup: dict[str, Any],
 ) -> dict[str, Any]:
     job_id = setup.get("restore_job_id")
-    if not job_id or setup.get("database") == "restored":
+    if not job_id:
         return setup
     try:
         job = await agent.get(f"/v1/jobs/{job_id}")
     except AgentError:
         return setup
-    if job.get("status") == "succeeded":
+    status = job.get("status")
+    if status == "succeeded":
         setup = dict(setup)
         setup["database"] = "restored"
+        setup.pop("restore_job_id", None)
+        _save_setup(db, setup)
+    elif status in ("failed", "cancelled"):
+        setup = dict(setup)
+        setup.pop("restore_job_id", None)
         _save_setup(db, setup)
     return setup
 
@@ -184,6 +190,10 @@ async def run_restore(
 ) -> dict[str, str]:
     if body.confirm != "RESTORE":
         raise HTTPException(status_code=400, detail="confirm must be RESTORE")
+    setup = _load_setup(db)
+    setup = await _maybe_sync_restore_job(db, agent, setup)
+    if setup.get("restore_job_id"):
+        raise HTTPException(status_code=409, detail="restore_in_progress")
     try:
         result = await agent.post(
             "/v1/restore/run",
