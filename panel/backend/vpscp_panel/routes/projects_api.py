@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -91,6 +92,24 @@ def _validate_unique_services(services: list[ServiceInput]) -> None:
         raise ValueError("duplicate image_env_var")
 
 
+def _validated_migration_command(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("migration_command must not be empty")
+    return stripped
+
+
+def _validated_migration_service(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("migration_service must not be empty")
+    return stripped
+
+
 class CreateProjectBody(BaseModel):
     slug: Slug
     display_name: str
@@ -107,6 +126,8 @@ class CreateProjectBody(BaseModel):
     routes: list[RouteInput]
     docker_hub_repo: str | None = None
     services: list[ServiceInput] = []
+    migration_service: str | None = None
+    migration_command: str | None = None
 
     @field_validator("display_name", "compose_file")
     @classmethod
@@ -162,6 +183,27 @@ class PatchProjectBody(BaseModel):
     migration_command: str | None = None
     migration_service: str | None = None
     health_check_url: str | None = None
+
+    @field_validator("migration_command")
+    @classmethod
+    def check_migration_command(cls, value: str | None) -> str | None:
+        return _validated_migration_command(value)
+
+    @field_validator("migration_service")
+    @classmethod
+    def check_migration_service(cls, value: str | None) -> str | None:
+        return _validated_migration_service(value)
+
+    @field_validator("health_check_url")
+    @classmethod
+    def check_health_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"http://127\.0\.0\.1:(\d+)(/.*)?", value):
+            raise ValueError(
+                "health_check_url must look like http://127.0.0.1:<port>/path"
+            )
+        return value
 
 
 class TestAccessBody(BaseModel):
@@ -352,8 +394,8 @@ async def create_project(
         db_name=db_name,
         db_user=db_user,
         write_database_url=body.write_database_url,
-        migration_command=None,
-        migration_service=None,
+        migration_command=_validated_migration_command(body.migration_command),
+        migration_service=_validated_migration_service(body.migration_service),
         health_check_url=None,
         user_env=body.user_env,
         creation_state=json.dumps(state),
@@ -842,6 +884,30 @@ async def rotate_database_password(
         json={"set": set_values, "unset": []},
     )
     return {"restart_required": True}
+
+
+@router.post("/{slug}/migrate", status_code=202)
+async def run_project_migrations(
+    slug: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(require_csrf)],
+) -> dict[str, str]:
+    """Standalone migration run: proxies the agent's compose/migrate endpoint
+    with the project's configured service/command (like the CI .sh step)."""
+    project = db.get(Project, slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if not project.migration_service or not project.migration_command:
+        raise HTTPException(status_code=409, detail="migrations_not_configured")
+    result = await agent.post(
+        f"/v1/projects/{slug}/compose/migrate",
+        json={
+            "service": project.migration_service,
+            "command": project.migration_command,
+        },
+    )
+    return {"job_id": result["job_id"]}
 
 
 @router.get("/{slug}/dumps")

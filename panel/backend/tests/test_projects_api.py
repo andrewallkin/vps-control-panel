@@ -393,6 +393,112 @@ def _ready_imgapp(db_session, frozen_time):
     db_session.commit()
 
 
+def test_create_project_accepts_migration_fields(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """Migration service/command must be settable at creation (the wizard
+    collects them) instead of being silently None."""
+    from vpscp_panel.models import Project as _Project
+
+    db_session.add(
+        Domain(
+            name="example.com",
+            zone_id="zone-1",
+            cert_status="missing",
+            cert_expires_at=None,
+        )
+    )
+    db_session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.post(
+            "/api/projects",
+            json={
+                "slug": "migapp",
+                "display_name": "Mig App",
+                "repo": "https://github.com/acme/migapp.git",
+                "branch": "main",
+                "compose_file": "docker-compose.yml",
+                "deploy_mode": "build",
+                "database_mode": "none",
+                "hostnames": [
+                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
+                ],
+                "routes": [{"path_prefix": "/", "port_env_var": "WEB_PORT"}],
+                "migration_service": "backend",
+                "migration_command": "bash /app/run_migrations.sh",
+            },
+            headers=_csrf(auth),
+        )
+        assert resp.status_code == 202, resp.text
+
+    with db_module.SessionLocal() as session:
+        project = session.get(_Project, "migapp")
+        assert project.migration_service == "backend"
+        assert project.migration_command == "bash /app/run_migrations.sh"
+
+
+def test_patch_rejects_invalid_migration_command(
+    client_factory, admin_user, frozen_time, db_session
+):
+    _ready_imgapp(db_session, frozen_time)
+    with client_factory() as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.patch(
+            "/api/projects/imgapp",
+            json={"migration_command": "   ", "migration_service": "web"},
+            headers=_csrf(auth),
+        )
+    assert resp.status_code == 422
+
+
+def test_migrate_endpoint_proxies_agent(client_factory, admin_user, frozen_time, db_session):
+    """Standalone 'Run migrations' button: panel proxies the agent's
+    compose/migrate endpoint with the configured command."""
+    _ready_imgapp(db_session, frozen_time)
+    with db_module.SessionLocal() as session:
+        project = session.get(Project, "imgapp")
+        project.migration_service = "web"
+        project.migration_command = "bash /app/run_migrations.sh"
+        session.commit()
+
+    calls = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.url.path, json.loads(request.content.decode())))
+        return httpx.Response(202, json={"job_id": "job-mig-1"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.post(
+            "/api/projects/imgapp/migrate",
+            headers={"X-CSRF-Token": auth["csrf_token"]},
+        )
+        assert resp.status_code == 202, resp.text
+        assert resp.json() == {"job_id": "job-mig-1"}
+        assert calls[-1] == (
+            "/v1/projects/imgapp/compose/migrate",
+            {"service": "web", "command": "bash /app/run_migrations.sh"},
+        )
+
+
+def test_migrate_endpoint_409_when_unconfigured(
+    client_factory, admin_user, frozen_time, db_session
+):
+    _ready_imgapp(db_session, frozen_time)
+    with client_factory() as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.post(
+            "/api/projects/imgapp/migrate",
+            headers={"X-CSRF-Token": auth["csrf_token"]},
+        )
+    assert resp.status_code == 409
+
+
 def test_put_routing_writes_allocated_ports_to_env(
     client_factory, admin_user, frozen_time, db_session
 ):

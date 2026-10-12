@@ -18,6 +18,8 @@ import type { EnvRow } from '../lib/envEditorUtils'
 import { formatBytes } from '../lib/format'
 import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
 import type { RegistryTagOption } from '../lib/projectDeployTypes'
+import { MigrationRunControls } from '../components/projects/MigrationRunControls'
+import { LogViewer } from '../components/setup/LogViewer'
 import {
   prepareServiceMappingRows,
   tagPrefixFromImageEnvVar,
@@ -40,6 +42,7 @@ import {
   redeployDeploy,
   restartProjectCompose,
   rotateProjectDatabase,
+  migrateProject,
   startProjectDeploy,
   type ProjectDetail,
   type ProjectHostname,
@@ -105,6 +108,7 @@ export function ProjectPage() {
   const [activeTab, setActiveTab] = useState<TabId>(() => tabFromHash(window.location.hash))
   const [logService, setLogService] = useState('')
   const [selectedTags, setSelectedTags] = useState<Record<string, string>>({})
+  const [runMigrations, setRunMigrations] = useState(true)
   const [activeDeployId, setActiveDeployId] = useState<number | null>(null)
   const [envRows, setEnvRows] = useState<EnvRow[]>([])
   const [loadedEnvKeys, setLoadedEnvKeys] = useState<string[]>([])
@@ -295,9 +299,21 @@ export function ProjectPage() {
     return map
   }, [metricsQuery.data, slug])
 
+  const migrateMutation = useMutation({
+    mutationFn: () => migrateProject(slug),
+    onSuccess: (data) => {
+      setActiveDeployId(null)
+      setMigrateJobId(data.job_id)
+    },
+  })
+  const [migrateJobId, setMigrateJobId] = useState<string | null>(null)
+
   const deployMutation = useMutation({
-    mutationFn: (body: { tags?: Record<string, string>; build?: boolean }) =>
-      startProjectDeploy(slug, body),
+    mutationFn: (body: {
+      tags?: Record<string, string>
+      build?: boolean
+      run_migrations?: boolean
+    }) => startProjectDeploy(slug, body),
     onSuccess: (data) => {
       setActiveDeployId(data.id)
       void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
@@ -613,6 +629,16 @@ export function ProjectPage() {
             </p>
           ) : null}
 
+          <MigrationRunControls
+            configured={Boolean(project.migration_service && project.migration_command)}
+            command={project.migration_command}
+            runMigrations={runMigrations}
+            onToggle={setRunMigrations}
+            onRunNow={() => migrateMutation.mutate()}
+            hasDatabase={project.database_mode !== 'none'}
+            runNowDisabled={migrateMutation.isPending}
+          />
+
           {project.deploy_mode === 'image' && imageServicesConfigured ? (
             <div className="space-y-4">
               {(tagsQuery.data?.services ?? []).map((svc) => {
@@ -634,7 +660,7 @@ export function ProjectPage() {
                 type="button"
                 disabled={deployMutation.isPending || Object.keys(selectedTags).length === 0}
                 className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
-                onClick={() => deployMutation.mutate({ tags: selectedTags })}
+                onClick={() => deployMutation.mutate({ tags: selectedTags, run_migrations: runMigrations })}
               >
                 Deploy
               </button>
@@ -644,7 +670,7 @@ export function ProjectPage() {
               type="button"
               disabled={deployMutation.isPending}
               className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
-              onClick={() => deployMutation.mutate({ build: true })}
+              onClick={() => deployMutation.mutate({ build: true, run_migrations: runMigrations })}
             >
               Build &amp; deploy
             </button>
@@ -654,6 +680,17 @@ export function ProjectPage() {
             <pre className="max-h-64 overflow-auto rounded-md border border-border bg-card p-3 font-mono text-xs">
               {liveDeployLog}
             </pre>
+          ) : null}
+
+          {migrateJobId ? (
+            <div className="space-y-2">
+              <h2 className="text-sm font-semibold">Migration log</h2>
+              <LogViewer
+                key={migrateJobId}
+                jobId={migrateJobId}
+                onEnd={() => setMigrateJobId(null)}
+              />
+            </div>
           ) : null}
 
           <section className="space-y-2">

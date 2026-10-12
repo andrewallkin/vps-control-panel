@@ -82,6 +82,8 @@ export function NewProjectWizardPage() {
   const [dbUser, setDbUser] = useState('')
   const [adoptedDbName, setAdoptedDbName] = useState('')
   const [writeDatabaseUrl, setWriteDatabaseUrl] = useState(true)
+  const [migrationService, setMigrationService] = useState('')
+  const [migrationCommand, setMigrationCommand] = useState('')
   const [envRows, setEnvRows] = useState<EnvRow[]>([])
   const [userEnv, setUserEnv] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
@@ -358,6 +360,8 @@ export function NewProjectWizardPage() {
       db_user: resolvedDbUser,
       write_database_url: databaseMode !== 'none' && writeDatabaseUrl,
       user_env: userEnv || null,
+      migration_service: migrationService.trim() || null,
+      migration_command: migrationCommand.trim() || null,
       hostnames,
       routes: routes.map((r) => ({
         path_prefix: r.path_prefix,
@@ -378,6 +382,8 @@ export function NewProjectWizardPage() {
     displayName,
     dockerHubRepo,
     hostnames,
+    migrationCommand,
+    migrationService,
     repoUrl,
     routes,
     slug,
@@ -763,6 +769,36 @@ export function NewProjectWizardPage() {
               Write DATABASE_URL to .env
             </label>
           ) : null}
+          <div className="space-y-2">
+            <label htmlFor="migration-service" className="block text-sm font-medium">
+              Migration service (optional)
+            </label>
+            <input
+              id="migration-service"
+              type="text"
+              value={migrationService}
+              placeholder="backend"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              onChange={(e) => setMigrationService(e.target.value)}
+            />
+            <label htmlFor="migration-command" className="block text-sm font-medium">
+              Migration command (optional)
+            </label>
+            <input
+              id="migration-command"
+              type="text"
+              value={migrationCommand}
+              placeholder="bash /app/run_migrations.sh"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+              onChange={(e) => setMigrationCommand(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Runs inside the service container on every deploy (before containers
+              switch), e.g. <span className="font-mono">bash /app/run_migrations.sh</span>{' '}
+              or <span className="font-mono">alembic upgrade head</span>. Both fields
+              must be set to enable.
+            </p>
+          </div>
           <p className="text-xs text-muted-foreground">
             Projects using Postgres must join the external <code>postgres-net</code> network in
             their compose file.

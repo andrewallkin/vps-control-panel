@@ -92,6 +92,8 @@ export interface CreateProjectPayload {
   db_user?: string | null
   write_database_url: boolean
   user_env?: string | null
+  migration_service?: string | null
+  migration_command?: string | null
   hostnames: ProjectHostname[]
   routes: ProjectRoute[]
   services?: ProjectServiceInput[]
@@ -180,12 +182,20 @@ export async function fetchProjectDeploys(slug: string): Promise<DeployRow[]> {
 
 export async function startProjectDeploy(
   slug: string,
-  body: { tags?: Record<string, string>; build?: boolean },
+  body: { tags?: Record<string, string>; build?: boolean; run_migrations?: boolean },
 ): Promise<{ id: number; status: string }> {
   return apiJson(`/api/projects/${encodeURIComponent(slug)}/deploy`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
+  })
+}
+
+export async function migrateProject(
+  slug: string,
+): Promise<{ job_id: string }> {
+  return apiJson(`/api/projects/${encodeURIComponent(slug)}/migrate`, {
+    method: 'POST',
   })
 }
 

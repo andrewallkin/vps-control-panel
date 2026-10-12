@@ -52,13 +52,18 @@ async def consume_job_events(agent: AgentClient, job_id: str) -> tuple[list[str]
     return log_lines, end_data
 
 
-def build_agent_deploy_body(project: Project, tags: dict[str, str]) -> dict[str, Any]:
+def build_agent_deploy_body(
+    project: Project,
+    tags: dict[str, str],
+    *,
+    run_migrations: bool = True,
+) -> dict[str, Any]:
     body: dict[str, Any] = {
         "tags": tags,
         "mode": project.deploy_mode,
         "db": project.database_mode != "none",
     }
-    if project.migration_service and project.migration_command:
+    if run_migrations and project.migration_service and project.migration_command:
         body["migration"] = {
             "service": project.migration_service,
             "command": project.migration_command,
@@ -146,6 +151,7 @@ async def run_deploy(
     tags: dict[str, str],
     trigger: str,
     clock: Callable[[], datetime],
+    run_migrations: bool = True,
 ) -> Deploy:
     deploy = Deploy(
         project_slug=project.slug,
@@ -165,7 +171,7 @@ async def run_deploy(
         raise DeployAlreadyRunningError from None
     db.refresh(deploy)
 
-    agent_body = build_agent_deploy_body(project, tags)
+    agent_body = build_agent_deploy_body(project, tags, run_migrations=run_migrations)
     try:
         start = await agent.post(f"/v1/projects/{project.slug}/deploy", json=agent_body)
         job_id = start["job_id"]

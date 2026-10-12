@@ -278,6 +278,60 @@ def test_reconcile_stuck_work_marks_orphans_failed(db_session, frozen_time):
     assert json.loads(project.creation_state)["status"] == "failed"
 
 
+def test_deploy_run_migrations_flag_controls_migrate_step(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """The deploy dialog's 'Run database migrations' checkbox gates whether the
+    migrate step is sent to the agent. Default is run (pre-ticked)."""
+    _ready_project(db_session)
+    with db_module.SessionLocal() as session:
+        project = session.get(Project, "myapp")
+        project.migration_service = "web"
+        project.migration_command = "bash /app/run_migrations.sh"
+        session.commit()
+
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/projects/myapp/deploy" and request.method == "POST":
+            bodies.append(json.loads(request.content.decode()))
+            return httpx.Response(200, json={"job_id": "job-deploy-1"})
+        if path == "/v1/jobs/job-deploy-1/events" and request.method == "GET":
+            return httpx.Response(
+                200,
+                content=_sse_bytes(
+                    ("end", {"status": "succeeded", "result": {}, "error": None}),
+                ),
+            )
+        return httpx.Response(404, json={"detail": "unexpected"})
+
+    client = client_factory(transport=httpx.MockTransport(handler))
+    auth = login(client, admin_user, frozen_time)
+    tags = {"DOCKER_IMAGE_WEB": "backend-main-abc1234"}
+
+    # default: migrations run
+    resp = client.post(
+        "/api/projects/myapp/deploy",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+        json={"tags": tags},
+    )
+    assert resp.status_code == 202, resp.text
+    assert bodies[-1]["migration"] == {
+        "service": "web",
+        "command": "bash /app/run_migrations.sh",
+    }
+
+    # unchecked: migrate step omitted entirely
+    resp = client.post(
+        "/api/projects/myapp/deploy",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+        json={"tags": tags, "run_migrations": False},
+    )
+    assert resp.status_code == 202, resp.text
+    assert "migration" not in bodies[-1]
+
+
 def test_only_one_running_deploy_per_slug(db_session):
     _ready_project(db_session)
     started = datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC)
