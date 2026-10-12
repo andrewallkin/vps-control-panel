@@ -179,8 +179,8 @@ def _port_from_to(to_field: str) -> int | None:
 def _is_web_port_allow(rule: dict[str, Any]) -> bool:
     if rule["action"] != "ALLOW IN":
         return False
-    port = _port_from_to(rule["to"])
-    return port in (80, 443)
+    to_field = rule["to"]
+    return _port_matches_to(to_field, 80) or _port_matches_to(to_field, 443)
 
 
 def _is_non_cf_web_port_allow(rule: dict[str, Any]) -> bool:
@@ -189,7 +189,7 @@ def _is_non_cf_web_port_allow(rule: dict[str, Any]) -> bool:
 
 def _is_ssh_allow_rule(rule: dict[str, Any]) -> bool:
     return (
-        rule["action"] == "ALLOW IN" and rule["proto"] == "tcp" and _port_from_to(rule["to"]) == 22
+        rule["action"] == "ALLOW IN" and rule["proto"] == "tcp" and _port_matches_to(rule["to"], 22)
     )
 
 
@@ -213,8 +213,7 @@ def _client_covered_by_ssh(
             continue
         if rule["action"] != "ALLOW IN":
             continue
-        port = _port_from_to(rule["to"])
-        if port != 22 or rule["proto"] != "tcp":
+        if rule["proto"] != "tcp" or not _port_matches_to(rule["to"], 22):
             continue
         if rule["v6"] != (client.version == 6):
             continue

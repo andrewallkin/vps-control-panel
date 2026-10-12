@@ -330,6 +330,64 @@ def test_delete_ssh_allowed_when_other_rule_covers_client(settings):
     assert ["ufw", "--force", "delete", "1"] in [c["args"] for c in runner.calls]
 
 
+def test_delete_web_range_blocked_when_cf_off(settings):
+    web_range = """Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 70:90/tcp                  ALLOW IN    Anywhere                   # wide
+"""
+    runner = UfwFakeRunner(web_range)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
+            ("firewall_cloudflare_only", "false"),
+        )
+
+    expected = {
+        "to": "70:90/tcp",
+        "proto": "tcp",
+        "action": "ALLOW IN",
+        "from": "Anywhere",
+        "v6": False,
+        "comment": "wide",
+    }
+    with pytest.raises(ConflictError, match="70:90/tcp"):
+        delete_rule(
+            runner,
+            db=db,
+            number=1,
+            client_ip="203.0.113.50",
+            expected=expected,
+        )
+
+
+def test_delete_ssh_allowed_when_range_covers_client(settings):
+    ssh_range = """Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    203.0.113.50               # ssh-one
+[ 2] 20:30/tcp                  ALLOW IN    203.0.113.50               # ssh-range
+"""
+    runner = UfwFakeRunner(ssh_range)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+
+    expected = {
+        "to": "22/tcp",
+        "proto": "tcp",
+        "action": "ALLOW IN",
+        "from": "203.0.113.50",
+        "v6": False,
+        "comment": "ssh-one",
+    }
+    delete_rule(runner, db=db, number=1, client_ip="203.0.113.50", expected=expected)
+    assert ["ufw", "--force", "delete", "1"] in [c["args"] for c in runner.calls]
+
+
 def test_cloudflare_only_on_adds_cf_rules_then_removes_generic(settings):
     runner = UfwFakeRunner(UFW_STATUS_BASE)
     db = StateDB(settings.state_db_path)
