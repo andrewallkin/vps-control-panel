@@ -256,6 +256,21 @@ def test_registry_requires_step_up(ops_client, auth):
     assert response.status_code == 403
 
 
+def test_database_adopt_requires_step_up(ops_client, auth):
+    response = ops_client.post(
+        "/api/database/adopt",
+        headers=csrf_headers(auth),
+        json={
+            "slug": "myapp",
+            "db_name": "mydb",
+            "db_user": "mydb_user",
+            "password_mode": "rotate",
+        },
+    )
+    assert response.status_code == 403
+    assert response.json() == {"detail": "step_up_required"}
+
+
 def test_database_adopt_writes_env(ops_client, auth, frozen_time, admin_user, agent_requests):
     assert db_module.SessionLocal is not None
     with db_module.SessionLocal() as db:
@@ -282,6 +297,7 @@ def test_database_adopt_writes_env(ops_client, auth, frozen_time, admin_user, ag
         )
         db.commit()
 
+    step_up(ops_client, auth, admin_user, frozen_time + timedelta(seconds=31))
     response = ops_client.post(
         "/api/database/adopt",
         headers=csrf_headers(auth),

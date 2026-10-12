@@ -69,6 +69,7 @@ async def adopt_database(
     body: AdoptDatabaseBody,
     db: Annotated[DbSession, Depends(get_db)],
     _session: Annotated[Session, Depends(require_csrf)],
+    _step_up: Annotated[Session, Depends(require_step_up)],
     agent: Annotated[AgentClient, Depends(_agent)],
 ) -> dict[str, bool]:
     project = db.get(Project, body.slug)
