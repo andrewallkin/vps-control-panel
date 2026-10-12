@@ -18,6 +18,7 @@ import type { EnvRow } from '../lib/envEditorUtils'
 import { formatBytes } from '../lib/format'
 import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
 import type { RegistryTagOption } from '../lib/projectDeployTypes'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { MigrationRunControls } from '../components/projects/MigrationRunControls'
 import { LogViewer } from '../components/setup/LogViewer'
 import {
@@ -114,6 +115,7 @@ export function ProjectPage() {
   const [loadedEnvKeys, setLoadedEnvKeys] = useState<string[]>([])
   const [envDirty, setEnvDirty] = useState(false)
   const [restartPrompt, setRestartPrompt] = useState(false)
+  const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false)
   const [hostnamesDraft, setHostnamesDraft] = useState<ProjectHostname[]>([])
   const [routesDraft, setRoutesDraft] = useState<RouteDraft[]>([])
   const [routingError, setRoutingError] = useState<string | null>(null)
@@ -834,11 +836,23 @@ export function ProjectPage() {
               type="button"
               disabled={rotateMutation.isPending}
               className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted cursor-pointer"
-              onClick={() => rotateMutation.mutate()}
+              onClick={() => setRotateConfirmOpen(true)}
             >
               Rotate password
             </button>
           ) : null}
+          <ConfirmDialog
+            open={rotateConfirmOpen}
+            title="Rotate database password"
+            description="This changes the live database role password immediately. Running containers keep the old password until you restart them. A TOTP code is required."
+            confirmLabel="Rotate password"
+            busy={rotateMutation.isPending}
+            onConfirm={() => {
+              setRotateConfirmOpen(false)
+              rotateMutation.mutate()
+            }}
+            onCancel={() => setRotateConfirmOpen(false)}
+          />
           {dbRestartPrompt ? (
             <div className="rounded-md border border-border bg-card p-4 text-sm">
               <p>Restart services?</p>

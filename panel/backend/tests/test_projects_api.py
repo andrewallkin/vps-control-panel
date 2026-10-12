@@ -536,6 +536,58 @@ def test_delete_retries_and_cleans_rows_when_agent_already_gone(
         assert session.query(_PA).count() == 0
 
 
+def test_project_database_rotate_requires_step_up(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """Same action as POST /api/database/rotate (which requires step-up):
+    rotating the live role password invalidates running containers'
+    credentials — a stray click must not be enough."""
+    _ready_imgapp(db_session, frozen_time)
+    with db_module.SessionLocal() as session:
+        project = session.get(Project, "imgapp")
+        project.database_mode = "new"
+        project.db_name = "imgapp_db"
+        project.db_user = "imgapp_user"
+        session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"password": "rotated-secret"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.post(
+            "/api/projects/imgapp/database/rotate",
+            headers=_csrf(auth),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "step_up_required"
+
+
+def test_backup_service_account_clear_requires_step_up(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """Setting credentials needs step-up; clearing them must too."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.put(
+            "/api/backups/settings",
+            json={
+                "service_account": None,
+                "bucket": "my-bucket",
+                "schedule_hours": "0,12",
+                "schedule_minute": 0,
+                "timezone": "UTC",
+                "retention_days": 30,
+            },
+            headers=_csrf(auth),
+        )
+        assert resp.status_code == 403
+        assert resp.json()["detail"] == "step_up_required"
+
+
 def test_migrate_endpoint_409_when_unconfigured(
     client_factory, admin_user, frozen_time, db_session
 ):

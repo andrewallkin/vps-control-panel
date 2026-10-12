@@ -886,10 +886,16 @@ async def put_routing(
 @router.post("/{slug}/database/rotate")
 async def rotate_database_password(
     slug: str,
+    request: Request,
     db: Annotated[DbSession, Depends(get_db)],
     agent: Annotated[AgentClient, Depends(_agent)],
-    _session: Annotated[Session, Depends(require_csrf)],
+    session: Annotated[Session, Depends(require_csrf)],
 ) -> dict[str, bool]:
+    # Same action as POST /api/database/rotate: a credential change requires
+    # a fresh TOTP (spec step-up rules).
+    from vpscp_panel.auth import require_step_up
+
+    await require_step_up(request, session)
     project = db.get(Project, slug)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
