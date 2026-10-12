@@ -671,6 +671,22 @@ def test_exposure_deny_before_allow_blocks(settings):
     assert row["external"] is False
 
 
+def test_exposure_cloudflare_cidr_allow_is_expected(settings):
+    status = """Status: active
+[ 1] 80/tcp                     ALLOW IN    173.245.48.0/20            # cf
+"""
+    runner = UfwFakeRunner(status)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    ss = '0 128 0.0.0.0:80 0.0.0.0:* users:(("nginx",pid=1,fd=3))\n'
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-tlnp"], stdout=ss)
+    runner.on(lambda args: args[:4] == ["ss", "-H", "-ulnp"], stdout="")
+    report = exposure_report(runner, db)
+    row = next(r for r in report if r["port"] == 80)
+    assert row["external"] is True
+    assert row["expected"] is True
+
+
 def test_exposure_allow_before_deny_is_external(settings):
     status = """Status: active
 [ 1] 9000/tcp                   ALLOW IN    Anywhere                   # allow

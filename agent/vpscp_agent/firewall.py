@@ -363,6 +363,28 @@ def _is_internet_wide_source(from_field: str) -> bool:
     return from_field in _INTERNET_WIDE_SOURCES
 
 
+def _parse_public_source_network(
+    from_field: str,
+) -> ipaddress.IPv4Network | ipaddress.IPv6Network | None:
+    try:
+        if "/" in from_field:
+            network = ipaddress.ip_network(from_field, strict=False)
+        else:
+            if ":" in from_field:
+                network = ipaddress.ip_network(f"{from_field}/128", strict=False)
+            else:
+                network = ipaddress.ip_network(f"{from_field}/32", strict=False)
+    except ValueError:
+        return None
+    if network.is_private or network.is_loopback or network.is_link_local:
+        return None
+    if isinstance(network, ipaddress.IPv6Network) and network.subnet_of(
+        ipaddress.ip_network("fc00::/7")
+    ):
+        return None
+    return network
+
+
 def _port_matches_to(to_field: str, port: int) -> bool:
     port_part = to_field.split("/", 1)[0]
     if ":" in port_part:
@@ -377,12 +399,17 @@ def _ufw_internet_allowed(rules: list[dict[str, Any]], port: int, proto: str, *,
             continue
         if not _port_matches_to(rule["to"], port):
             continue
-        if not _is_internet_wide_source(rule["from"]):
+        source = rule["from"]
+        if _is_internet_wide_source(source):
+            if rule["action"] == "ALLOW IN":
+                return True
+            if rule["action"] == "DENY IN":
+                return False
+            continue
+        if _parse_public_source_network(source) is None:
             continue
         if rule["action"] == "ALLOW IN":
             return True
-        if rule["action"] == "DENY IN":
-            return False
     return False
 
 
