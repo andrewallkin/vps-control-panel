@@ -1,6 +1,6 @@
 # VPS migration runbook
 
-Checklist for moving from the old single-VPS setup to a new Netcup host running **vps-control-panel**. Work top to bottom; check items off as you go.
+Checklist for moving from the **old Hostinger VPS** to a **new Netcup** host running **vps-control-panel**. Work top to bottom; check items off as you go.
 
 **In scope:** Budget HQ, Strava Automation, SplitEasy, Health Tracker, personal site.  
 **Out of scope:** Run It Up.  
@@ -37,6 +37,7 @@ Fill in your new apex domain wherever you see `<new-domain>` (do not commit real
 
 ## 3. Panel setup wizard (global)
 
+- [ ] **Database:** choose **Start empty** and continue. Do **not** upload the cutover dump in the wizard—the full **Database** page (including **Cluster restore**) is only available **after setup is complete**.
 - [ ] **Cloudflare:** Create an API token with **Zone:Read** and **DNS:Edit** on the zones you will use (**Zone Settings:Read** is optional). Paste it in the wizard; confirm zones list loads.
 - [ ] **Domains:** Register **`andrewallkin.cloud`** and **`<new-domain>`** (apex). Wait until at least one certificate shows **valid** before continuing.
 - [ ] **Panel hostname:** Choose the FQDN where the control panel itself will live (e.g. `panel.<new-domain>` or a subdomain on `andrewallkin.cloud`). Complete TLS issuance for that hostname.
@@ -47,12 +48,13 @@ Fill in your new apex domain wherever you see `<new-domain>` (do not commit real
   - [ ] Schedule and **retention** (days)
   - [ ] **Archive passphrase** (for encrypted config archives, if used)
   - [ ] Run **Test credentials** (and optionally **Run now**) once settings look correct.
+- [ ] Finish the wizard and confirm you reach the main dashboard (setup complete).
 
-## 4. Final database cutover on the **old** VPS
+## 4. Final database cutover on the **old Hostinger** VPS
 
-Take this dump as late as possible before restore on the new host (minimizes stale data).
+Take this dump as late as possible before restore on the new Netcup host (minimizes stale data).
 
-- [ ] On the **old** VPS, create the cluster dump:
+- [ ] On the **old Hostinger** VPS, create the cluster dump:
 
   ```bash
   docker exec postgres-central pg_dumpall -U pgadmin | gzip > cutover.sql.gz
@@ -60,9 +62,11 @@ Take this dump as late as possible before restore on the new host (minimizes sta
 
 - [ ] Copy `cutover.sql.gz` securely to your laptop or straight to the new server (e.g. `scp`).
 
-## 5. Cluster restore on the **new** VPS
+## 5. Cluster restore on the **new Netcup** VPS
 
-- [ ] In the panel, open **Database → Cluster restore**.
+Setup must be finished before this step.
+
+- [ ] In the panel, open **Database → Cluster restore** (sidebar **Database** page, not the setup wizard).
 - [ ] Upload `cutover.sql.gz` (gzip-compressed `pg_dumpall`).
 - [ ] Run restore; watch the job log until it completes.
 - [ ] Expect restored DB roles to keep passwords from the dump until you **rotate** per project (below).
@@ -70,11 +74,11 @@ Take this dump as late as possible before restore on the new host (minimizes sta
 
 ## 6. GitHub / CI changes (per app repo)
 
-Do this before or in parallel with panel project creation so deploys push the right images.
+Do this before or in parallel with panel project creation so new images land on Docker Hub. **GitHub Actions only build and push images**—you **deploy from the panel** (section 9).
 
 ### Budget HQ and Strava Automation
 
-- [ ] Add **build + push** workflows modelled on SplitEasy’s `.github/workflows/deploy.yml` (build image, push to Docker Hub, trigger panel deploy or rely on panel polling—match whatever SplitEasy uses today).
+- [ ] Add **build + push** workflows modelled on SplitEasy’s `.github/workflows/deploy.yml` (build image and push to Docker Hub only—no SSH deploy steps).
 - [ ] Ensure `docker-compose.yml` (or service compose) uses **`image: ${DOCKER_IMAGE_*}`** for each built service (not hard-coded tags).
 - [ ] Remove **`VPS_*`** secrets and **application env secrets** from GitHub Actions; the panel stores deploy/env configuration.
 
@@ -122,7 +126,7 @@ For each app that persisted files under `data/` on the old host:
 
 For each project:
 
-- [ ] Trigger **Deploy** from the panel (or push a commit that runs the new CI workflow).
+- [ ] Push commits if needed so CI **builds and pushes** the image to Docker Hub, then trigger **Deploy** from the panel.
 - [ ] Confirm containers are **healthy** on the project page.
 - [ ] Hit each public hostname over HTTPS; smoke-test login and critical flows.
 - [ ] Confirm DNS in Cloudflare points at the **new** IPv4 (via panel upsert).
@@ -137,10 +141,10 @@ Update third-party URLs that still target the old host:
 - [ ] **Telegram** bot webhook URL.
 - [ ] **Google OAuth** authorized redirect URIs (and any other OAuth clients).
 
-## 11. Decommission old VPS
+## 11. Decommission old Hostinger VPS
 
-- [ ] Keep the **old VPS running for at least 7 days** as rollback insurance (DNS, data, or missed callbacks).
-- [ ] After you are confident, power off or delete the old Netcup instance.
+- [ ] Keep the **old Hostinger VPS running for at least 7 days** as rollback insurance (DNS, data, or missed callbacks).
+- [ ] After you are confident, **power off** the Hostinger VPS (the **Netcup** host is your new production server—do not decommission it here).
 - [ ] Optionally drop the restored **`gmail_manager`** database from the panel if you no longer need it (it was never attached to a project).
 
 ---
