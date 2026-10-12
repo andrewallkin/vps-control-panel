@@ -571,6 +571,38 @@ def test_restore_run_refuses_while_deploy_locked(settings):
             gate.set()
 
 
+def test_prescan_accepts_copy_data_sections(restore_job_env):
+    """Every real pg_dump with rows emits 'COPY ... FROM stdin;' terminated by
+    a bare '\\.' line — the COPY data terminator. Rejecting it broke every
+    restore of a dump with actual data (caught by the CI integration test)."""
+    settings, runner, db, psql, store = restore_job_env
+    dump = (
+        b"--\n-- PostgreSQL database cluster dump\n--\n"
+        b"CREATE DATABASE appdb;\n"
+        b"\\connect appdb\n"
+        b"COPY public.seed_row (id) FROM stdin;\n"
+        b"42\n"
+        b"\\.\n"
+        b"\n-- dump complete\n"
+    )
+    upload_id = _complete_upload(store, gzip.compress(dump))
+    runner.on("d.datname FROM pg_database", stdout="")
+    runner.on("r.rolname FROM pg_roles", stdout="")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(lines=[], returncode=0)
+
+    result = restore_cluster(
+        _ctx(db),
+        settings=settings,
+        psql=psql,
+        runner=runner,
+        db=db,
+        upload_id=upload_id,
+    )
+    assert result["error_count"] == 0
+
+
 def test_wrong_confirm_returns_400(settings):
     settings.stack_dir.mkdir(parents=True)
     settings.stack_env_path.write_text("POSTGRES_USER=pgadmin\n")

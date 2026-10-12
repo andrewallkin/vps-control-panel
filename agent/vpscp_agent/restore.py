@@ -132,7 +132,10 @@ def _iter_dump_lines(stream) -> Iterator[str]:
 
 
 # psql meta-commands a real pg_dumpall legitimately uses.
+# psql meta-commands a real pg_dumpall legitimately uses, plus the bare "\."
+# COPY data terminator that ends every COPY ... FROM stdin section.
 _DUMP_META_ALLOWED = ("\\connect", "\\c ", "\\restrict", "\\unrestrict", "\\echo", "\\pset")
+_COPY_TERMINATOR = "\\."
 _COPY_PROGRAM_RE = re.compile(r"\bcopy\b.*\b(?:TO|FROM)\s+PROGRAM\b", re.IGNORECASE)
 _SUPERUSER_GRANT_RE = re.compile(
     r"\b(?:CREATE|ALTER)\s+ROLE\s+(\"?)([\w.-]+)\1[^;]*\bSUPERUSER\b", re.IGNORECASE
@@ -217,7 +220,10 @@ def _scan_for_dangerous_statements(
                 continue
             if stripped.startswith("\\"):
                 meta = stripped.split()[0].rstrip(";")
-                if not any(stripped.startswith(allowed) for allowed in _DUMP_META_ALLOWED):
+                allowed = stripped == _COPY_TERMINATOR or any(
+                    stripped.startswith(prefix) for prefix in _DUMP_META_ALLOWED
+                )
+                if not allowed:
                     violations.append(f"line {lineno}: forbidden psql meta-command {meta}")
             if _COPY_PROGRAM_RE.search(stripped):
                 violations.append(f"line {lineno}: COPY ... PROGRAM is forbidden")
