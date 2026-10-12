@@ -91,7 +91,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
-      - run: uvx --from shellcheck-py shellcheck install.sh update.sh
+      - run: uvx --from shellcheck-py shellcheck -x install.sh update.sh lib/common.sh
 
   stack:
     runs-on: ubuntu-24.04

@@ -169,7 +169,23 @@ refresh_vpscp_gid() {
   mv "${tmp}" "${env_file}"
 }
 
+wait_for_panel_api() {
+  # The CLI runs DB migrations at startup and the server migrates in its
+  # lifespan; give the server its first turn before exec-ing into the
+  # container (run_migrations is file-locked, but this also avoids
+  # exec-ing into a half-started container).
+  local attempt
+  for attempt in $(seq 1 60); do
+    if curl -fsS http://127.0.0.1:8080/api/health >/dev/null 2>&1; then
+      return 0
+    fi
+    [[ "${attempt}" == 60 ]] && die "panel API did not become healthy; see: docker compose -f ${STACK_DIR}/docker-compose.yml logs panel"
+    sleep 1
+  done
+}
+
 bootstrap_panel_admin() {
+  wait_for_panel_api
   if (cd "${STACK_DIR}" && docker compose exec -T panel python -m vpscp_panel.cli has-admin); then
     return
   fi

@@ -44,8 +44,23 @@ def get_engine() -> Engine:
 
 
 def run_migrations(settings: PanelSettings) -> None:
+    """Upgrade the panel DB to head, serialized across processes.
+
+    install.sh's CLI (has-admin) and the server lifespan both migrate at
+    first boot; two concurrent alembic runs on the same fresh SQLite file
+    crash with 'database is locked' / 'table already exists' (or worse).
+    An exclusive file lock makes every caller wait its turn instead.
+    """
+    import fcntl
+
     settings.panel_data_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = settings.panel_db_path.with_suffix(".migrate.lock")
     alembic_ini = Path(__file__).resolve().parent.parent / "alembic.ini"
     config = Config(str(alembic_ini))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{settings.panel_db_path}")
-    command.upgrade(config, "head")
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            command.upgrade(config, "head")
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
