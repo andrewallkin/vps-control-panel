@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import current_session, get_db, require_csrf
 from vpscp_panel.models import Domain, Session
+from vpscp_panel.panel_events import panel_audited
 from vpscp_panel.routes.setup import require_setup_mutate
 from vpscp_panel.settings_store import get_setting, set_setting
 from vpscp_panel.setup_helpers import (
@@ -77,7 +78,8 @@ async def post_cloudflare_token(
 ) -> dict[str, Any]:
     if not body.token.strip():
         raise HTTPException(status_code=400, detail="token must not be empty")
-    result = await agent.post("/v1/dns/credentials", json={"token": body.token})
+    with panel_audited(db, "cloudflare.set_token", {}):
+        result = await agent.post("/v1/dns/credentials", json={"token": body.token})
     zones = result.get("zones", [])
     setup = load_setup(db)
     setup["cloudflare"] = "done"
@@ -236,11 +238,13 @@ async def get_server_settings(
 @router.put("/api/server-settings")
 async def put_server_settings(
     body: ServerSettingsUpdate,
+    db: Annotated[DbSession, Depends(get_db)],
     agent: Annotated[AgentClient, Depends(_agent)],
     _session: Annotated[Session, Depends(require_setup_mutate)],
 ) -> dict[str, Any]:
     payload = body.model_dump(exclude_unset=True)
-    return await agent.put("/v1/server/settings", json=payload)
+    with panel_audited(db, "server.update_settings", payload):
+        return await agent.put("/v1/server/settings", json=payload)
 
 
 def _panel_fqdn(domain: str, subdomain: str) -> str:

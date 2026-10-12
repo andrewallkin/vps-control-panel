@@ -4,6 +4,10 @@ import { Layout } from '../components/Layout'
 import { isAuthenticated, useAuthMe } from '../hooks/useAuthMe'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DomainsPage } from '../pages/DomainsPage'
+import { BackupsPage } from '../pages/BackupsPage'
+import { AuditPage } from '../pages/AuditPage'
+import { DatabasePage } from '../pages/DatabasePage'
+import { FirewallPage } from '../pages/FirewallPage'
 import { LoginPage } from '../pages/LoginPage'
 import { NewProjectWizardPage } from '../pages/NewProjectWizardPage'
 import { ProjectPage } from '../pages/ProjectPage'
@@ -88,6 +92,38 @@ function ProjectSlugEntry() {
   )
 }
 
+function FirewallEntry() {
+  return (
+    <RequireSetupComplete>
+      <FirewallPage />
+    </RequireSetupComplete>
+  )
+}
+
+function BackupsEntry() {
+  return (
+    <RequireSetupComplete>
+      <BackupsPage />
+    </RequireSetupComplete>
+  )
+}
+
+function DatabaseEntry() {
+  return (
+    <RequireSetupComplete>
+      <DatabasePage />
+    </RequireSetupComplete>
+  )
+}
+
+function AuditEntry() {
+  return (
+    <RequireSetupComplete>
+      <AuditPage />
+    </RequireSetupComplete>
+  )
+}
+
 function SettingsEntry() {
   return (
     <RequireSetupComplete>
@@ -123,6 +159,10 @@ export function AppRoutes() {
           <Route path="projects/new" element={<NewProjectEntry />} />
           <Route path="projects/:slug" element={<ProjectSlugEntry />} />
           <Route path="domains" element={<DomainsEntry />} />
+          <Route path="firewall" element={<FirewallEntry />} />
+          <Route path="backups" element={<BackupsEntry />} />
+          <Route path="database" element={<DatabaseEntry />} />
+          <Route path="audit" element={<AuditEntry />} />
           <Route path="settings" element={<SettingsEntry />} />
         </Route>
         <Route path="setup" element={<SetupEntry />} />

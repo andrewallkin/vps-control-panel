@@ -55,9 +55,11 @@ def _default_fetch() -> list[str]:
 def ensure_known_hosts(
     settings: Settings,
     fetch: Callable[[], list[str]] | None = None,
+    *,
+    force: bool = False,
 ) -> Path:
     path = known_hosts_path(settings)
-    if path.is_file():
+    if not force and path.is_file():
         lines = [line for line in path.read_text().splitlines() if line.strip()]
         if lines:
             return path

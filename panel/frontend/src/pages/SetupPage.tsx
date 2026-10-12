@@ -10,6 +10,7 @@ import { useNavigate } from 'react-router-dom'
 import { CloudflareSetupStep } from '../components/setup/CloudflareSetupStep'
 import { DomainsSetupStep } from '../components/setup/DomainsSetupStep'
 import { LogViewer } from '../components/setup/LogViewer'
+import { OptionalSetupStep } from '../components/setup/OptionalSetupStep'
 import { PanelHostnameSetupStep } from '../components/setup/PanelHostnameSetupStep'
 import { ProgressBar } from '../components/setup/ProgressBar'
 import { RestoreConfirmDialog } from '../components/setup/RestoreConfirmDialog'
@@ -68,6 +69,7 @@ export function SetupPage() {
   const [awaitingPanelHostnameContinue, setAwaitingPanelHostnameContinue] = useState(
     () => getPanelHostnameContinuePending() !== null,
   )
+  const [optionalAcknowledged, setOptionalAcknowledged] = useState(false)
 
   const zonesQuery = useQuery({
     queryKey: ['cloudflare', 'zones'],
@@ -113,6 +115,7 @@ export function SetupPage() {
       resolveActiveStep(steps, hasValidCert, restoreJobId, uploading, uploadInfo, {
         cloudflareAcknowledged,
         panelHostnameAcknowledged,
+        optionalAcknowledged,
       }),
     [
       steps,
@@ -122,6 +125,7 @@ export function SetupPage() {
       uploadInfo,
       cloudflareAcknowledged,
       panelHostnameAcknowledged,
+      optionalAcknowledged,
     ],
   )
 
@@ -373,6 +377,13 @@ export function SetupPage() {
             setAwaitingPanelHostnameContinue(false)
             setPanelHostnameContinuePending(null)
           }}
+        />
+      ) : null}
+
+      {activeStep === 'optional' && !restoreJobId ? (
+        <OptionalSetupStep
+          onContinueToFinish={() => setOptionalAcknowledged(true)}
+          onSkipped={() => finishMutation.mutate()}
         />
       ) : null}
 

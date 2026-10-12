@@ -146,13 +146,12 @@ def test_job_events_sse_relay(api_client, auth, agent_requests):
     assert agent_requests[-1].url.path == "/v1/jobs/abc123/events"
 
 
-def test_audit_forwards_query(api_client, auth, agent_requests):
-    response = api_client.get("/api/audit", params={"limit": "10", "before_id": "5"})
+def test_audit_returns_merged_feed(api_client, auth, agent_requests):
+    response = api_client.get("/api/audit", params={"limit": "10"})
     assert response.status_code == 200
-    req = agent_requests[-1]
-    assert req.url.path == "/v1/audit"
-    assert req.url.params.get("limit") == "10"
-    assert req.url.params.get("before_id") == "5"
+    body = response.json()
+    assert "entries" in body
+    assert any(req.url.path == "/v1/audit" for req in agent_requests)
 
 
 def test_agent_error_404_passthrough(panel_settings, frozen_time, admin_user):

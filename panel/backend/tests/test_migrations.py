@@ -18,4 +18,5 @@ def test_migration_creates_core_tables(client):
         "project_route",
         "port_allocation",
         "deploy",
+        "panel_event",
     }.issubset(table_names)

@@ -8,6 +8,7 @@ function stepStatus(steps: SetupStep[], id: SetupStep['id']): string {
 export interface ResolveActiveStepOptions {
   cloudflareAcknowledged?: boolean
   panelHostnameAcknowledged?: boolean
+  optionalAcknowledged?: boolean
 }
 
 export function resolveActiveStep(
@@ -20,6 +21,7 @@ export function resolveActiveStep(
 ): WizardStepId {
   const cloudflareAcknowledged = options.cloudflareAcknowledged ?? true
   const panelHostnameAcknowledged = options.panelHostnameAcknowledged ?? true
+  const optionalAcknowledged = options.optionalAcknowledged ?? true
 
   const databaseStatus = stepStatus(steps, 'database')
   if (databaseStatus === 'pending' || uploading || uploadInfo || restoreJobId) {
@@ -38,6 +40,10 @@ export function resolveActiveStep(
   const panelHostnameDone = stepStatus(steps, 'panel_hostname') === 'done'
   if (!panelHostnameDone || !panelHostnameAcknowledged) {
     return 'panel_hostname'
+  }
+
+  if (!optionalAcknowledged) {
+    return 'optional'
   }
 
   return 'finish'

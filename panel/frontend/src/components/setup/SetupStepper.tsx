@@ -1,7 +1,7 @@
 import { CheckCircle, Circle, CircleDashed } from '@phosphor-icons/react'
 import type { SetupStep, SetupStepId } from '../../lib/setupApi'
 
-export type WizardStepId = SetupStepId | 'finish'
+export type WizardStepId = SetupStepId | 'optional' | 'finish'
 
 export interface SetupStepperProps {
   active: WizardStepId
@@ -15,6 +15,7 @@ const stepOrder: WizardStepId[] = [
   'cloudflare',
   'domains',
   'panel_hostname',
+  'optional',
   'finish',
 ]
 
@@ -24,6 +25,7 @@ const stepLabels: Record<WizardStepId, string> = {
   cloudflare: 'Cloudflare',
   domains: 'Domains',
   panel_hostname: 'Panel hostname',
+  optional: 'Optional',
   finish: 'Finish',
 }
 
@@ -42,6 +44,13 @@ function stepState(
 
   if (stepId === 'account') {
     return 'done'
+  }
+
+  if (stepId === 'optional') {
+    if (active === 'finish' || active === 'optional') {
+      return active === 'optional' ? 'current' : 'done'
+    }
+    return 'upcoming'
   }
 
   if (stepId === 'finish') {

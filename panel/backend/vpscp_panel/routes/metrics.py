@@ -53,18 +53,3 @@ async def docker_prune_images(
     agent: Annotated[AgentClient, Depends(_agent)],
 ) -> dict:
     return await agent.post("/v1/docker/prune-images")
-
-
-@router.get("/api/audit")
-async def audit_list(
-    _session: Annotated[Session, Depends(current_session)],
-    agent: Annotated[AgentClient, Depends(_agent)],
-    limit: str | None = None,
-    before_id: str | None = None,
-) -> dict:
-    params: dict[str, str] = {}
-    if limit is not None:
-        params["limit"] = limit
-    if before_id is not None:
-        params["before_id"] = before_id
-    return await agent.get("/v1/audit", params=params or None)

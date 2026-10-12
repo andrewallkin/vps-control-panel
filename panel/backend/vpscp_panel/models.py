@@ -13,6 +13,7 @@ class AdminUser(Base):
     username: Mapped[str] = mapped_column(String, unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     totp_secret_enc: Mapped[str] = mapped_column(String, nullable=False)
+    totp_pending_enc: Mapped[str | None] = mapped_column(String, nullable=True)
     totp_last_step: Mapped[int | None] = mapped_column(Integer, nullable=True)
     failed_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -31,6 +32,17 @@ class Session(Base):
     stepped_up_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     user_agent: Mapped[str] = mapped_column(String, nullable=False)
     ip: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class PanelEvent(Base):
+    __tablename__ = "panel_event"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    operation: Mapped[str] = mapped_column(String, nullable=False)
+    params_json: Mapped[str] = mapped_column(Text, nullable=False)
+    ok: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    duration_ms: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class Setting(Base):

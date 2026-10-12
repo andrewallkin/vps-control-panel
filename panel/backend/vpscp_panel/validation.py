@@ -17,6 +17,7 @@ _SSH_REPO_RE = re.compile(r"^git@github\.com:([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9
 _HTTPS_REPO_RE = re.compile(
     r"^https://github\.com/([A-Za-z0-9_.-]{1,100})/([A-Za-z0-9_.-]{1,100})(\.git)?$"
 )
+_FILE_REPO_RE = re.compile(r"^file:///[A-Za-z0-9/._-]+$")
 RESERVED_SLUGS = frozenset({"panel", "vpscp-panel", "vpscp"})
 _SERVICE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
 _DOCKER_IMAGE_ENV_RE = re.compile(r"^DOCKER_IMAGE_[A-Z0-9_]+$")
@@ -78,7 +79,11 @@ def validate_branch(value: str) -> str:
 
 
 def validate_repo_url(value: str) -> str:
-    if _SSH_REPO_RE.fullmatch(value) or _HTTPS_REPO_RE.fullmatch(value):
+    if (
+        _SSH_REPO_RE.fullmatch(value)
+        or _HTTPS_REPO_RE.fullmatch(value)
+        or _FILE_REPO_RE.fullmatch(value)
+    ):
         return value
     raise ValueError(f"invalid repo url: {value!r}")
 
