@@ -68,7 +68,8 @@ jobs:
         run: |
           docker network create postgres-net
           docker run -d --name it-postgres --network postgres-net \
-            -e POSTGRES_USER=pgadmin -e POSTGRES_PASSWORD=itpass postgres:16-alpine
+            -e POSTGRES_USER=pgadmin -e POSTGRES_PASSWORD=itpass \
+            -e POSTGRES_DB=postgres postgres:16-alpine
           for i in $(seq 1 30); do docker exec it-postgres pg_isready -U pgadmin && break; sleep 1; done
       - run: uv sync --frozen
       - run: uv run pytest -m integration -v
