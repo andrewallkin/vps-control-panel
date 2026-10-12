@@ -164,3 +164,4 @@ Update third-party URLs that still target the old host:
 | Create admin (recovery) | `docker compose exec panel python -m vpscp_panel.cli create-admin <user>` (from `stack/`) |
 | Safety dumps | `/var/lib/vpscp/restore/safety-*.sql.gz` — pre-restore snapshots; keep until confident, delete manually |
 | Restore errors | Restore jobs fail on load errors; job log shows the failing lines. Re-run with **Overwrite existing data** if a partial restore left objects behind |
+| Dump safety | A dump is executable code (it runs as the postgres superuser). Only restore dumps you trust; the panel rejects psql meta-commands beyond `\connect`/`\restrict`, `COPY … PROGRAM`, and non-admin `SUPERUSER` grants |

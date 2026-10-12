@@ -8,6 +8,7 @@ import re
 import shutil
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -129,6 +130,58 @@ def _iter_dump_lines(stream) -> Iterator[str]:
         if not raw:
             break
         yield raw.decode("utf-8", errors="replace").rstrip("\n\r")
+
+
+# psql meta-commands a real pg_dumpall legitimately uses.
+_DUMP_META_ALLOWED = ("\\connect", "\\c ", "\\restrict", "\\unrestrict", "\\echo", "\\pset")
+_COPY_PROGRAM_RE = re.compile(r"\bcopy\b.*\b(?:TO|FROM)\s+PROGRAM\b", re.IGNORECASE)
+_SUPERUSER_GRANT_RE = re.compile(
+    r"\b(?:CREATE|ALTER)\s+ROLE\s+(\"?)([\w.-]+)\1[^;]*\bSUPERUSER\b", re.IGNORECASE
+)
+
+
+@contextmanager
+def _open_dump_stream(path: Path) -> Iterator[bytes]:
+    if path.name.endswith(".sql.gz"):
+        with gzip.open(path, "rb") as stream:
+            yield stream
+    else:
+        with path.open("rb") as stream:
+            yield stream
+
+
+def _scan_for_dangerous_statements(path: Path, *, admin: str) -> None:
+    r"""Reject dumps that would execute OS commands or persist superusers.
+
+    A restore runs as the postgres superuser via psql, so a crafted dump is
+    executable code. Real pg_dumpall output only uses \connect/\restrict/
+    \unrestrict/\echo/\pset meta-commands — everything else is refused.
+    """
+    violations: list[str] = []
+    with _open_dump_stream(path) as stream:
+        for lineno, line in enumerate(_iter_dump_lines(stream), start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("--"):
+                continue
+            if stripped.startswith("\\"):
+                meta = stripped.split()[0].rstrip(";")
+                if not any(stripped.startswith(allowed) for allowed in _DUMP_META_ALLOWED):
+                    violations.append(f"line {lineno}: forbidden psql meta-command {meta}")
+            if _COPY_PROGRAM_RE.search(stripped):
+                violations.append(f"line {lineno}: COPY ... PROGRAM is forbidden")
+            # Every real pg_dumpall re-asserts the admin role's own SUPERUSER
+            # attribute; that line is benign. Anything else persisting a
+            # superuser is forbidden.
+            superuser_match = _SUPERUSER_GRANT_RE.search(stripped)
+            if superuser_match and superuser_match.group(2) != admin:
+                violations.append(f"line {lineno}: SUPERUSER grants are forbidden")
+            if len(violations) >= 20:
+                break
+    if violations:
+        preview = "; ".join(violations[:5])
+        raise ValueError(f"dump contains forbidden statements: {preview}")
 
 
 class UploadStore:
@@ -420,6 +473,7 @@ def restore_cluster(
     overwrite: bool = False,
 ) -> dict:
     dump_path = UploadStore(settings).completed_path(upload_id)
+    _scan_for_dangerous_statements(dump_path, admin=psql.admin_user())
     databases, roles = cluster_objects(psql)
     empty = not databases and not roles
     if not empty and not overwrite:
