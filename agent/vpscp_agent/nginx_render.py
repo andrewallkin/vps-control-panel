@@ -42,6 +42,14 @@ class RouteSpec(BaseModel):
     websocket: bool = False
     pass_authorization: bool = False
 
+    @model_validator(mode="after")
+    def _check_mode_exclusion(self) -> Self:
+        # Both modes render a proxy_set_header Connection line; together they
+        # produce conflicting directives in the same location block.
+        if self.streaming and self.websocket:
+            raise ValueError("route cannot be both streaming and websocket")
+        return self
+
 
 class HostnameSpec(BaseModel):
     fqdn: Fqdn

@@ -40,4 +40,44 @@ describe('RouteEditor', () => {
       expect.objectContaining({ ok: false }),
     )
   })
+
+  it('exposes per-route proxy options and rejects streaming+websocket', async () => {
+    const user = userEvent.setup()
+    const onChange = vi.fn()
+    const onValidationChange = vi.fn()
+
+    render(
+      <RouteEditor
+        routes={[
+          {
+            path_prefix: '/mcp',
+            port_env_var: 'MCP_PORT',
+            streaming: true,
+            websocket: false,
+            pass_authorization: false,
+            max_body_mb: 25,
+            read_timeout_s: 60,
+            send_timeout_s: 60,
+          },
+        ]}
+        onChange={onChange}
+        onValidationChange={onValidationChange}
+      />,
+    )
+
+    expect(screen.getByLabelText(/streaming/i)).toBeChecked()
+
+    await user.click(screen.getByLabelText(/pass authorization/i))
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ path_prefix: '/mcp', pass_authorization: true }),
+    ])
+
+    await user.click(screen.getByLabelText(/^websocket$/i))
+    expect(onChange).toHaveBeenLastCalledWith([
+      expect.objectContaining({ streaming: true, websocket: true }),
+    ])
+    expect(onValidationChange).toHaveBeenLastCalledWith(
+      expect.objectContaining({ ok: false }),
+    )
+  })
 })

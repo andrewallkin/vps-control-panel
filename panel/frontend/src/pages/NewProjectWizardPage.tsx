@@ -9,7 +9,7 @@ import { RouteEditor } from '../components/projects/RouteEditor'
 import { ServiceMappingEditor } from '../components/projects/ServiceMappingEditor'
 import type { EnvRow } from '../lib/envEditorUtils'
 import { fetchDomains } from '../lib/domainsApi'
-import type { RoutesValidationResult } from '../lib/routeValidation'
+import type { RouteDraft, RoutesValidationResult } from '../lib/routeValidation'
 import {
   validateBranch,
   validateDockerHubRepo,
@@ -72,7 +72,9 @@ export function NewProjectWizardPage() {
   const [extraHostnames, setExtraHostnames] = useState<
     { domain: string; subdomain: string; kind: 'alias' | 'redirect' }[]
   >([])
-  const [routes, setRoutes] = useState([{ path_prefix: '/', port_env_var: '' }])
+  const [routes, setRoutes] = useState<RouteDraft[]>([
+    { path_prefix: '/', port_env_var: '' },
+  ])
   const [routesValidation, setRoutesValidation] = useState<RoutesValidationResult>({
     ok: false,
     error: 'At least one route is required.',
@@ -366,6 +368,12 @@ export function NewProjectWizardPage() {
       routes: routes.map((r) => ({
         path_prefix: r.path_prefix,
         port_env_var: r.port_env_var,
+        streaming: r.streaming ?? false,
+        websocket: r.websocket ?? false,
+        pass_authorization: r.pass_authorization ?? false,
+        max_body_mb: r.max_body_mb ?? 25,
+        read_timeout_s: r.read_timeout_s ?? 60,
+        send_timeout_s: r.send_timeout_s ?? 60,
       })),
       services: preparedServices.rows,
     })

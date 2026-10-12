@@ -549,6 +549,106 @@ def test_migrate_endpoint_409_when_unconfigured(
     assert resp.status_code == 409
 
 
+def test_create_project_accepts_route_options(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """Route proxy options (streaming for Strava MCP routes) must be
+    accepted at creation and persisted."""
+    from vpscp_panel.models import ProjectRoute as _PR
+
+    db_session.add(
+        Domain(
+            name="example.com",
+            zone_id="zone-1",
+            cert_status="missing",
+            cert_expires_at=None,
+        )
+    )
+    db_session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.post(
+            "/api/projects",
+            json={
+                "slug": "optapp",
+                "display_name": "Opt App",
+                "repo": "https://github.com/acme/optapp.git",
+                "branch": "main",
+                "compose_file": "docker-compose.yml",
+                "deploy_mode": "build",
+                "database_mode": "none",
+                "hostnames": [
+                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
+                ],
+                "routes": [
+                    {
+                        "path_prefix": "/mcp",
+                        "port_env_var": "MCP_PORT",
+                        "streaming": True,
+                        "max_body_mb": 64,
+                        "read_timeout_s": 600,
+                    }
+                ],
+            },
+            headers=_csrf(auth),
+        )
+        assert resp.status_code == 202, resp.text
+
+    with db_module.SessionLocal() as session:
+        route = session.query(_PR).filter_by(project_slug="optapp").one()
+        assert route.streaming is True
+        assert route.max_body_mb == 64
+        assert route.read_timeout_s == 600
+
+
+def test_create_project_rejects_streaming_and_websocket(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """nginx renders conflicting Connection headers when both are set; the
+    combination is invalid."""
+    db_session.add(
+        Domain(
+            name="example.com",
+            zone_id="zone-1",
+            cert_status="missing",
+            cert_expires_at=None,
+        )
+    )
+    db_session.commit()
+
+    with client_factory() as client:
+        auth = login(client, admin_user, frozen_time)
+        resp = client.post(
+            "/api/projects",
+            json={
+                "slug": "badapp",
+                "display_name": "Bad App",
+                "repo": "https://github.com/acme/badapp.git",
+                "branch": "main",
+                "compose_file": "docker-compose.yml",
+                "deploy_mode": "build",
+                "database_mode": "none",
+                "hostnames": [
+                    {"domain": "example.com", "subdomain": "", "kind": "primary"}
+                ],
+                "routes": [
+                    {
+                        "path_prefix": "/",
+                        "port_env_var": "WEB_PORT",
+                        "streaming": True,
+                        "websocket": True,
+                    }
+                ],
+            },
+            headers=_csrf(auth),
+        )
+    assert resp.status_code == 422
+
+
 def test_put_routing_writes_allocated_ports_to_env(
     client_factory, admin_user, frozen_time, db_session
 ):

@@ -75,6 +75,18 @@ class HostnameInput(BaseModel):
 class RouteInput(BaseModel):
     path_prefix: RoutePath
     port_env_var: EnvKey
+    max_body_mb: int = Field(25, ge=1, le=10240)
+    read_timeout_s: int = Field(60, ge=1, le=3600)
+    send_timeout_s: int = Field(60, ge=1, le=3600)
+    streaming: bool = False
+    websocket: bool = False
+    pass_authorization: bool = False
+
+    @model_validator(mode="after")
+    def check_route(self) -> RouteInput:
+        if self.streaming and self.websocket:
+            raise ValueError("route cannot be both streaming and websocket")
+        return self
 
 
 class ServiceInput(BaseModel):
@@ -415,6 +427,12 @@ async def create_project(
                 project_slug=body.slug,
                 path_prefix=route.path_prefix,
                 port_env_var=route.port_env_var,
+                max_body_mb=route.max_body_mb,
+                read_timeout_s=route.read_timeout_s,
+                send_timeout_s=route.send_timeout_s,
+                streaming=route.streaming,
+                websocket=route.websocket,
+                pass_authorization=route.pass_authorization,
             )
         )
     for service in body.services:
