@@ -483,3 +483,149 @@ def test_validation_error_returns_400(fw_client):
 def test_ssh_cidr_covers_client():
     net = ipaddress.ip_network("203.0.113.0/24")
     assert ipaddress.ip_address("203.0.113.50") in net
+
+
+UFW_CIDR_HTTPS = """Status: active
+
+     To                         Action      From
+     --                         ------      ----
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh
+[ 2] 443/tcp                    ALLOW IN    203.0.113.0/24             # partner
+[ 3] 10000/tcp                  ALLOW IN    Anywhere                   # app
+"""
+
+
+def test_delete_ssh_allow_requires_client_ip(settings):
+    runner = UfwFakeRunner(
+        """Status: active
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh
+"""
+    )
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    expected = {
+        "to": "22/tcp",
+        "proto": "tcp",
+        "action": "ALLOW IN",
+        "from": "Anywhere",
+        "v6": False,
+        "comment": "ssh",
+    }
+    with pytest.raises(ValueError, match="client_ip is required"):
+        delete_rule(runner, db=db, number=1, client_ip=None, expected=expected)
+
+
+def test_delete_ssh_allow_rejects_invalid_client_ip(settings):
+    runner = UfwFakeRunner(
+        """Status: active
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh
+"""
+    )
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    expected = {
+        "to": "22/tcp",
+        "proto": "tcp",
+        "action": "ALLOW IN",
+        "from": "Anywhere",
+        "v6": False,
+        "comment": "ssh",
+    }
+    with pytest.raises(ValueError, match="invalid client_ip"):
+        delete_rule(runner, db=db, number=1, client_ip="not-an-ip", expected=expected)
+
+
+def test_delete_cidr_https_blocked_while_cf_only_off(settings):
+    runner = UfwFakeRunner(UFW_CIDR_HTTPS)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    expected = {
+        "to": "443/tcp",
+        "proto": "tcp",
+        "action": "ALLOW IN",
+        "from": "203.0.113.0/24",
+        "v6": False,
+        "comment": "partner",
+    }
+    with pytest.raises(ConflictError, match="443/tcp"):
+        delete_rule(runner, db=db, number=2, client_ip="203.0.113.1", expected=expected)
+
+
+def test_delete_non_web_rule_without_client_ip(settings):
+    runner = UfwFakeRunner(UFW_CIDR_HTTPS)
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    expected = {
+        "to": "10000/tcp",
+        "proto": "tcp",
+        "action": "ALLOW IN",
+        "from": "Anywhere",
+        "v6": False,
+        "comment": "app",
+    }
+    delete_rule(runner, db=db, number=3, client_ip=None, expected=expected)
+    assert ["ufw", "--force", "delete", "3"] in [c["args"] for c in runner.calls]
+
+
+def test_delete_ssh_route_missing_client_ip_400(fw_client):
+    client, runner, _db, _settings = fw_client
+    runner.ufw_status = """Status: active
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh
+"""
+    resp = client.request(
+        "DELETE",
+        "/v1/firewall/rules/1",
+        json={
+            "to": "22/tcp",
+            "proto": "tcp",
+            "action": "ALLOW IN",
+            "from": "Anywhere",
+            "v6": False,
+            "comment": "ssh",
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_delete_route_invalid_client_ip_400(fw_client):
+    client, runner, _db, _settings = fw_client
+    runner.ufw_status = """Status: active
+[ 1] 22/tcp                     ALLOW IN    Anywhere                   # ssh
+[ 2] 22/tcp                     ALLOW IN    203.0.113.0/24             # backup
+"""
+    resp = client.request(
+        "DELETE",
+        "/v1/firewall/rules/2?client_ip=not-an-ip",
+        json={
+            "to": "22/tcp",
+            "proto": "tcp",
+            "action": "ALLOW IN",
+            "from": "203.0.113.0/24",
+            "v6": False,
+            "comment": "backup",
+        },
+    )
+    assert resp.status_code == 400
+
+
+def test_delete_cidr_https_route_409(fw_client):
+    client, runner, db, _settings = fw_client
+    runner.ufw_status = UFW_CIDR_HTTPS
+    with db.connect() as conn:
+        conn.execute(
+            "INSERT INTO agent_setting (key, value) VALUES (?, ?)",
+            ("firewall_cloudflare_only", "false"),
+        )
+    resp = client.request(
+        "DELETE",
+        "/v1/firewall/rules/2?client_ip=203.0.113.1",
+        json={
+            "to": "443/tcp",
+            "proto": "tcp",
+            "action": "ALLOW IN",
+            "from": "203.0.113.0/24",
+            "v6": False,
+            "comment": "partner",
+        },
+    )
+    assert resp.status_code == 409

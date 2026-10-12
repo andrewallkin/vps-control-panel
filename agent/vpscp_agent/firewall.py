@@ -176,11 +176,24 @@ def _port_from_to(to_field: str) -> int | None:
         return None
 
 
-def _is_generic_web_allow(rule: dict[str, Any]) -> bool:
+def _is_web_port_allow(rule: dict[str, Any]) -> bool:
     if rule["action"] != "ALLOW IN" or rule["comment"] == "cf":
         return False
     port = _port_from_to(rule["to"])
-    return port in (80, 443) and rule["from"] in ("Anywhere", "Anywhere (v6)")
+    return port in (80, 443)
+
+
+def _is_ssh_allow_rule(rule: dict[str, Any]) -> bool:
+    return (
+        rule["action"] == "ALLOW IN" and rule["proto"] == "tcp" and _port_from_to(rule["to"]) == 22
+    )
+
+
+def _validate_client_ip(value: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address:
+    try:
+        return ipaddress.ip_address(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid client_ip: {value!r}") from exc
 
 
 def _is_cf_rule(rule: dict[str, Any]) -> bool:
@@ -190,10 +203,7 @@ def _is_cf_rule(rule: dict[str, Any]) -> bool:
 def _client_covered_by_ssh(
     rules: list[dict[str, Any]], client_ip: str, *, skip_number: int
 ) -> bool:
-    try:
-        client = ipaddress.ip_address(client_ip)
-    except ValueError:
-        return True
+    client = _validate_client_ip(client_ip)
     for rule in rules:
         if rule["number"] == skip_number:
             continue
@@ -227,22 +237,19 @@ def _check_delete_guardrails(
     client_ip: str | None,
 ) -> None:
     cf_only = _cloudflare_only_enabled(db)
-    port = _port_from_to(rule["to"])
-    if not cf_only and _is_generic_web_allow(rule):
+    if not cf_only and _is_web_port_allow(rule):
         raise ConflictError(f"cannot delete {rule['to']} while Cloudflare-only mode is off")
     if cf_only and _is_cf_rule(rule):
         raise ConflictError(
             "cannot delete individual Cloudflare (cf) rules while Cloudflare-only is on"
         )
-    if (
-        port == 22
-        and rule["proto"] == "tcp"
-        and client_ip
-        and not _client_covered_by_ssh(rules, client_ip, skip_number=rule["number"])
-    ):
-        raise ConflictError(
-            f"cannot delete last SSH (22/tcp) rule that allows access from {client_ip}"
-        )
+    if _is_ssh_allow_rule(rule):
+        if not client_ip:
+            raise ValueError("client_ip is required to delete an SSH allow rule")
+        if not _client_covered_by_ssh(rules, client_ip, skip_number=rule["number"]):
+            raise ConflictError(
+                f"cannot delete last SSH (22/tcp) rule that allows access from {client_ip}"
+            )
 
 
 def delete_rule(
@@ -322,7 +329,7 @@ def cloudflare_only(
                     source=cidr,
                     comment="cf",
                 )
-        _delete_rules_by_predicate(runner, db, _is_generic_web_allow)
+        _delete_rules_by_predicate(runner, db, _is_web_port_allow)
         _set_setting(db, SETTING_CF_ONLY, "true")
     else:
         for port, comment in ((80, "http"), (443, "https")):
