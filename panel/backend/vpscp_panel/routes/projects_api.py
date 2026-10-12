@@ -2,19 +2,20 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import AsyncIterator
+import re
+from collections.abc import AsyncIterator, Iterable
 from datetime import datetime
 from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, Field, field_validator, model_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session as DbSession
 from starlette.responses import StreamingResponse
 
 import vpscp_panel.db as db_module
-from vpscp_panel.agent_client import AgentClient
+from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import current_session, get_db, require_csrf, require_step_up
 from vpscp_panel.deploy_ops import has_running_deploy
 from vpscp_panel.models import (
@@ -54,6 +55,8 @@ from vpscp_panel.validation import (
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 utility_router = APIRouter(prefix="/api", tags=["projects"])
 
+_creation_tasks: dict[str, asyncio.Task] = {}
+
 
 def _agent(request: Request) -> AgentClient:
     return request.app.state.agent
@@ -71,7 +74,19 @@ class HostnameInput(BaseModel):
 
 class RouteInput(BaseModel):
     path_prefix: RoutePath
-    port_env_var: EnvKey
+    port_env_var: Annotated[EnvKey, AfterValidator(_reject_managed_port_env_var)]
+    max_body_mb: int = Field(25, ge=1, le=10240)
+    read_timeout_s: int = Field(60, ge=1, le=3600)
+    send_timeout_s: int = Field(60, ge=1, le=3600)
+    streaming: bool = False
+    websocket: bool = False
+    pass_authorization: bool = False
+
+    @model_validator(mode="after")
+    def check_route(self) -> RouteInput:
+        if self.streaming and self.websocket:
+            raise ValueError("route cannot be both streaming and websocket")
+        return self
 
 
 class ServiceInput(BaseModel):
@@ -87,6 +102,34 @@ def _validate_unique_services(services: list[ServiceInput]) -> None:
     env_vars = [row.image_env_var for row in services]
     if len(env_vars) != len(set(env_vars)):
         raise ValueError("duplicate image_env_var")
+
+
+def _reject_managed_port_env_var(value: str) -> str:
+    from vpscp_panel.project_env import MANAGED_ENV_KEYS
+
+    if value in MANAGED_ENV_KEYS:
+        raise ValueError(
+            f"port_env_var {value!r} is a panel-managed key and cannot be a route port"
+        )
+    return value
+
+
+def _validated_migration_command(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("migration_command must not be empty")
+    return stripped
+
+
+def _validated_migration_service(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("migration_service must not be empty")
+    return stripped
 
 
 class CreateProjectBody(BaseModel):
@@ -105,6 +148,8 @@ class CreateProjectBody(BaseModel):
     routes: list[RouteInput]
     docker_hub_repo: str | None = None
     services: list[ServiceInput] = []
+    migration_service: str | None = None
+    migration_command: str | None = None
 
     @field_validator("display_name", "compose_file")
     @classmethod
@@ -161,6 +206,25 @@ class PatchProjectBody(BaseModel):
     migration_service: str | None = None
     health_check_url: str | None = None
 
+    @field_validator("migration_command")
+    @classmethod
+    def check_migration_command(cls, value: str | None) -> str | None:
+        return _validated_migration_command(value)
+
+    @field_validator("migration_service")
+    @classmethod
+    def check_migration_service(cls, value: str | None) -> str | None:
+        return _validated_migration_service(value)
+
+    @field_validator("health_check_url")
+    @classmethod
+    def check_health_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"http://127\.0\.0\.1:(\d+)(/.*)?", value):
+            raise ValueError("health_check_url must look like http://127.0.0.1:<port>/path")
+        return value
+
 
 class TestAccessBody(BaseModel):
     slug: Slug
@@ -183,10 +247,10 @@ class RoutingHostnameInput(BaseModel):
 
 class RoutingRouteInput(BaseModel):
     path_prefix: RoutePath
-    port_env_var: EnvKey
-    max_body_mb: int = 25
-    read_timeout_s: int = 60
-    send_timeout_s: int = 60
+    port_env_var: Annotated[EnvKey, AfterValidator(_reject_managed_port_env_var)]
+    max_body_mb: int = Field(25, ge=1, le=10240)
+    read_timeout_s: int = Field(60, ge=1, le=3600)
+    send_timeout_s: int = Field(60, ge=1, le=3600)
     streaming: bool = False
     websocket: bool = False
     pass_authorization: bool = False
@@ -203,6 +267,12 @@ class PutRoutingBody(BaseModel):
             raise ValueError("exactly one primary hostname required")
         if len(self.routes) < 1:
             raise ValueError("at least one route required")
+        paths = [route.path_prefix for route in self.routes]
+        if len(paths) != len(set(paths)):
+            raise ValueError("duplicate route path")
+        for route in self.routes:
+            if route.streaming and route.websocket:
+                raise ValueError("route cannot be both streaming and websocket")
         return self
 
 
@@ -344,8 +414,8 @@ async def create_project(
         db_name=db_name,
         db_user=db_user,
         write_database_url=body.write_database_url,
-        migration_command=None,
-        migration_service=None,
+        migration_command=_validated_migration_command(body.migration_command),
+        migration_service=_validated_migration_service(body.migration_service),
         health_check_url=None,
         user_env=body.user_env,
         creation_state=json.dumps(state),
@@ -367,6 +437,12 @@ async def create_project(
                 project_slug=body.slug,
                 path_prefix=route.path_prefix,
                 port_env_var=route.port_env_var,
+                max_body_mb=route.max_body_mb,
+                read_timeout_s=route.read_timeout_s,
+                send_timeout_s=route.send_timeout_s,
+                streaming=route.streaming,
+                websocket=route.websocket,
+                pass_authorization=route.pass_authorization,
             )
         )
     for service in body.services:
@@ -384,10 +460,14 @@ async def create_project(
     async def _background_creation() -> None:
         if db_module.SessionLocal is None:
             return
-        with db_module.SessionLocal() as session:
-            await run_creation(session, agent, body.slug)
+        try:
+            with db_module.SessionLocal() as session:
+                await run_creation(session, agent, body.slug)
+        finally:
+            _creation_tasks.pop(body.slug, None)
 
-    asyncio.create_task(_background_creation())
+    task = asyncio.create_task(_background_creation())
+    _creation_tasks[body.slug] = task
 
     return {"slug": body.slug, "creation_state": state}
 
@@ -549,7 +629,7 @@ async def download_dump(
     )
 
 
-@router.post("/{slug}/retry-create")
+@router.post("/{slug}/retry-create", status_code=202)
 async def retry_create(
     slug: str,
     db: Annotated[DbSession, Depends(get_db)],
@@ -560,10 +640,24 @@ async def retry_create(
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
     state = json.loads(project.creation_state)
-    if state.get("status") in ("ready", "running"):
+    if state.get("status") == "ready":
         raise HTTPException(status_code=409, detail="creation not retryable")
-    await run_creation(db, agent, slug)
-    db.refresh(project)
+    if state.get("status") == "running" and slug in _creation_tasks:
+        raise HTTPException(status_code=409, detail="creation not retryable")
+    if slug in _creation_tasks:
+        raise HTTPException(status_code=409, detail="creation not retryable")
+
+    async def _background_retry() -> None:
+        if db_module.SessionLocal is None:
+            return
+        try:
+            with db_module.SessionLocal() as session:
+                await run_creation(session, agent, slug)
+        finally:
+            _creation_tasks.pop(slug, None)
+
+    task = asyncio.create_task(_background_retry())
+    _creation_tasks[slug] = task
     return {"slug": slug, "creation_state": json.loads(project.creation_state)}
 
 
@@ -615,6 +709,31 @@ async def get_project_env(
     return await agent.get(f"/v1/projects/{slug}/env")
 
 
+def _managed_env_keys(db: DbSession, slug: str) -> frozenset[str]:
+    """Keys the panel writes itself: Postgres connection settings and every
+    allocated route port. User env edits must not clobber them — the .env
+    would silently diverge from PortAllocation/nginx (502s)."""
+    from vpscp_panel.project_env import MANAGED_ENV_KEYS
+
+    port_keys = {
+        row.env_var
+        for row in db.scalars(
+            select(PortAllocation).where(PortAllocation.project_slug == slug)
+        ).all()
+    }
+    return frozenset(MANAGED_ENV_KEYS | port_keys)
+
+
+def _reject_managed_env_keys(db: DbSession, slug: str, keys: Iterable[str]) -> None:
+    managed = _managed_env_keys(db, slug)
+    offending = sorted({key for key in keys if key in managed})
+    if offending:
+        raise HTTPException(
+            status_code=400,
+            detail=f"managed env keys cannot be edited: {', '.join(offending)}",
+        )
+
+
 @router.put("/{slug}/env")
 async def put_project_env(
     slug: str,
@@ -625,6 +744,8 @@ async def put_project_env(
 ) -> Any:
     if db.get(Project, slug) is None:
         raise HTTPException(status_code=404, detail="project not found")
+    keys = [line.split("=", 1)[0].strip() for line in body.content.splitlines() if "=" in line]
+    _reject_managed_env_keys(db, slug, keys)
     return await agent.put(f"/v1/projects/{slug}/env", json={"content": body.content})
 
 
@@ -638,13 +759,14 @@ async def patch_project_env(
 ) -> Any:
     if db.get(Project, slug) is None:
         raise HTTPException(status_code=404, detail="project not found")
+    _reject_managed_env_keys(db, slug, list(body.set) + list(body.unset))
     return await agent.patch(
         f"/v1/projects/{slug}/env",
         json={"set": body.set, "unset": body.unset},
     )
 
 
-@router.delete("/{slug}", status_code=204)
+@router.delete("/{slug}")
 async def delete_project(
     slug: str,
     body: DeleteProjectBody,
@@ -663,22 +785,38 @@ async def delete_project(
         select(ProjectHostname).where(ProjectHostname.project_slug == slug)
     ).all()
 
-    await agent.delete(f"/v1/projects/{slug}", json={"confirm": slug})
+    warnings: list[str] = []
+    try:
+        await agent.delete(f"/v1/projects/{slug}", json={"confirm": slug})
+    except AgentError as exc:
+        # Already deleted agent-side (retry after partial failure), or a
+        # transient agent error: keep going so the panel rows (secrets) are
+        # always cleaned up and the slug is reusable. Failures are reported.
+        if exc.status == 404:
+            warnings.append("agent project already removed")
+        else:
+            warnings.append(f"agent delete failed: {exc.detail}")
 
     if body.drop_database and project.db_name:
-        await agent.post(
-            "/v1/db/drop",
-            json={
-                "db_name": project.db_name,
-                "confirm": project.db_name,
-                "drop_role": True,
-            },
-        )
+        try:
+            await agent.post(
+                "/v1/db/drop",
+                json={
+                    "db_name": project.db_name,
+                    "confirm": project.db_name,
+                    "drop_role": True,
+                },
+            )
+        except AgentError as exc:
+            warnings.append(f"database drop failed: {exc.detail}")
 
     if body.remove_dns:
         for row in hostnames:
             fqdn = hostname_fqdn(row.domain, row.subdomain)
-            await agent.post("/v1/dns/records/delete", json={"fqdn": fqdn})
+            try:
+                await agent.post("/v1/dns/records/delete", json={"fqdn": fqdn})
+            except AgentError as exc:
+                warnings.append(f"dns delete failed for {fqdn}: {exc.detail}")
 
     db.execute(delete(ProjectHostname).where(ProjectHostname.project_slug == slug))
     db.execute(delete(ProjectRoute).where(ProjectRoute.project_slug == slug))
@@ -687,7 +825,7 @@ async def delete_project(
     db.execute(delete(ProjectService).where(ProjectService.project_slug == slug))
     db.delete(project)
     db.commit()
-    return Response(status_code=204)
+    return {"status": "deleted", "warnings": warnings}
 
 
 @router.put("/{slug}/routing")
@@ -760,11 +898,26 @@ async def put_routing(
             db.add(allocation)
             existing_ports[route.port_env_var] = allocation
 
+    # Every allocated route port must exist in the project .env: compose binds
+    # ${PORT_VAR} and nginx proxies to the allocated host port. Skipping this
+    # leaves the route pointing at an unbound port (silent 502).
+    env_sets: dict[str, str] = {}
+    for route in body.routes:
+        allocation = existing_ports[route.port_env_var]
+        env_sets[route.port_env_var] = str(allocation.host_port)
+    await agent.patch(
+        f"/v1/projects/{slug}/env",
+        json={"set": env_sets, "unset": []},
+    )
+
     db.commit()
 
     await _build_nginx_and_apply(db, agent, project)
 
-    for fqdn in new_fqdns - old_fqdns:
+    # Upsert every current fqdn (not just the diff): a Cloudflare outage on
+    # the first save must be recoverable by re-saving, instead of the empty
+    # diff leaving the A record missing forever.
+    for fqdn in sorted(new_fqdns):
         await agent.post("/v1/dns/records/upsert", json={"fqdn": fqdn, "adopt": False})
 
     for fqdn in old_fqdns - new_fqdns:
@@ -776,10 +929,16 @@ async def put_routing(
 @router.post("/{slug}/database/rotate")
 async def rotate_database_password(
     slug: str,
+    request: Request,
     db: Annotated[DbSession, Depends(get_db)],
     agent: Annotated[AgentClient, Depends(_agent)],
-    _session: Annotated[Session, Depends(require_csrf)],
+    session: Annotated[Session, Depends(require_csrf)],
 ) -> dict[str, bool]:
+    # Same action as POST /api/database/rotate: a credential change requires
+    # a fresh TOTP (spec step-up rules).
+    from vpscp_panel.auth import require_step_up
+
+    await require_step_up(request, session)
     project = db.get(Project, slug)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
@@ -804,6 +963,30 @@ async def rotate_database_password(
         json={"set": set_values, "unset": []},
     )
     return {"restart_required": True}
+
+
+@router.post("/{slug}/migrate", status_code=202)
+async def run_project_migrations(
+    slug: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(require_csrf)],
+) -> dict[str, str]:
+    """Standalone migration run: proxies the agent's compose/migrate endpoint
+    with the project's configured service/command (like the CI .sh step)."""
+    project = db.get(Project, slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if not project.migration_service or not project.migration_command:
+        raise HTTPException(status_code=409, detail="migrations_not_configured")
+    result = await agent.post(
+        f"/v1/projects/{slug}/compose/migrate",
+        json={
+            "service": project.migration_service,
+            "command": project.migration_command,
+        },
+    )
+    return {"job_id": result["job_id"]}
 
 
 @router.get("/{slug}/dumps")

@@ -380,7 +380,9 @@ def delete_project(
 
     row = get_project_row(db, slug)
     if row is None:
-        raise NotFoundError(f"project not found: {slug!r}")
+        # Already deleted agent-side (retry after partial failure, or a
+        # double-click): success no-op so the panel can finish its cleanup.
+        return DeleteProjectResult(removed=[], warnings=[])
 
     removed: list[str] = []
     warnings: list[str] = []

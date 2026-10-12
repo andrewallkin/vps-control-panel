@@ -43,7 +43,10 @@ def post_deploy(slug: Slug, body: DeployBody, request: Request) -> dict[str, str
     jobs = request.app.state.jobs
     validate_project_slug(slug)
     validate_deploy_health_url(db, slug, body.health_url)
-    if body.db and jobs.is_locked("postgres"):
+    # A deploy with a database or a migrate step must not run against a
+    # half-loaded cluster: the restore holds the postgres lock precisely to
+    # keep migrations and connections away while the dump is being applied.
+    if (body.db or body.migration is not None) and jobs.is_locked("postgres"):
         raise JobLockedError("postgres")
 
     params: dict[str, object] = {

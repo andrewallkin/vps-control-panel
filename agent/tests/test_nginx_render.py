@@ -30,6 +30,11 @@ def _assert_matches_golden(name: str, rendered: str) -> None:
     assert rendered == _read_golden(name)
 
 
+def test_route_rejects_streaming_and_websocket():
+    with pytest.raises(ValueError, match="streaming and websocket"):
+        RouteSpec(path="/mcp", port=10001, streaming=True, websocket=True)
+
+
 def test_golden_spa():
     spec = SiteSpec(
         site_id="budget",

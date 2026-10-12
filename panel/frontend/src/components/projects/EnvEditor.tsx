@@ -31,6 +31,11 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
         if (i !== index) {
           return row
         }
+        // Renaming a row onto a managed key must not take effect: the server
+        // rejects managed keys and the lock model is keyed on the row's key.
+        if (patch.key !== undefined && isEnvKeyLocked(patch.key, routePortEnvVars)) {
+          return row
+        }
         const next = { ...row, ...patch }
         if (!row.locked && (patch.value !== undefined || patch.key !== undefined)) {
           return { ...next, edited: true }

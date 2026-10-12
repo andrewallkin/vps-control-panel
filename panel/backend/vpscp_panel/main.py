@@ -8,12 +8,14 @@ from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+import vpscp_panel.db as db_module
 from vpscp_panel import __version__
 from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import current_session
 from vpscp_panel.auth import router as auth_router
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.db import init_db, run_migrations
+from vpscp_panel.deploy_ops import reconcile_deploy_jobs, reconcile_stuck_work
 from vpscp_panel.models import Session
 from vpscp_panel.routes.account_api import router as account_api_router
 from vpscp_panel.routes.audit import router as audit_router
@@ -71,6 +73,10 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
         init_db(resolved_settings)
         if app.state.agent is None:
             app.state.agent = AgentClient(str(resolved_settings.agent_socket))
+        if db_module.SessionLocal is not None:
+            with db_module.SessionLocal() as session:
+                reconcile_stuck_work(session, app.state.clock)
+            await reconcile_deploy_jobs(db_module.SessionLocal, app.state.agent, app.state.clock)
         try:
             yield
         finally:

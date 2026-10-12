@@ -1,23 +1,32 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
+export interface RestoreConflict {
+  databases: string[]
+  roles: string[]
+}
+
 export interface RestoreConfirmDialogProps {
   open: boolean
   busy?: boolean
-  onConfirm: () => void
+  conflict?: RestoreConflict | null
+  onConfirm: (overwrite: boolean) => void
   onCancel: () => void
 }
 
 export function RestoreConfirmDialog({
   open,
   busy = false,
+  conflict = null,
   onConfirm,
   onCancel,
 }: RestoreConfirmDialogProps) {
   const titleId = useId()
   const descId = useId()
   const inputId = useId()
+  const overwriteId = useId()
   const cancelRef = useRef<HTMLButtonElement>(null)
   const [confirmText, setConfirmText] = useState('')
+  const [overwrite, setOverwrite] = useState(false)
 
   useEffect(() => {
     if (!open) {
@@ -37,7 +46,7 @@ export function RestoreConfirmDialog({
     return null
   }
 
-  const canConfirm = confirmText === 'RESTORE' && !busy
+  const canConfirm = confirmText === 'RESTORE' && !busy && (!conflict || overwrite)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -62,6 +71,29 @@ export function RestoreConfirmDialog({
           This will load the uploaded dump into the central PostgreSQL cluster. Type{' '}
           <span className="font-mono text-foreground">RESTORE</span> to confirm.
         </p>
+        {conflict ? (
+          <div className="mt-4 space-y-2 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3">
+            <p className="text-sm font-medium text-destructive">
+              The cluster already contains data that would be replaced:
+            </p>
+            <ul className="list-inside list-disc text-sm text-foreground">
+              {[...conflict.databases, ...conflict.roles].map((name) => (
+                <li key={name} className="font-mono">
+                  {name}
+                </li>
+              ))}
+            </ul>
+            <label htmlFor={overwriteId} className="flex items-center gap-2 text-sm font-medium">
+              <input
+                id={overwriteId}
+                type="checkbox"
+                checked={overwrite}
+                onChange={(event) => setOverwrite(event.target.checked)}
+              />
+              Overwrite existing data
+            </label>
+          </div>
+        ) : null}
         <label htmlFor={inputId} className="mt-4 block text-sm font-medium">
           Confirmation
         </label>
@@ -89,7 +121,7 @@ export function RestoreConfirmDialog({
             type="button"
             disabled={!canConfirm}
             className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
-            onClick={onConfirm}
+            onClick={() => onConfirm(overwrite)}
           >
             Restore cluster
           </button>

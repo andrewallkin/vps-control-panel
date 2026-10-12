@@ -13,13 +13,18 @@ import { LogViewer } from '../components/setup/LogViewer'
 import { OptionalSetupStep } from '../components/setup/OptionalSetupStep'
 import { PanelHostnameSetupStep } from '../components/setup/PanelHostnameSetupStep'
 import { ProgressBar } from '../components/setup/ProgressBar'
-import { RestoreConfirmDialog } from '../components/setup/RestoreConfirmDialog'
+import {
+  RestoreConfirmDialog,
+  type RestoreConflict,
+} from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { SetupStepper } from '../components/setup/SetupStepper'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
-import { fetchCloudflareZones, fetchDomains } from '../lib/domainsApi'
+import { ACCEPT, isAcceptedDump } from '../lib/dumpFile'
+import { ApiError } from '../lib/api'
+import { fetchCloudflareZones, fetchDomains, fetchServerSettings } from '../lib/domainsApi'
 import {
   completeSetup,
   fetchSetupState,
@@ -37,12 +42,7 @@ import {
 } from '../lib/setupSession'
 import { resolveActiveStep } from '../lib/setupWizard'
 
-const ACCEPT = '.sql,.sql.gz'
 
-function isAcceptedDump(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return name.endsWith('.sql') || name.endsWith('.sql.gz')
-}
 
 function stepStatus(steps: SetupStep[], id: SetupStep['id']): string {
   return steps.find((step) => step.id === id)?.status ?? 'pending'
@@ -81,6 +81,12 @@ export function SetupPage() {
     refetchIntervalInBackground: false,
   })
 
+  const serverSettingsQuery = useQuery({
+    queryKey: ['server-settings'],
+    queryFn: fetchServerSettings,
+    refetchIntervalInBackground: false,
+  })
+
   const domainsQuery = useQuery({
     queryKey: ['domains'],
     queryFn: fetchDomains,
@@ -98,8 +104,13 @@ export function SetupPage() {
   const [uploading, setUploading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmDialogKey, setConfirmDialogKey] = useState(0)
+  const [restoreConflict, setRestoreConflict] = useState<RestoreConflict | null>(null)
   const [restoreJobId, setRestoreJobId] = useState<string | null>(null)
   const [jobEnd, setJobEnd] = useState<JobEndPayload | null>(null)
+
+  // Resume a restore that is still running after a page refresh.
+  const stateRestoreJobId = setupQuery.data?.restore_job_id ?? null
+  const effectiveRestoreJobId = restoreJobId ?? stateRestoreJobId
   const [dragOver, setDragOver] = useState(false)
 
   const steps = useMemo(() => setupQuery.data?.steps ?? [], [setupQuery.data?.steps])
@@ -112,7 +123,7 @@ export function SetupPage() {
 
   const activeStep = useMemo(
     () =>
-      resolveActiveStep(steps, hasValidCert, restoreJobId, uploading, uploadInfo, {
+      resolveActiveStep(steps, hasValidCert, effectiveRestoreJobId, uploading, uploadInfo, {
         cloudflareAcknowledged,
         panelHostnameAcknowledged,
         optionalAcknowledged,
@@ -120,7 +131,7 @@ export function SetupPage() {
     [
       steps,
       hasValidCert,
-      restoreJobId,
+      effectiveRestoreJobId,
       uploading,
       uploadInfo,
       cloudflareAcknowledged,
@@ -145,10 +156,27 @@ export function SetupPage() {
   })
 
   const restoreMutation = useMutation({
-    mutationFn: (id: string) => startSetupRestore(id),
+    mutationFn: ({ id, overwrite }: { id: string; overwrite: boolean }) =>
+      startSetupRestore(id, overwrite),
     onSuccess: (result) => {
       setRestoreJobId(result.job_id)
       setConfirmOpen(false)
+      setRestoreConflict(null)
+    },
+    onError: (err) => {
+      const detail =
+        err instanceof ApiError && err.body && typeof err.body === 'object'
+          ? (err.body as { detail?: unknown }).detail
+          : null
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        (detail as { code?: string }).code === 'cluster_not_empty'
+      ) {
+        setRestoreConflict(detail as unknown as RestoreConflict)
+        setConfirmDialogKey((value) => value + 1)
+        setConfirmOpen(true)
+      }
     },
   })
 
@@ -211,6 +239,7 @@ export function SetupPage() {
   const handleJobEnd = useCallback(
     (payload: JobEndPayload) => {
       setJobEnd(payload)
+      setRestoreJobId(null)
       void setupQuery.refetch()
     },
     [setupQuery],
@@ -234,7 +263,7 @@ export function SetupPage() {
         <p className="text-sm text-destructive">Could not load setup status.</p>
       ) : null}
 
-      {activeStep === 'database' && databaseStatus === 'pending' && !restoreJobId ? (
+      {activeStep === 'database' && databaseStatus === 'pending' && !effectiveRestoreJobId ? (
         <section className="space-y-4" aria-labelledby="database-step-heading">
           <h2 id="database-step-heading" className="text-base font-semibold">
             Database
@@ -330,17 +359,33 @@ export function SetupPage() {
         </section>
       ) : null}
 
-      {restoreJobId ? (
+      {effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="restore-log-heading">
           <h2 id="restore-log-heading" className="text-base font-semibold">
             Restore progress
           </h2>
-          <LogViewer key={restoreJobId} jobId={restoreJobId} onEnd={handleJobEnd} />
-          {jobEnd ? <RestoreResultSummary end={jobEnd} /> : null}
+          <LogViewer key={effectiveRestoreJobId} jobId={effectiveRestoreJobId} onEnd={handleJobEnd} />
         </section>
       ) : null}
 
-      {activeStep === 'cloudflare' && !restoreJobId ? (
+      {!effectiveRestoreJobId && jobEnd ? (
+        <RestoreResultSummary
+          end={jobEnd}
+          onContinue={() => {
+            setJobEnd(null)
+            void setupQuery.refetch()
+          }}
+          onRetry={() => {
+            setJobEnd(null)
+            setRestoreJobId(null)
+            setUploadInfo(null)
+            setUploadId(null)
+            void setupQuery.refetch()
+          }}
+        />
+      ) : null}
+
+      {activeStep === 'cloudflare' && !effectiveRestoreJobId ? (
         <CloudflareSetupStep
           configured={cloudflareConfigured}
           zones={zonesQuery.data?.zones ?? []}
@@ -350,6 +395,7 @@ export function SetupPage() {
               ? 'Could not load Cloudflare zones.'
               : null
           }
+          acmeEmail={serverSettingsQuery.data?.acme_email ?? ''}
           onTokenSaved={() => {
             setCloudflareZonesRequested(true)
             setAwaitingCloudflareContinue(true)
@@ -363,11 +409,11 @@ export function SetupPage() {
         />
       ) : null}
 
-      {activeStep === 'domains' && !restoreJobId ? (
+      {activeStep === 'domains' && !effectiveRestoreJobId ? (
         <DomainsSetupStep onCertReady={refreshSetup} />
       ) : null}
 
-      {activeStep === 'panel_hostname' && !restoreJobId ? (
+      {activeStep === 'panel_hostname' && !effectiveRestoreJobId ? (
         <PanelHostnameSetupStep
           onSaved={() => {
             setAwaitingPanelHostnameContinue(true)
@@ -380,14 +426,14 @@ export function SetupPage() {
         />
       ) : null}
 
-      {activeStep === 'optional' && !restoreJobId ? (
+      {activeStep === 'optional' && !effectiveRestoreJobId ? (
         <OptionalSetupStep
           onContinueToFinish={() => setOptionalAcknowledged(true)}
           onSkipped={() => finishMutation.mutate()}
         />
       ) : null}
 
-      {activeStep === 'finish' && !restoreJobId ? (
+      {activeStep === 'finish' && !effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="finish-heading">
           <h2 id="finish-heading" className="text-base font-semibold">
             Finish
@@ -418,10 +464,11 @@ export function SetupPage() {
         key={confirmDialogKey}
         open={confirmOpen}
         busy={restoreMutation.isPending}
+        conflict={restoreConflict}
         onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => {
+        onConfirm={(overwrite) => {
           if (uploadId) {
-            restoreMutation.mutate(uploadId)
+            restoreMutation.mutate({ id: uploadId, overwrite })
           }
         }}
       />

@@ -58,8 +58,9 @@ async def put_backup_settings(
 ) -> dict[str, Any]:
     payload = body.model_dump()
     unset_fields = body.model_dump(exclude_unset=True)
-    needs_step_up = bool(unset_fields.get("service_account")) or (
-        "archive_passphrase" in unset_fields
+    needs_step_up = (
+        "service_account" in unset_fields  # setting OR clearing credentials
+        or "archive_passphrase" in unset_fields
     )
     if needs_step_up:
         await require_step_up(request, session)

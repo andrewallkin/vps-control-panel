@@ -14,12 +14,16 @@ import { StatusBadge } from '../components/StatusBadge'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { LogViewer } from '../components/setup/LogViewer'
 import { ProgressBar } from '../components/setup/ProgressBar'
-import { RestoreConfirmDialog } from '../components/setup/RestoreConfirmDialog'
+import {
+  RestoreConfirmDialog,
+  type RestoreConflict,
+} from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
+import { ACCEPT, isAcceptedDump } from '../lib/dumpFile'
 import {
   adoptDatabase,
   databaseDumpDownloadUrl,
@@ -39,16 +43,11 @@ import {
   type UploadCompleteInfo,
 } from '../lib/setupApi'
 
-const ACCEPT = '.sql,.sql.gz'
 
-function isAcceptedDump(file: File): boolean {
-  const name = file.name.toLowerCase()
-  return name.endsWith('.sql') || name.endsWith('.sql.gz')
-}
 
 type PendingStepUp =
   | { kind: 'upload'; file: File }
-  | { kind: 'restore' }
+  | { kind: 'restore'; overwrite: boolean }
   | { kind: 'adopt'; payload: AdoptDatabasePayload }
   | { kind: 'rotate'; slug: string }
   | { kind: 'drop'; payload: DropDatabasePayload }
@@ -127,6 +126,7 @@ export function DatabasePage() {
   const [uploading, setUploading] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmDialogKey, setConfirmDialogKey] = useState(0)
+  const [restoreConflict, setRestoreConflict] = useState<RestoreConflict | null>(null)
   const [restoreJobId, setRestoreJobId] = useState<string | null>(null)
   const [jobEnd, setJobEnd] = useState<JobEndPayload | null>(null)
   const [dragOver, setDragOver] = useState(false)
@@ -218,6 +218,7 @@ export function DatabasePage() {
   const handleJobEnd = useCallback(
     (payload: JobEndPayload) => {
       setJobEnd(payload)
+      setRestoreJobId(null)
       void invalidateDatabaseData()
     },
     [invalidateDatabaseData],
@@ -259,12 +260,28 @@ export function DatabasePage() {
   })
 
   const restoreMutation = useMutation({
-    mutationFn: (id: string) =>
-      runWithStepUp({ kind: 'restore' }, async () => {
-        const result = await startSetupRestore(id)
+    mutationFn: ({ id, overwrite }: { id: string; overwrite: boolean }) =>
+      runWithStepUp({ kind: 'restore', overwrite }, async () => {
+        const result = await startSetupRestore(id, overwrite)
         setRestoreJobId(result.job_id)
         setConfirmOpen(false)
+        setRestoreConflict(null)
       }),
+    onError: (err) => {
+      const detail =
+        err instanceof ApiError && err.body && typeof err.body === 'object'
+          ? (err.body as { detail?: unknown }).detail
+          : null
+      if (
+        detail &&
+        typeof detail === 'object' &&
+        (detail as { code?: string }).code === 'cluster_not_empty'
+      ) {
+        setRestoreConflict(detail as unknown as RestoreConflict)
+        setConfirmDialogKey((value) => value + 1)
+        setConfirmOpen(true)
+      }
+    },
   })
 
   const onStepUpVerified = () => {
@@ -279,7 +296,7 @@ export function DatabasePage() {
       return
     }
     if (pending.kind === 'restore' && uploadId) {
-      restoreMutation.mutate(uploadId)
+      restoreMutation.mutate({ id: uploadId, overwrite: pending.overwrite })
       return
     }
     if (pending.kind === 'adopt') {
@@ -727,21 +744,37 @@ export function DatabasePage() {
         ) : (
           <div className="space-y-3">
             <LogViewer key={restoreJobId} jobId={restoreJobId} onEnd={handleJobEnd} />
-            {jobEnd ? <RestoreResultSummary end={jobEnd} /> : null}
           </div>
         )}
+        {!restoreJobId && jobEnd ? (
+          <div className="mt-3">
+            <RestoreResultSummary
+              end={jobEnd}
+              onContinue={() => {
+                setJobEnd(null)
+                void invalidateDatabaseData()
+              }}
+              onRetry={() => {
+                setJobEnd(null)
+                setUploadInfo(null)
+                setUploadId(null)
+              }}
+            />
+          </div>
+        ) : null}
       </section>
 
       <RestoreConfirmDialog
         key={confirmDialogKey}
         open={confirmOpen}
         busy={restoreMutation.isPending}
+        conflict={restoreConflict}
         onCancel={() => setConfirmOpen(false)}
-        onConfirm={() => {
+        onConfirm={(overwrite) => {
           if (!uploadId) {
             return
           }
-          setPendingStepUp({ kind: 'restore' })
+          setPendingStepUp({ kind: 'restore', overwrite })
           setStepUpOpen(true)
         }}
       />

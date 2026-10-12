@@ -65,6 +65,7 @@ class UploadCompleteBody(BaseModel):
 class RestoreBody(BaseModel):
     upload_id: str
     confirm: str
+    overwrite: bool = False
 
 
 async def _maybe_sync_restore_job(
@@ -73,15 +74,28 @@ async def _maybe_sync_restore_job(
     setup: dict[str, Any],
 ) -> dict[str, Any]:
     job_id = setup.get("restore_job_id")
-    if not job_id or setup.get("database") == "restored":
+    if not job_id:
         return setup
     try:
         job = await agent.get(f"/v1/jobs/{job_id}")
-    except AgentError:
+    except AgentError as exc:
+        if exc.status == 404:
+            # Job record gone (agent restarted before persistence existed, or
+            # the id is stale): clear it so the wizard is retryable instead of
+            # hanging at 'pending' forever.
+            setup = dict(setup)
+            setup.pop("restore_job_id", None)
+            _save_setup(db, setup)
         return setup
-    if job.get("status") == "succeeded":
+    status = job.get("status")
+    if status == "succeeded":
         setup = dict(setup)
         setup["database"] = "restored"
+        setup.pop("restore_job_id", None)
+        _save_setup(db, setup)
+    elif status in ("failed", "cancelled"):
+        setup = dict(setup)
+        setup.pop("restore_job_id", None)
         _save_setup(db, setup)
     return setup
 
@@ -183,10 +197,23 @@ async def run_restore(
 ) -> dict[str, str]:
     if body.confirm != "RESTORE":
         raise HTTPException(status_code=400, detail="confirm must be RESTORE")
-    result = await agent.post(
-        "/v1/restore/run",
-        json={"upload_id": body.upload_id, "confirm": body.confirm},
-    )
+    setup = _load_setup(db)
+    setup = await _maybe_sync_restore_job(db, agent, setup)
+    if setup.get("restore_job_id"):
+        raise HTTPException(status_code=409, detail="restore_in_progress")
+    try:
+        result = await agent.post(
+            "/v1/restore/run",
+            json={
+                "upload_id": body.upload_id,
+                "confirm": body.confirm,
+                "overwrite": body.overwrite,
+            },
+        )
+    except AgentError as exc:
+        if exc.status == 409:
+            raise HTTPException(status_code=409, detail=exc.detail) from exc
+        raise
     setup = _load_setup(db)
     setup["restore_job_id"] = result["job_id"]
     _save_setup(db, setup)

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -43,5 +43,22 @@ describe('EnvEditor', () => {
     )
 
     expect(screen.getByLabelText(/^SECRET$/i)).toHaveValue('••••gh')
+  })
+
+  it('blocks renaming a row to a managed key', async () => {
+    render(
+      <EnvEditorHarness
+        initialRows={[{ key: 'FOO', value: 'bar', locked: false }]}
+      />,
+    )
+
+    const keyInput = screen.getByDisplayValue('FOO')
+    // one-shot change (as after a paste) rather than keystrokes: the row's
+    // React key includes the env key, so per-keystroke typing remounts the input
+    fireEvent.change(keyInput, { target: { value: 'POSTGRES_PASSWORD' } })
+
+    // the rename must not take effect: the managed key never becomes a row
+    expect(screen.queryByDisplayValue('POSTGRES_PASSWORD')).not.toBeInTheDocument()
+    expect(screen.getByDisplayValue('FOO')).toBeInTheDocument()
   })
 })

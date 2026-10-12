@@ -111,6 +111,40 @@ def _run_deploy(
     )
 
 
+def test_deploy_with_migration_refused_while_restore_locked(settings):
+    """A migrate step against a half-loaded cluster is the dangerous overlap:
+    deploy must refuse while the cluster restore holds the postgres lock."""
+    from fastapi.testclient import TestClient
+
+    from tests.fakes import FakeRunner
+    from vpscp_agent.main import create_app
+    from vpscp_agent.state import StateDB
+
+    settings.stack_dir.mkdir(parents=True)
+    settings.stack_env_path.write_text("POSTGRES_USER=pgadmin\n")
+    runner = FakeRunner()
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+
+    with TestClient(create_app(settings, runner=runner)) as client:
+        mgr = client.app.state.jobs
+        gate = threading.Event()
+        mgr.start("db.restore_cluster", {}, lambda _ctx: gate.wait(timeout=30), lock_key="postgres")
+        try:
+            resp = client.post(
+                "/v1/projects/myapp/deploy",
+                json={
+                    "mode": "build",
+                    "tags": {},
+                    "db": False,
+                    "migration": {"service": "web", "command": "alembic upgrade head"},
+                },
+            )
+            assert resp.status_code == 409
+        finally:
+            gate.set()
+
+
 def test_git_fetch_failure_failed_before_switch_no_tags_written(deploy_setup):
     _, _, runner, _, project_dir = deploy_setup
     (project_dir / ".env").write_text("DOCKER_IMAGE_WEB=old-tag\n")

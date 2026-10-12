@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -94,6 +96,7 @@ def test_get_state_default_shape(setup_client, auth):
             {"id": "panel_hostname", "status": "pending"},
         ],
         "completed": False,
+        "restore_job_id": None,
     }
 
 
@@ -159,6 +162,78 @@ def test_restore_stores_job_id(setup_client, auth, agent_requests):
     with db_module.SessionLocal() as db:
         stored = get_setting(db, "setup")
     assert stored["restore_job_id"] == "job-restore-1"
+
+
+def test_setup_state_exposes_restore_job(setup_client, auth):
+    """After refresh the wizard must be able to resume the restore log: state
+    carries the running restore_job_id."""
+    with db_module.SessionLocal() as db:
+        set_setting(db, "setup", {"database": "pending", "restore_job_id": "job-restore-1"})
+        db.commit()
+    resp = setup_client.get("/api/setup/state", headers=csrf_headers(auth))
+    assert resp.status_code == 200
+    assert resp.json()["restore_job_id"] == "job-restore-1"
+
+
+def test_second_restore_rejected_while_running(setup_client, auth, agent_requests):
+    """A second restore while one is in flight must be rejected, not silently
+    overwrite the tracked job id."""
+    setup_client.post(
+        "/api/setup/restore",
+        json={"upload_id": "up-1", "confirm": "RESTORE"},
+        headers=csrf_headers(auth),
+    )
+    resp = setup_client.post(
+        "/api/setup/restore",
+        json={"upload_id": "up-2", "confirm": "RESTORE"},
+        headers=csrf_headers(auth),
+    )
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "restore_in_progress"
+
+
+def test_failed_restore_job_clears_and_allows_retry(panel_settings, frozen_time, admin_user):
+    """A failed restore must leave the step retryable: restore_job_id cleared in
+    state so the wizard shows the upload choices again."""
+    transport = _setup_transport([], job_status="failed")
+    agent = AgentClient("/fake.sock", transport=transport)
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        auth = login(client, admin_user, frozen_time)
+        assert db_module.SessionLocal is not None
+        with db_module.SessionLocal() as db:
+            set_setting(db, "setup", {"database": "pending", "restore_job_id": "job-restore-1"})
+            db.commit()
+        resp = client.get("/api/setup/state", headers=csrf_headers(auth))
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["restore_job_id"] is None
+        assert body["steps"][1]["status"] == "pending"
+
+
+def test_vanished_restore_job_cleared_in_state(panel_settings, frozen_time, admin_user):
+    """If the agent restarts and the job record is gone, the setup sync must
+    not leave restore_job_id set forever (wizard stuck at 'pending')."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "job not found"})
+
+    transport = httpx.MockTransport(handler)
+    agent = AgentClient("/fake.sock", transport=transport)
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        auth = login(client, admin_user, frozen_time)
+        assert db_module.SessionLocal is not None
+        with db_module.SessionLocal() as db:
+            set_setting(db, "setup", {"database": "pending", "restore_job_id": "gone-job"})
+            db.commit()
+        resp = client.get("/api/setup/state", headers=csrf_headers(auth))
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["restore_job_id"] is None
+        assert body["steps"][1]["status"] == "pending"
 
 
 def test_get_state_job_success_marks_restored(
@@ -252,6 +327,19 @@ def test_upload_requires_step_up_after_completed(setup_client, auth, agent_reque
     assert response.status_code == 403
     assert response.json() == {"detail": "step_up_required"}
     assert len(agent_requests) == 0
+
+
+def test_restore_forwards_overwrite_and_surfaces_conflict(setup_client, auth, agent_requests):
+    """overwrite flag reaches the agent; a cluster_not_empty 409 is relayed with
+    the drop list so the UI can confirm replacement."""
+    resp = setup_client.post(
+        "/api/setup/restore",
+        json={"upload_id": "up-1", "confirm": "RESTORE", "overwrite": True},
+        headers=csrf_headers(auth),
+    )
+    assert resp.status_code == 200, resp.text
+    body = json.loads(agent_requests[-1].content.decode())
+    assert body["overwrite"] is True
 
 
 def test_restore_requires_step_up_after_completed(setup_client, auth, agent_requests):

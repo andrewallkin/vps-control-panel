@@ -1,3 +1,5 @@
+import json
+import sqlite3
 import threading
 import time
 import uuid
@@ -29,11 +31,17 @@ class Job:
     lines: list[str] = field(default_factory=list)
     id: str = field(default_factory=lambda: uuid.uuid4().hex)
     _lines_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    _persist_hook: Any = field(default=None, repr=False)
 
     def log(self, line: str) -> None:
         text = scrub_error_message(line.rstrip("\n"))
         with self._lines_lock:
             self.lines.append(text)
+            count = len(self.lines)
+        if count % 20 == 0:
+            persist = getattr(self, "_persist_hook", None)
+            if persist is not None:
+                persist(self)
 
     def snapshot(self, since: int = 0) -> dict[str, Any]:
         with self._lines_lock:
@@ -70,6 +78,58 @@ class JobManager:
         self._jobs: dict[str, Job] = {}
         self._lock_keys: dict[str, str] = {}
         self._lock = threading.Lock()
+        self._recover_persisted()
+
+    def _persist(self, job: Job) -> None:
+        with self._db.connect() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO job "
+                "(id, kind, params_json, status, result_json, error, started_at, finished_at, log) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    job.id,
+                    job.kind,
+                    json.dumps(job.params),
+                    job.status,
+                    json.dumps(job.result) if job.result is not None else None,
+                    job.error,
+                    job.started_at,
+                    job.finished_at,
+                    "\n".join(job.lines),
+                ),
+            )
+
+    def _recover_persisted(self) -> None:
+        """Reload job records from state.db so a restart does not strand
+        consumers (the setup wizard tracks restore jobs across refreshes).
+        A row still marked 'running' belonged to a dead process: finalize it
+        as failed rather than leaving it running forever."""
+        try:
+            with self._db.connect() as conn:
+                rows = conn.execute("SELECT * FROM job ORDER BY started_at").fetchall()
+        except sqlite3.OperationalError:
+            # JobManager is built in create_app before migrate() runs; there is
+            # nothing to recover on a fresh database anyway.
+            return
+        for row in rows:
+            job = Job(
+                id=row["id"],
+                kind=row["kind"],
+                params=json.loads(row["params_json"]),
+                status=row["status"],
+                started_at=row["started_at"],
+                finished_at=row["finished_at"],
+                result=json.loads(row["result_json"]) if row["result_json"] else None,
+                error=row["error"],
+            )
+            for line in (row["log"] or "").splitlines():
+                job.lines.append(line)
+            if job.status == "running":
+                job.status = "failed"
+                job.error = "interrupted: agent restarted while running"
+                job.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
+                self._persist(job)
+            self._jobs[job.id] = job
 
     def start(
         self,
@@ -91,6 +151,8 @@ class JobManager:
             self._jobs[job.id] = job
             if lock_key is not None:
                 self._lock_keys[lock_key] = job.id
+        job._persist_hook = self._persist
+        self._persist(job)
 
         def run() -> None:
             start = time.monotonic()
@@ -118,6 +180,7 @@ class JobManager:
                 job.status = "succeeded" if ok else "failed"
                 job.result = result
                 job.error = error
+                self._persist(job)
                 with self._lock:
                     if lock_key is not None and self._lock_keys.get(lock_key) == job.id:
                         del self._lock_keys[lock_key]
@@ -137,6 +200,16 @@ class JobManager:
         for job_id in finished[: len(finished) - self._keep]:
             del self._jobs[job_id]
 
+    def has_lock_prefix(self, prefix: str) -> bool:
+        with self._lock:
+            for key, job_id in self._lock_keys.items():
+                if not key.startswith(prefix):
+                    continue
+                job = self._jobs.get(job_id)
+                if job is not None and job.status == "running":
+                    return True
+        return False
+
     def is_locked(self, key: str) -> bool:
         with self._lock:
             holder = self._lock_keys.get(key)
@@ -147,7 +220,24 @@ class JobManager:
 
     def get(self, job_id: str) -> Job | None:
         with self._lock:
-            return self._jobs.get(job_id)
+            job = self._jobs.get(job_id)
+        if job is not None:
+            return job
+        with self._db.connect() as conn:
+            row = conn.execute("SELECT * FROM job WHERE id = ?", (job_id,)).fetchone()
+        if row is None:
+            return None
+        recovered = Job(
+            id=row["id"],
+            kind=row["kind"],
+            params=json.loads(row["params_json"]),
+            status=row["status"] if row["status"] != "running" else "failed",
+            started_at=row["started_at"],
+            finished_at=row["finished_at"],
+            result=json.loads(row["result_json"]) if row["result_json"] else None,
+            error=row["error"],
+        )
+        return recovered
 
     def list(self) -> list[Job]:
         with self._lock:

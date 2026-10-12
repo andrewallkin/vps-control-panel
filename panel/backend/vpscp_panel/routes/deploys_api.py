@@ -29,6 +29,7 @@ def _agent(request: Request) -> AgentClient:
 class StartDeployBody(BaseModel):
     tags: dict[str, str] | None = None
     build: bool = False
+    run_migrations: bool = True
 
     @model_validator(mode="after")
     def tags_or_build(self) -> StartDeployBody:
@@ -78,6 +79,7 @@ async def start_deploy(
             tags=tags,
             trigger=trigger,
             clock=request.app.state.clock,
+            run_migrations=body.run_migrations,
         )
     except DeployAlreadyRunningError:
         raise HTTPException(status_code=409, detail="deploy already running") from None

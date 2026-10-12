@@ -31,9 +31,11 @@ function restoreStatusDisplay(status: string): {
 
 export interface RestoreResultSummaryProps {
   end: JobEndPayload
+  onContinue?: () => void
+  onRetry?: () => void
 }
 
-export function RestoreResultSummary({ end }: RestoreResultSummaryProps) {
+export function RestoreResultSummary({ end, onContinue, onRetry }: RestoreResultSummaryProps) {
   const [errorsOpen, setErrorsOpen] = useState(false)
   const result = end.result
   const databases = result?.databases ?? []
@@ -101,6 +103,24 @@ export function RestoreResultSummary({ end }: RestoreResultSummaryProps) {
             </ul>
           ) : null}
         </div>
+      ) : null}
+      {end.status === 'succeeded' && onContinue ? (
+        <button
+          type="button"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
+          onClick={onContinue}
+        >
+          Continue
+        </button>
+      ) : null}
+      {end.status === 'failed' && onRetry ? (
+        <button
+          type="button"
+          className="rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+          onClick={onRetry}
+        >
+          Try again
+        </button>
       ) : null}
     </div>
   )

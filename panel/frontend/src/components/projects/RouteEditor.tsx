@@ -19,7 +19,19 @@ export function RouteEditor({ routes, onChange, onValidationChange }: RouteEdito
   }
 
   function addRoute() {
-    emit([...routes, { path_prefix: '/', port_env_var: '' }])
+    emit([
+      ...routes,
+      {
+        path_prefix: '/',
+        port_env_var: '',
+        streaming: false,
+        websocket: false,
+        pass_authorization: false,
+        max_body_mb: 25,
+        read_timeout_s: 60,
+        send_timeout_s: 60,
+      },
+    ])
   }
 
   function removeRoute(index: number) {
@@ -71,6 +83,84 @@ export function RouteEditor({ routes, onChange, onValidationChange }: RouteEdito
             <Trash weight="regular" aria-hidden className="size-4" />
             Remove
           </button>
+
+          <div className="flex flex-wrap items-center gap-4 border-t border-border pt-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                id={`route-streaming-${index}`}
+                type="checkbox"
+                checked={route.streaming ?? false}
+                onChange={(event) =>
+                  updateRoute(index, { streaming: event.target.checked })
+                }
+              />
+              Streaming
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                id={`route-websocket-${index}`}
+                type="checkbox"
+                checked={route.websocket ?? false}
+                onChange={(event) =>
+                  updateRoute(index, { websocket: event.target.checked })
+                }
+              />
+              WebSocket
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                id={`route-auth-${index}`}
+                type="checkbox"
+                checked={route.pass_authorization ?? false}
+                onChange={(event) =>
+                  updateRoute(index, { pass_authorization: event.target.checked })
+                }
+              />
+              Pass Authorization
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              Max body (MB)
+              <input
+                id={`route-body-${index}`}
+                type="number"
+                min={1}
+                max={10240}
+                className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                value={route.max_body_mb ?? 25}
+                onChange={(event) =>
+                  updateRoute(index, { max_body_mb: Number(event.target.value) })
+                }
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              Read timeout (s)
+              <input
+                id={`route-read-${index}`}
+                type="number"
+                min={1}
+                max={3600}
+                className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                value={route.read_timeout_s ?? 60}
+                onChange={(event) =>
+                  updateRoute(index, { read_timeout_s: Number(event.target.value) })
+                }
+              />
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              Send timeout (s)
+              <input
+                id={`route-send-${index}`}
+                type="number"
+                min={1}
+                max={3600}
+                className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm"
+                value={route.send_timeout_s ?? 60}
+                onChange={(event) =>
+                  updateRoute(index, { send_timeout_s: Number(event.target.value) })
+                }
+              />
+            </label>
+          </div>
         </div>
       ))}
 

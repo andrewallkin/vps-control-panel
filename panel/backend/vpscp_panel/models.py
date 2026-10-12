@@ -140,3 +140,4 @@ class Deploy(Base):
     log: Mapped[str] = mapped_column(Text, nullable=False, default="")
     trigger: Mapped[str] = mapped_column(String, nullable=False)
     commit: Mapped[str | None] = mapped_column(String, nullable=True)
+    job_id: Mapped[str | None] = mapped_column(String, nullable=True)

@@ -6,12 +6,14 @@ import json
 import os
 import re
 import shutil
+import tempfile
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, BinaryIO
 
 from vpscp_agent.config import Settings
 from vpscp_agent.db_ops import list_databases, list_roles
@@ -24,9 +26,14 @@ if TYPE_CHECKING:
     from vpscp_agent.jobs import JobContext
     from vpscp_agent.state import StateDB
 
-_CLUSTER_EMPTY_SQL = """
-SELECT 1 FROM pg_database d
-WHERE NOT d.datistemplate AND d.datname <> 'postgres' LIMIT 1;
+_CLUSTER_DBS_SQL = """
+SELECT d.datname FROM pg_database d
+WHERE NOT d.datistemplate AND d.datname <> 'postgres' ORDER BY 1;
+""".strip()
+
+_CLUSTER_ROLES_SQL = """
+SELECT r.rolname FROM pg_roles r
+WHERE r.rolname !~ '^pg_' ORDER BY 1;
 """.strip()
 
 _MAX_CHUNK_BYTES = 16 * 1024 * 1024
@@ -36,7 +43,7 @@ _ROLE_RE = re.compile(r"^CREATE ROLE (\S+);")
 _DATABASE_RE = re.compile(r"^CREATE DATABASE (\S+) ")
 _UPLOAD_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 
-ALLOWED_SUFFIXES = (".sql.gz", ".sql")
+ALLOWED_SUFFIXES = (".sql.gz", ".sql", ".sql.gz.age", ".sql.age")
 
 
 @dataclass(frozen=True)
@@ -71,22 +78,20 @@ def _validate_upload_id(upload_id: str) -> None:
         raise ValueError("invalid upload id")
 
 
-def validate_dump(path: Path, *, filename: str | None = None) -> DumpScan:
+def validate_dump(
+    path: Path, *, filename: str | None = None, passphrase: str | None = None
+) -> DumpScan:
     name = filename if filename is not None else path.name
-    if name.endswith(".sql.gz"):
+    if name.endswith((".sql.gz", ".sql.gz.age")):
         kind = "gzip"
-    elif name.endswith(".sql"):
+    elif name.endswith((".sql", ".sql.age")):
         kind = "plain"
     else:
         raise ValueError("unsupported dump extension")
 
     try:
-        if kind == "gzip":
-            with gzip.open(path, "rb") as stream:
-                header_ok, roles, databases = _scan_dump_stream(stream)
-        else:
-            with path.open("rb") as stream:
-                header_ok, roles, databases = _scan_dump_stream(stream)
+        with _open_dump_sql_stream(path, passphrase=passphrase, name=name) as stream:
+            header_ok, roles, databases = _scan_dump_stream(stream)
     except (EOFError, gzip.BadGzipFile) as exc:
         if kind == "gzip":
             raise ValueError("corrupt gzip") from exc
@@ -126,14 +131,123 @@ def _iter_dump_lines(stream) -> Iterator[str]:
         yield raw.decode("utf-8", errors="replace").rstrip("\n\r")
 
 
+# psql meta-commands a real pg_dumpall legitimately uses.
+# psql meta-commands a real pg_dumpall legitimately uses, plus the bare "\."
+# COPY data terminator that ends every COPY ... FROM stdin section.
+_DUMP_META_ALLOWED = ("\\connect", "\\c ", "\\restrict", "\\unrestrict", "\\echo", "\\pset")
+_COPY_TERMINATOR = "\\."
+_COPY_PROGRAM_RE = re.compile(r"\bcopy\b.*\b(?:TO|FROM)\s+PROGRAM\b", re.IGNORECASE)
+_SUPERUSER_GRANT_RE = re.compile(
+    r"\b(?:CREATE|ALTER)\s+ROLE\s+(\"?)([\w.-]+)\1[^;]*\bSUPERUSER\b", re.IGNORECASE
+)
+
+
+def _stored_suffix(filename: str) -> str:
+    for suffix in (".sql.gz.age", ".sql.age", ".sql.gz", ".sql"):
+        if filename.endswith(suffix):
+            return suffix
+    raise ValueError("unsupported dump extension")
+
+
+def _dump_passphrase(settings) -> str | None:
+    from vpscp_agent.envfile import read_env
+
+    return read_env(settings.stack_env_path).get("BACKUP_ARCHIVE_PASSPHRASE") or None
+
+
+@contextmanager
+def _open_dump_sql_stream(
+    path: Path, *, passphrase: str | None, name: str | None = None
+) -> Iterator[BinaryIO]:
+    """Open a dump as a streaming reader of decompressed SQL.
+
+    Cutover dumps are multi-GB decompressed; the SQL must stream (gzip
+    member reads) and never be materialized whole. Backups uploaded to GCS
+    are age-encrypted — pyrage decrypt is bytes-in/bytes-out, so the inner
+    payload is staged to a temp file and then streamed from disk; the
+    decompressed SQL still never lands in RAM.
+    """
+    display = name if name is not None else path.name
+    if display.endswith(".age"):
+        if not passphrase:
+            raise ValueError(
+                "dump is age-encrypted but BACKUP_ARCHIVE_PASSPHRASE is not configured"
+            )
+        from pyrage import passphrase as pyrage_passphrase
+
+        try:
+            inner = pyrage_passphrase.decrypt(path.read_bytes(), passphrase)
+        except Exception as exc:
+            raise ValueError("dump decryption failed: wrong passphrase?") from exc
+        tmp_name: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, dir=path.parent, suffix=".inner") as tmp:
+                tmp.write(inner)
+                tmp_name = tmp.name
+            del inner
+            with _open_plain_or_gzip(Path(tmp_name), display) as stream:
+                yield stream
+        finally:
+            if tmp_name is not None:
+                os.unlink(tmp_name)
+    else:
+        with _open_plain_or_gzip(path, display) as stream:
+            yield stream
+
+
+def _open_plain_or_gzip(path: Path, display: str) -> BinaryIO:
+    if display.endswith((".sql.gz", ".sql.gz.age")):
+        return gzip.open(path, "rb")
+    return path.open("rb")
+
+
+def _scan_for_dangerous_statements(
+    path: Path, *, admin: str, passphrase: str | None = None, name: str | None = None
+) -> None:
+    r"""Reject dumps that would execute OS commands or persist superusers.
+
+    A restore runs as the postgres superuser via psql, so a crafted dump is
+    executable code. Real pg_dumpall output only uses \connect/\restrict/
+    \unrestrict/\echo/\pset meta-commands — everything else is refused.
+    """
+    violations: list[str] = []
+    with _open_dump_sql_stream(path, passphrase=passphrase, name=name) as stream:
+        for lineno, line in enumerate(_iter_dump_lines(stream), start=1):
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if stripped.startswith("--"):
+                continue
+            if stripped.startswith("\\"):
+                meta = stripped.split()[0].rstrip(";")
+                allowed = stripped == _COPY_TERMINATOR or any(
+                    stripped.startswith(prefix) for prefix in _DUMP_META_ALLOWED
+                )
+                if not allowed:
+                    violations.append(f"line {lineno}: forbidden psql meta-command {meta}")
+            if _COPY_PROGRAM_RE.search(stripped):
+                violations.append(f"line {lineno}: COPY ... PROGRAM is forbidden")
+            # Every real pg_dumpall re-asserts the admin role's own SUPERUSER
+            # attribute; that line is benign. Anything else persisting a
+            # superuser is forbidden.
+            superuser_match = _SUPERUSER_GRANT_RE.search(stripped)
+            if superuser_match and superuser_match.group(2) != admin:
+                violations.append(f"line {lineno}: SUPERUSER grants are forbidden")
+            if len(violations) >= 20:
+                break
+    if violations:
+        preview = "; ".join(violations[:5])
+        raise ValueError(f"dump contains forbidden statements: {preview}")
+
+
 class UploadStore:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._dir = settings.restore_dir
 
     def create(self, filename: str, size: int) -> str:
-        if not filename.endswith((".sql.gz", ".sql")):
-            raise ValueError("filename must end with .sql.gz or .sql")
+        if not filename.endswith(ALLOWED_SUFFIXES):
+            raise ValueError(f"filename must end with one of {ALLOWED_SUFFIXES}")
         if size > self._settings.max_upload_bytes:
             raise ValueError("upload exceeds max_upload_bytes")
         self._dir.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -184,9 +298,8 @@ class UploadStore:
                 hasher.update(chunk)
         if hasher.hexdigest() != sha256.lower():
             raise ValueError("sha256 mismatch")
-        scan = validate_dump(part_path, filename=meta.filename)
-        suffix = ".sql.gz" if meta.filename.endswith(".sql.gz") else ".sql"
-        final_path = self._dir / f"{upload_id}{suffix}"
+        scan = validate_dump(part_path, filename=meta.filename, passphrase=self._passphrase())
+        final_path = self._dir / f"{upload_id}{_stored_suffix(meta.filename)}"
         os.replace(part_path, final_path)
         os.chmod(final_path, 0o600)
         return UploadInfo(
@@ -206,12 +319,7 @@ class UploadStore:
         meta = self._load_meta(upload_id)
         if meta.received != meta.size:
             raise ValueError("upload incomplete")
-        if meta.filename.endswith(".sql.gz"):
-            path = self._dir / f"{upload_id}.sql.gz"
-        elif meta.filename.endswith(".sql"):
-            path = self._dir / f"{upload_id}.sql"
-        else:
-            raise ValueError("unsupported dump extension")
+        path = self._dir / f"{upload_id}{_stored_suffix(meta.filename)}"
         if not path.is_file():
             raise ValueError("upload not validated")
         return path
@@ -254,10 +362,10 @@ class UploadStore:
 
     def _artifact_paths(self, upload_id: str, filename: str) -> list[Path]:
         paths = [self._part_path(upload_id)]
-        if filename.endswith(".sql.gz"):
-            paths.append(self._dir / f"{upload_id}.sql.gz")
-        elif filename.endswith(".sql"):
-            paths.append(self._dir / f"{upload_id}.sql")
+        try:
+            paths.append(self._dir / f"{upload_id}{_stored_suffix(filename)}")
+        except ValueError:
+            pass
         return paths
 
     def _part_path(self, upload_id: str) -> Path:
@@ -279,6 +387,9 @@ class UploadStore:
         path.write_text(json.dumps(payload), encoding="utf-8")
         os.chmod(path, 0o600)
 
+    def _passphrase(self) -> str | None:
+        return _dump_passphrase(self._settings)
+
     def _load_meta(self, upload_id: str) -> UploadMeta:
         path = self._meta_path(upload_id)
         if not path.is_file():
@@ -296,8 +407,47 @@ class UploadStore:
         )
 
 
+def cluster_objects(psql: Psql) -> tuple[list[str], list[str]]:
+    """Non-system databases and roles currently in the cluster.
+
+    The admin role is excluded from the roles list: it pre-exists on every
+    stack and a pg_dumpall restore always collides on it benignly.
+    """
+    admin = psql.admin_user()
+    databases = [row[0] for row in psql.query_rows(_CLUSTER_DBS_SQL) if row]
+    roles = [row[0] for row in psql.query_rows(_CLUSTER_ROLES_SQL) if row and row[0] != admin]
+    return databases, roles
+
+
 def cluster_is_empty(psql: Psql) -> bool:
-    return not bool(psql.query_rows(_CLUSTER_EMPTY_SQL))
+    databases, roles = cluster_objects(psql)
+    return not databases and not roles
+
+
+def _drop_objects(psql: Psql, databases: list[str], roles: list[str]) -> None:
+    statements = [f"DROP DATABASE IF EXISTS {quote_ident(name)};" for name in databases]
+    statements.extend(f"DROP ROLE IF EXISTS {quote_ident(name)};" for name in roles)
+    if not statements:
+        return
+    psql.exec_sql("\n".join(statements), database="postgres")
+
+
+def _classify_load_errors(lines: list[str], admin: str) -> tuple[list[str], int]:
+    """Split ERROR lines into (fatal, benign_count).
+
+    A real pg_dumpall always contains `CREATE ROLE <admin>` and therefore
+    always collides with the stack's admin role; that single collision is
+    benign. Every other ERROR line means the dump did not apply as intended.
+    """
+    benign_re = re.compile(rf'ERROR:\s+role "{re.escape(admin)}" already exists')
+    fatal: list[str] = []
+    benign = 0
+    for line in lines:
+        if benign_re.search(line):
+            benign += 1
+        else:
+            fatal.append(line)
+    return fatal, benign
 
 
 def reset_admin_password(psql: Psql, settings: Settings) -> None:
@@ -321,21 +471,13 @@ def _attachment_slugs(db: StateDB) -> list[str]:
     return [row["slug"] for row in rows]
 
 
-def _dump_byte_chunks(path: Path) -> Iterator[bytes]:
-    if path.name.endswith(".sql.gz"):
-        with gzip.open(path, "rb") as gz:
-            while True:
-                chunk = gz.read(1024 * 1024)
-                if not chunk:
-                    break
-                yield chunk
-    else:
-        with path.open("rb") as handle:
-            while True:
-                chunk = handle.read(1024 * 1024)
-                if not chunk:
-                    break
-                yield chunk
+def _dump_byte_chunks(path: Path, *, passphrase: str | None = None) -> Iterator[bytes]:
+    with _open_dump_sql_stream(path, passphrase=passphrase, name=path.name) as stream:
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            yield chunk
 
 
 def _safety_dump_path(restore_dir: Path) -> Path:
@@ -360,7 +502,9 @@ def _write_safety_dump(
         "-U",
         admin,
     ]
-    runner.stream_to_gzip_file(args, path, 120)
+    # A real pg_dumpall takes minutes on a 5-app cluster; 120s aborted the
+    # overwrite path mid-safety-dump (Task 19).
+    runner.stream_to_gzip_file(args, path, 3600)
     os.chmod(path, 0o600)
     return path
 
@@ -373,9 +517,21 @@ def restore_cluster(
     runner: Runner,
     db: StateDB,
     upload_id: str,
+    overwrite: bool = False,
 ) -> dict:
     dump_path = UploadStore(settings).completed_path(upload_id)
-    empty = cluster_is_empty(psql)
+    passphrase = _dump_passphrase(settings)
+    _scan_for_dangerous_statements(
+        dump_path, admin=psql.admin_user(), passphrase=passphrase, name=dump_path.name
+    )
+    databases, roles = cluster_objects(psql)
+    empty = not databases and not roles
+    if not empty and not overwrite:
+        listing = ", ".join(databases + roles)
+        raise ValueError(
+            f"cluster is not empty (would be replaced: {listing}); "
+            "re-run with overwrite=true to replace it"
+        )
     stopped_slugs: list[str] = []
     safety_dump: Path | None = None
 
@@ -391,6 +547,9 @@ def restore_cluster(
 
         safety_dump = _write_safety_dump(settings, psql, runner, settings.restore_dir)
         ctx.log(f"safety dump: {safety_dump}")
+        if overwrite:
+            ctx.log(f"dropping existing objects: {', '.join(databases + roles)}")
+            _drop_objects(psql, databases, roles)
 
     admin = psql.admin_user()
     load_args = [
@@ -407,32 +566,54 @@ def restore_cluster(
         "-d",
         "postgres",
     ]
-    errors: list[str] = []
-    error_count = 0
+    error_lines: list[str] = []
+
+    fatal_estimate = 0
 
     def on_line(line: str) -> None:
-        nonlocal error_count
+        nonlocal fatal_estimate
         ctx.log(line)
         if "ERROR:" in line:
-            error_count += 1
-            if len(errors) < 200:
-                errors.append(line)
+            if len(error_lines) < 200:
+                error_lines.append(line)
+            else:
+                fatal_estimate += 1
 
-    runner.pipe_through(load_args, _dump_byte_chunks(dump_path), on_line, 120)
-    reset_admin_password(psql, settings)
+    returncode = 0
+    try:
+        returncode = runner.pipe_through(
+            load_args, _dump_byte_chunks(dump_path, passphrase=passphrase), on_line, 120
+        )
+    finally:
+        # A failed or interrupted load must not strand stopped project
+        # containers or leave the admin password as the dump set it. The
+        # restarts run even if the password reset itself fails.
+        try:
+            reset_admin_password(psql, settings)
+        finally:
+            for slug in stopped_slugs:
+                project_dir = safe_project_path(settings.apps_dir, slug)
+                args = ["docker", "compose", "-p", slug, "start"]
+                ctx.log(f"compose start: {slug}")
+                runner(args, cwd=project_dir, check=True)
 
-    for slug in stopped_slugs:
-        project_dir = safe_project_path(settings.apps_dir, slug)
-        args = ["docker", "compose", "-p", slug, "start"]
-        ctx.log(f"compose start: {slug}")
-        runner(args, cwd=project_dir, check=True)
+    fatal, benign = _classify_load_errors(error_lines, admin)
+    if returncode != 0:
+        raise ValueError(f"restore failed: psql exited with code {returncode}")
+    if fatal or fatal_estimate:
+        # fatal_estimate counts ERROR lines beyond the 200-line capture cap so
+        # 200 benign lines cannot mask later fatal ones.
+        total = len(fatal) + fatal_estimate
+        preview = "; ".join(fatal[:5]) or "(errors beyond capture cap)"
+        raise ValueError(f"restore failed: {total} error(s) during load: {preview}")
 
-    databases = list_databases(psql, db)
-    roles = list_roles(psql)
+    databases_out = list_databases(psql, db)
+    roles_out = list_roles(psql)
     return {
-        "databases": [d.model_dump() for d in databases],
-        "roles": roles,
-        "error_count": error_count,
-        "errors": errors,
+        "databases": [d.model_dump() for d in databases_out],
+        "roles": roles_out,
+        "error_count": 0,
+        "errors": [],
+        "benign_errors": benign,
         "safety_dump": str(safety_dump) if safety_dump is not None else None,
     }

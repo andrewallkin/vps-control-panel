@@ -179,7 +179,7 @@ async def register_domain(
     db: Annotated[DbSession, Depends(get_db)],
     agent: Annotated[AgentClient, Depends(_agent)],
     _session: Annotated[Session, Depends(require_csrf)],
-) -> dict[str, str]:
+) -> dict[str, Any]:
     if not body.zone_id.strip():
         raise HTTPException(status_code=400, detail="zone_id must not be empty")
     await agent.post("/v1/domains", json={"name": body.name, "zone_id": body.zone_id})
@@ -192,8 +192,11 @@ async def register_domain(
         )
     )
     db.commit()
-    issue = await agent.post("/v1/tls/issue", json={"domain": body.name})
-    return {"job_id": issue["job_id"]}
+    try:
+        issue = await agent.post("/v1/tls/issue", json={"domain": body.name})
+    except AgentError as exc:
+        return {"job_id": None, "issue_error": str(exc.detail)}
+    return {"job_id": issue["job_id"], "issue_error": None}
 
 
 @router.delete("/api/domains/{name}", status_code=204)

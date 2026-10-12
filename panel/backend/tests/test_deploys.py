@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 import vpscp_panel.db as db_module
+from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.models import Deploy, Domain, Project, ProjectService
 
 
@@ -203,6 +204,214 @@ def test_deploy_finished_at_uses_end_clock(
         assert row is not None
         assert row.finished_at == end_time.replace(tzinfo=None)
         assert row.finished_at != frozen_time.replace(tzinfo=None)
+
+
+def test_run_deploy_cancellation_finalizes_row(client_factory, admin_user, frozen_time, db_session):
+    """A cancelled deploy (client disconnect / panel shutdown) must not leave
+    status='running' forever — that bricks deploys for the project."""
+    import asyncio
+
+    from vpscp_panel import deploy_ops
+
+    _ready_project(db_session)
+
+    async def cancelled_consume(agent, job_id):
+        raise asyncio.CancelledError
+
+    class StubAgent:
+        async def post(self, path, json=None):
+            return {"job_id": "job-1"}
+
+    original = deploy_ops.consume_job_events
+    deploy_ops.consume_job_events = cancelled_consume
+    try:
+        with db_module.SessionLocal() as session:
+            project = session.get(Project, "myapp")
+            with pytest.raises(asyncio.CancelledError):
+                asyncio.run(
+                    deploy_ops.run_deploy(
+                        session,
+                        StubAgent(),
+                        project,
+                        tags={"DOCKER_IMAGE_WEB": "x"},
+                        trigger="deploy",
+                        clock=lambda: frozen_time,
+                    )
+                )
+        with db_module.SessionLocal() as session:
+            row = session.scalars(select(Deploy).where(Deploy.project_slug == "myapp")).one()
+            assert row.status == "failed"
+            assert row.finished_at is not None
+    finally:
+        deploy_ops.consume_job_events = original
+
+
+def test_reconcile_stuck_work_marks_orphaned_creations(db_session, frozen_time):
+    """Startup reconciliation marks orphaned creations failed so retries work.
+    Deploy rows are deliberately NOT mass-failed: reconcile_deploy_jobs
+    finalizes them from the agent's terminal job state (a running job may
+    have switched containers on its own — failing the row would lie)."""
+    from vpscp_panel.deploy_ops import reconcile_stuck_work
+
+    _ready_project(db_session)
+    db_session.add(
+        Deploy(
+            project_slug="myapp",
+            started_at=frozen_time,
+            finished_at=None,
+            status="running",
+            tags_json="{}",
+            log="",
+            trigger="deploy",
+            commit=None,
+        )
+    )
+    project = db_session.get(Project, "myapp")
+    state = json.loads(project.creation_state)
+    state["status"] = "running"
+    project.creation_state = json.dumps(state)
+    db_session.commit()
+
+    reconcile_stuck_work(db_session, lambda: frozen_time)
+
+    row = db_session.scalars(select(Deploy).where(Deploy.project_slug == "myapp")).one()
+    assert row.status == "running", "deploy rows are left to reconcile_deploy_jobs"
+    project = db_session.get(Project, "myapp")
+    assert json.loads(project.creation_state)["status"] == "failed"
+
+
+def test_deploy_run_migrations_flag_controls_migrate_step(
+    client_factory, admin_user, frozen_time, db_session
+):
+    """The deploy dialog's 'Run database migrations' checkbox gates whether the
+    migrate step is sent to the agent. Default is run (pre-ticked)."""
+    _ready_project(db_session)
+    with db_module.SessionLocal() as session:
+        project = session.get(Project, "myapp")
+        project.migration_service = "web"
+        project.migration_command = "bash /app/run_migrations.sh"
+        session.commit()
+
+    bodies = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/projects/myapp/deploy" and request.method == "POST":
+            bodies.append(json.loads(request.content.decode()))
+            return httpx.Response(200, json={"job_id": "job-deploy-1"})
+        if path == "/v1/jobs/job-deploy-1/events" and request.method == "GET":
+            return httpx.Response(
+                200,
+                content=_sse_bytes(
+                    ("end", {"status": "succeeded", "result": {}, "error": None}),
+                ),
+            )
+        return httpx.Response(404, json={"detail": "unexpected"})
+
+    client = client_factory(transport=httpx.MockTransport(handler))
+    auth = login(client, admin_user, frozen_time)
+    tags = {"DOCKER_IMAGE_WEB": "backend-main-abc1234"}
+
+    # default: migrations run
+    resp = client.post(
+        "/api/projects/myapp/deploy",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+        json={"tags": tags},
+    )
+    assert resp.status_code == 202, resp.text
+    assert bodies[-1]["migration"] == {
+        "service": "web",
+        "command": "bash /app/run_migrations.sh",
+    }
+
+    # unchecked: migrate step omitted entirely
+    resp = client.post(
+        "/api/projects/myapp/deploy",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+        json={"tags": tags, "run_migrations": False},
+    )
+    assert resp.status_code == 202, resp.text
+    assert "migration" not in bodies[-1]
+
+
+def test_reconcile_finalizes_from_agent_job(frozen_time, db_session):
+    """Panel restart mid-deploy: the agent job keeps running and finishes on
+    its own. Startup reconciliation must finalize the row from the agent's
+    terminal state — not mass-fail it while containers actually switched."""
+    import asyncio
+
+    from vpscp_panel.deploy_ops import reconcile_deploy_jobs
+
+    _ready_project(db_session)
+    with db_module.SessionLocal() as session:
+        session.add(
+            Deploy(
+                project_slug="myapp",
+                started_at=frozen_time,
+                finished_at=None,
+                status="running",
+                tags_json="{}",
+                log="",
+                trigger="deploy",
+                commit=None,
+                job_id="job-1",
+            )
+        )
+        session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/jobs/job-1":
+            return httpx.Response(
+                200,
+                json={
+                    "id": "job-1",
+                    "status": "succeeded",
+                    "result": {"commit": "abc123"},
+                    "log": "done",
+                },
+            )
+        return httpx.Response(404, json={"detail": "nope"})
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    asyncio.run(reconcile_deploy_jobs(db_module.SessionLocal, agent, lambda: frozen_time))
+
+    with db_module.SessionLocal() as session:
+        row = session.scalars(select(Deploy).where(Deploy.project_slug == "myapp")).one()
+        assert row.status == "succeeded"
+        assert row.finished_at is not None
+
+
+def test_reconcile_fails_row_when_agent_job_vanished(frozen_time, db_session):
+    import asyncio
+
+    from vpscp_panel.deploy_ops import reconcile_deploy_jobs
+
+    _ready_project(db_session)
+    with db_module.SessionLocal() as session:
+        session.add(
+            Deploy(
+                project_slug="myapp",
+                started_at=frozen_time,
+                finished_at=None,
+                status="running",
+                tags_json="{}",
+                log="",
+                trigger="deploy",
+                commit=None,
+                job_id="job-gone",
+            )
+        )
+        session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "job not found"})
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    asyncio.run(reconcile_deploy_jobs(db_module.SessionLocal, agent, lambda: frozen_time))
+
+    with db_module.SessionLocal() as session:
+        row = session.scalars(select(Deploy).where(Deploy.project_slug == "myapp")).one()
+        assert row.status == "failed"
 
 
 def test_only_one_running_deploy_per_slug(db_session):
@@ -468,7 +677,7 @@ def test_delete_cascades_deploy_and_service(
         json={"confirm": "delme"},
         headers={"X-CSRF-Token": auth["csrf_token"]},
     )
-    assert response.status_code == 204, response.text
+    assert response.status_code == 200, response.text
 
     with db_module.SessionLocal() as db:
         assert db.get(Project, "delme") is None

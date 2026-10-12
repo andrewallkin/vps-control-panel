@@ -26,7 +26,7 @@ RUN useradd -u 10001 panel && chown -R panel:panel /app \
 
 USER 10001
 
-CMD ["uv", "run", "--no-sync", "uvicorn", "vpscp_panel.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers", "--forwarded-allow-ips", "*"]
+CMD ["uv", "run", "--no-sync", "uvicorn", "vpscp_panel.main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/api/health')"]

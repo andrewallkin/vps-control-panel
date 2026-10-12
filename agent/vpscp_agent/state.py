@@ -53,6 +53,19 @@ MIGRATIONS: list[str] = [
         created_at TEXT NOT NULL
     );
     """,
+    """
+    CREATE TABLE job (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        params_json TEXT NOT NULL,
+        status TEXT NOT NULL,
+        result_json TEXT,
+        error TEXT,
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        log TEXT NOT NULL DEFAULT ''
+    );
+    """,
 ]
 
 
@@ -62,6 +75,7 @@ class StateDB:
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         conn = sqlite3.connect(self.path, isolation_level=None, timeout=10)
         conn.row_factory = sqlite3.Row
         try:
