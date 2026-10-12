@@ -26,6 +26,7 @@ from vpscp_agent.routes import deploy as deploy_routes
 from vpscp_agent.routes import dns as dns_routes
 from vpscp_agent.routes import docker as docker_routes
 from vpscp_agent.routes import firewall as firewall_routes
+from vpscp_agent.routes import github as github_routes
 from vpscp_agent.routes import jobs as jobs_routes
 from vpscp_agent.routes import nginx as nginx_routes
 from vpscp_agent.routes import projects as projects_routes
@@ -117,6 +118,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
                 "/v1/projects",
                 "/v1/registry",
                 "/v1/firewall",
+                "/v1/github",
             )
         ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -147,6 +149,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(deploy_routes.router)
     app.include_router(registry_routes.router)
     app.include_router(firewall_routes.router)
+    app.include_router(github_routes.router)
 
     @app.get("/v1/health")
     def health() -> dict[str, str]:

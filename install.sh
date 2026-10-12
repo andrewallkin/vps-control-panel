@@ -3,6 +3,8 @@
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "${REPO_DIR}/lib/common.sh"
 STACK_DIR=/srv/vpscp/stack
 PANEL_DIR=/srv/vpscp/panel
 AGENT_DIR=/opt/vpscp/agent
@@ -193,14 +195,7 @@ setup_stack() {
     (umask 077 && sed "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=${password}|" "${STACK_DIR}/.env.example" > "${STACK_DIR}/.env")
     echo "generated ${STACK_DIR}/.env"
   fi
-  local example_line key
-  while IFS= read -r example_line || [[ -n "${example_line}" ]]; do
-    [[ "${example_line}" =~ ^[A-Z_]+= ]] || continue
-    key="${example_line%%=*}"
-    if ! grep -q "^${key}=" "${STACK_DIR}/.env"; then
-      printf '%s\n' "${example_line}" >> "${STACK_DIR}/.env"
-    fi
-  done < <(grep -E '^[A-Z_]+=' "${STACK_DIR}/.env.example")
+  append_missing_env_keys "${STACK_DIR}/.env" "${STACK_DIR}/.env.example"
   refresh_vpscp_gid
   chown root:root "${STACK_DIR}/.env"
   chmod 600 "${STACK_DIR}/.env"

@@ -63,6 +63,20 @@ def test_ensure_known_hosts_raises_on_empty_key_list(settings: Settings):
         ensure_known_hosts(settings, fetch=list)
 
 
+def test_ensure_known_hosts_force_refreshes_existing_content(settings: Settings):
+    path = settings.state_dir / "known_hosts"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("github.com ssh-ed25519 EXISTING\n")
+
+    def fetch() -> list[str]:
+        return ["ssh-ed25519 REFRESHED"]
+
+    result = ensure_known_hosts(settings, fetch=fetch, force=True)
+
+    assert result == path
+    assert path.read_text() == "github.com ssh-ed25519 REFRESHED\n"
+
+
 def test_ensure_known_hosts_atomic_replace(settings: Settings, tmp_path):
     path = settings.state_dir / "known_hosts"
     path.parent.mkdir(parents=True, exist_ok=True)
