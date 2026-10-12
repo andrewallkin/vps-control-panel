@@ -77,12 +77,34 @@ def _write_initial_status_if_missing() -> None:
         )
 
 
+def maybe_encrypt_backup(backup_path: str) -> str:
+    """Age-encrypt the dump with the archive passphrase before upload.
+
+    The dump contains every app row and role password hash; the config
+    archive is already age-encrypted and the dump gets the same treatment.
+    Without a passphrase the file is uploaded unchanged (plaintext), which
+    the backup status reports as such.
+    """
+    passphrase = os.environ.get("BACKUP_ARCHIVE_PASSPHRASE")
+    if not passphrase:
+        return backup_path
+    with open(backup_path, "rb") as handle:
+        data = handle.read()
+    encrypted = encrypt(data, passphrase)
+    encrypted_path = backup_path + ".age"
+    with open(encrypted_path, "wb") as handle:
+        handle.write(encrypted)
+    os.remove(backup_path)
+    logger.info(f"Encrypted dump with archive passphrase: {encrypted_path}")
+    return encrypted_path
+
+
 def _timestamp_from_backup_filename(backup_filename: str) -> str:
     base = os.path.basename(backup_filename)
     prefix = "backup_"
-    suffix = ".sql.gz"
-    if base.startswith(prefix) and base.endswith(suffix):
-        return base[len(prefix) : -len(suffix)]
+    for suffix in (".sql.gz.age", ".sql.gz"):
+        if base.startswith(prefix) and base.endswith(suffix):
+            return base[len(prefix) : -len(suffix)]
     return datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
 
@@ -207,6 +229,7 @@ def run_backup():
             error = "Failed to create cluster dump"
             logger.error("Failed to create cluster dump. Aborting backup.")
             return
+        backup_file = maybe_encrypt_backup(backup_file)
 
         gcs_service = GoogleCloudStorageService()
         if not gcs_service.is_available():

@@ -11,7 +11,7 @@ def configure_logging():
     Includes timestamped file logging, detailed backup operation logs, and appropriate log levels.
     """
     # Create logs directory if it doesn't exist
-    log_dir = "/app/logs"
+    log_dir = os.environ.get("BACKUP_LOG_DIR", "/app/logs")
     os.makedirs(log_dir, exist_ok=True)
 
     # Create formatters

@@ -493,4 +493,4 @@ def test_restore_run_starts_job(settings):
         assert job.kind == "db.restore_cluster"
         client.app.state.jobs.wait(job_id, timeout=5)
         done = client.app.state.jobs.get(job_id)
-        assert done.status == "succeeded"
+        assert done.status == "succeeded", done.error
