@@ -5,6 +5,7 @@ import {
   Globe,
   Gear,
   List,
+  Scroll,
   Shield,
   Stack,
   X,
@@ -62,6 +63,10 @@ export function Layout() {
       <NavLink to="/database" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <Database weight="regular" aria-hidden className="size-5 shrink-0" />
         Database
+      </NavLink>
+      <NavLink to="/audit" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+        <Scroll weight="regular" aria-hidden className="size-5 shrink-0" />
+        Audit
       </NavLink>
       <NavLink to="/settings" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <Gear weight="regular" aria-hidden className="size-5 shrink-0" />

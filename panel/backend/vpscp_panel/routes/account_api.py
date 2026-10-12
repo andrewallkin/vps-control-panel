@@ -146,7 +146,5 @@ def revoke_session(
     row = db.get(Session, session_id)
     if row is None or row.admin_id != session.admin_id:
         raise HTTPException(status_code=404, detail="session not found")
-    if row.id == session.id:
-        raise HTTPException(status_code=400, detail="cannot revoke current session")
     db.delete(row)
     db.commit()

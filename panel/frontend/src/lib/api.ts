@@ -21,7 +21,13 @@ export class ApiError extends Error {
 }
 
 function shouldRedirectOn401(path: string): boolean {
-  return path !== '/api/auth/login'
+  if (path === '/api/auth/login') {
+    return false
+  }
+  if (path === '/api/account/password') {
+    return false
+  }
+  return true
 }
 
 export async function apiFetch(

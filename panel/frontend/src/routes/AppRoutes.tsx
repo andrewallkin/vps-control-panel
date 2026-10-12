@@ -5,6 +5,7 @@ import { isAuthenticated, useAuthMe } from '../hooks/useAuthMe'
 import { DashboardPage } from '../pages/DashboardPage'
 import { DomainsPage } from '../pages/DomainsPage'
 import { BackupsPage } from '../pages/BackupsPage'
+import { AuditPage } from '../pages/AuditPage'
 import { DatabasePage } from '../pages/DatabasePage'
 import { FirewallPage } from '../pages/FirewallPage'
 import { LoginPage } from '../pages/LoginPage'
@@ -115,6 +116,14 @@ function DatabaseEntry() {
   )
 }
 
+function AuditEntry() {
+  return (
+    <RequireSetupComplete>
+      <AuditPage />
+    </RequireSetupComplete>
+  )
+}
+
 function SettingsEntry() {
   return (
     <RequireSetupComplete>
@@ -153,6 +162,7 @@ export function AppRoutes() {
           <Route path="firewall" element={<FirewallEntry />} />
           <Route path="backups" element={<BackupsEntry />} />
           <Route path="database" element={<DatabaseEntry />} />
+          <Route path="audit" element={<AuditEntry />} />
           <Route path="settings" element={<SettingsEntry />} />
         </Route>
         <Route path="setup" element={<SetupEntry />} />

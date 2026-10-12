@@ -2,16 +2,19 @@ import os
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from vpscp_panel import __version__
 from vpscp_panel.agent_client import AgentClient, AgentError
+from vpscp_panel.auth import current_session
 from vpscp_panel.auth import router as auth_router
 from vpscp_panel.config import PanelSettings
 from vpscp_panel.db import init_db, run_migrations
+from vpscp_panel.models import Session
 from vpscp_panel.routes.account_api import router as account_api_router
 from vpscp_panel.routes.audit import router as audit_router
 from vpscp_panel.routes.backups_api import router as backups_api_router
@@ -90,6 +93,20 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
     @app.get("/api/health")
     def health() -> dict[str, str]:
         return {"status": "ok", "version": __version__}
+
+    @app.get("/api/health/agent")
+    async def agent_health(
+        request: Request,
+        _session: Annotated[Session, Depends(current_session)],
+    ) -> dict[str, Any]:
+        payload = await request.app.state.agent.get("/v1/health")
+        if not isinstance(payload, dict):
+            raise HTTPException(status_code=502, detail="invalid agent health response")
+        status = payload.get("status")
+        version = payload.get("version")
+        if not isinstance(status, str) or not isinstance(version, str):
+            raise HTTPException(status_code=502, detail="invalid agent health response")
+        return {"status": status, "version": version}
 
     app.include_router(auth_router)
     app.include_router(metrics_router)
