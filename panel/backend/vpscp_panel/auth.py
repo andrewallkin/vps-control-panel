@@ -67,10 +67,19 @@ def _settings(request: Request) -> PanelSettings:
     return request.app.state.settings
 
 
+def _request_scheme(request: Request) -> str:
+    # The container sees nginx via the Docker bridge, so uvicorn's proxy-header
+    # handling (127.0.0.1 only) never applies; nginx always overwrites this header.
+    forwarded = request.headers.get("X-Forwarded-Proto", "").strip().lower()
+    if forwarded in ("http", "https"):
+        return forwarded
+    return request.url.scheme
+
+
 def _cookie_kwargs(settings: PanelSettings, request: Request) -> dict:
     secure = settings.panel_cookie_secure
     if secure is None:
-        secure = request.url.scheme == "https"
+        secure = _request_scheme(request) == "https"
     return {
         "key": SESSION_COOKIE,
         "httponly": True,
@@ -98,7 +107,7 @@ def _same_origin(request: Request, url: str) -> bool:
     parsed = urlparse(url)
     if not parsed.scheme or not parsed.netloc:
         return False
-    base = f"{request.url.scheme}://{request.url.netloc}"
+    base = f"{_request_scheme(request)}://{request.url.netloc}"
     return f"{parsed.scheme}://{parsed.netloc}" == base
 
 

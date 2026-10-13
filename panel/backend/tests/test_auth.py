@@ -205,6 +205,30 @@ def test_bad_origin_rejected(client, admin_user, frozen_time):
     assert response.json() == {"detail": "bad_origin"}
 
 
+def test_login_behind_tls_proxy_accepts_https_origin(
+    panel_settings, admin_user, frozen_time
+):
+    panel_settings_auto = panel_settings.model_copy(update={"panel_cookie_secure": None})
+    app = create_app(settings=panel_settings_auto)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        response = client.post(
+            "http://panel.example.com/api/auth/login",
+            json={
+                "username": "admin",
+                "password": admin_user["password"],
+                "code": totp_code(admin_user["totp_secret"], frozen_time),
+            },
+            headers={
+                "Origin": "https://panel.example.com",
+                "Referer": "https://panel.example.com/login",
+                "X-Forwarded-Proto": "https",
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert "Secure" in response.headers.get("set-cookie", "")
+
+
 def test_csrf_missing_on_logout(client, admin_user, frozen_time):
     login(client, admin_user, frozen_time)
     response = client.post("/api/auth/logout")
