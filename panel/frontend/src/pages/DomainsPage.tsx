@@ -18,10 +18,14 @@ import {
 } from '../lib/domainsApi'
 import { useTickingNow } from '../hooks/useTickingNow'
 
-function hostnameLabel(entry: DomainHostname): string {
+function hostnameType(zoneName: string, fqdn: string): 'Domain' | 'Subdomain' {
+  return fqdn === zoneName ? 'Domain' : 'Subdomain'
+}
+
+function hostnameUse(entry: DomainHostname): string {
   switch (entry.kind) {
     case 'zone':
-      return 'Zone'
+      return 'Apex'
     case 'panel':
       return 'Panel'
     case 'primary':
@@ -31,6 +35,20 @@ function hostnameLabel(entry: DomainHostname): string {
     case 'redirect':
       return `${entry.project_name ?? entry.project_slug ?? 'Project'} redirect`
   }
+}
+
+function zoneHostnames(row: { name: string; hostnames?: DomainHostname[] }): DomainHostname[] {
+  if (row.hostnames && row.hostnames.length > 0) {
+    return row.hostnames
+  }
+  return [
+    {
+      fqdn: row.name,
+      kind: 'zone',
+      project_slug: null,
+      project_name: null,
+    },
+  ]
 }
 
 export function DomainsPage() {
@@ -119,7 +137,7 @@ export function DomainsPage() {
   const panelHostnameListed =
     panelHostnameReady &&
     panelHostname !== null &&
-    domains.some((row) => row.hostnames.some((h) => h.fqdn === panelHostname))
+    domains.some((row) => zoneHostnames(row).some((h) => h.fqdn === panelHostname))
   const tableLoading = domainsQuery.isPending || panelHostnameQuery.isPending
 
   return (
@@ -182,80 +200,48 @@ export function DomainsPage() {
         </p>
       ) : null}
 
-      <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-            <tr>
-              <th scope="col" className="px-3 py-2 font-medium">
-                Names
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                Zone
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                Certificate
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                SSL mode
-              </th>
-              <th scope="col" className="px-3 py-2 font-medium">
-                <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {tableLoading ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
-                  Loading domains…
-                </td>
-              </tr>
-            ) : null}
-            {!tableLoading
-              ? domains.map((row) => (
-              <tr key={row.name}>
-                <td className="px-3 py-2">
-                  <div className="flex flex-col gap-1">
-                    {(row.hostnames ?? [
-                      {
-                        fqdn: row.name,
-                        kind: 'zone' as const,
-                        project_slug: null,
-                        project_name: null,
-                      },
-                    ]).map((entry) => (
-                      <div key={entry.fqdn} className="flex flex-wrap items-baseline gap-x-2">
-                        <span className="font-mono text-sm">{entry.fqdn}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {hostnameLabel(entry)}
-                        </span>
-                      </div>
-                    ))}
+      {tableLoading ? (
+        <div className="rounded-lg border border-border bg-card px-3 py-6 text-sm text-muted-foreground">
+          Loading domains…
+        </div>
+      ) : null}
+      {!tableLoading && !domainsQuery.isError && domains.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card px-3 py-6 text-sm text-muted-foreground">
+          No domains registered yet.
+        </div>
+      ) : null}
+      {!tableLoading
+        ? domains.map((row) => {
+            const names = zoneHostnames(row)
+            const zoneName = zoneNameById.get(row.zone_id) ?? row.zone_id
+            return (
+              <section key={row.name} className="overflow-hidden rounded-lg border border-border bg-card">
+                <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-border px-3 py-3">
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Zone</p>
+                    <p className="truncate font-mono text-sm font-medium">{zoneName}</p>
                   </div>
-                </td>
-                <td className="px-3 py-2 font-mono text-xs">
-                  {zoneNameById.get(row.zone_id) ?? row.zone_id}
-                </td>
-                <td className="px-3 py-2">
-                  <CertStatusBadge
-                    certStatus={row.cert_status}
-                    certExpiresAt={row.cert_expires_at}
-                    nowMs={nowMs}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <SslModeBadge
-                    sslMode={row.ssl_mode}
-                    sslModeError={row.ssl_mode_error ?? null}
-                    warning={row.warning}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">Certificate</p>
+                    <CertStatusBadge
+                      certStatus={row.cert_status}
+                      certExpiresAt={row.cert_expires_at}
+                      nowMs={nowMs}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-muted-foreground">SSL mode</p>
+                    <SslModeBadge
+                      sslMode={row.ssl_mode}
+                      sslModeError={row.ssl_mode_error ?? null}
+                      warning={row.warning}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 self-center">
                     <button
                       type="button"
                       disabled={reissueMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-200 hover:bg-muted cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => reissueMutation.mutate(row.name)}
                     >
                       <ArrowsClockwise weight="regular" aria-hidden className="size-4" />
@@ -264,27 +250,51 @@ export function DomainsPage() {
                     <button
                       type="button"
                       disabled={removeMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => setRemoveTarget(row.name)}
                     >
                       <Trash weight="regular" aria-hidden className="size-4" />
                       Remove
                     </button>
                   </div>
-                </td>
-              </tr>
-            ))
-              : null}
-            {!tableLoading && !domainsQuery.isError && domains.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
-                  No domains registered yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
-      </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[32rem] table-fixed text-left text-sm">
+                    <colgroup>
+                      <col className="w-[50%]" />
+                      <col className="w-[22%]" />
+                      <col className="w-[28%]" />
+                    </colgroup>
+                    <thead className="border-b border-border bg-muted/40 text-muted-foreground">
+                      <tr>
+                        <th scope="col" className="px-3 py-2 font-medium">
+                          Name
+                        </th>
+                        <th scope="col" className="px-3 py-2 font-medium">
+                          Type
+                        </th>
+                        <th scope="col" className="px-3 py-2 font-medium">
+                          Use
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {names.map((entry) => (
+                        <tr key={entry.fqdn}>
+                          <td className="px-3 py-2 font-mono text-sm break-all">{entry.fqdn}</td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            {hostnameType(row.name, entry.fqdn)}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">{hostnameUse(entry)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )
+          })
+        : null}
 
       {issueJobId ? (
         <section className="space-y-3" aria-labelledby="issue-log-heading">
