@@ -441,9 +441,14 @@ def _classify_load_errors(lines: list[str], admin: str) -> tuple[list[str], int]
 
     A real pg_dumpall always contains `CREATE ROLE <admin>` and therefore
     always collides with the stack's admin role; that single collision is
-    benign. Every other ERROR line means the dump did not apply as intended.
+    benign. pg_dump >= 17 also emits `SET transaction_timeout`, which older
+    servers reject without affecting the rest of the load. Every other ERROR
+    line means the dump did not apply as intended.
     """
-    benign_re = re.compile(rf'ERROR:\s+role "{re.escape(admin)}" already exists')
+    benign_re = re.compile(
+        rf'ERROR:\s+role "{re.escape(admin)}" already exists'
+        r'|ERROR:\s+unrecognized configuration parameter "transaction_timeout"'
+    )
     fatal: list[str] = []
     benign = 0
     for line in lines:
