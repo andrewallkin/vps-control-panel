@@ -1,0 +1,8 @@
+---
+description: Point every session at the local development workflow
+alwaysApply: true
+---
+
+# Local development
+
+Before any edit, read and follow `AGENTS.md` at the repo root. That file is the workflow: pull `main`, use your own feature branch, confirm the user's two terminals, open a pull request, and wait until every CI job passes.
