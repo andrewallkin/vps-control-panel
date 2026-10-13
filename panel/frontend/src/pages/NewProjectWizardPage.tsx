@@ -1,4 +1,4 @@
-import { Spinner } from '@phosphor-icons/react'
+import { Plus, Spinner } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -427,7 +427,10 @@ export function NewProjectWizardPage() {
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6">
       <div className="space-y-1">
-        <Link to="/projects" className="text-sm text-accent">
+        <Link
+          to="/projects"
+          className="text-sm font-medium underline-offset-2 hover:underline cursor-pointer text-accent"
+        >
           ← Projects
         </Link>
         <h1 className="text-xl font-semibold tracking-tight">New project</h1>
@@ -436,70 +439,74 @@ export function NewProjectWizardPage() {
       {step !== 'progress' ? <ProjectWizardStepper active={step} /> : null}
 
       {step === 'basics' ? (
-        <section className="space-y-4 rounded-md border border-border bg-card p-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="display-name">
+            <label className="block text-sm font-medium" htmlFor="display-name">
               Display name
             </label>
             <input
               id="display-name"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
           </div>
           <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="project-slug">
+            <label className="block text-sm font-medium" htmlFor="project-slug">
               Slug
             </label>
             <input
               id="project-slug"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
               value={slug}
+              aria-invalid={slugValidation.ok ? undefined : true}
+              aria-describedby={slugValidation.ok ? undefined : 'slug-error'}
               onChange={(e) => {
                 setSlugTouched(true)
                 setSlug(e.target.value.toLowerCase())
               }}
             />
             {!slugValidation.ok ? (
-              <p className="text-sm text-destructive">{slugValidation.error}</p>
+              <p id="slug-error" className="mt-1 text-sm text-destructive" role="alert">
+                {slugValidation.error}
+              </p>
             ) : null}
           </div>
         </section>
       ) : null}
 
       {step === 'source' ? (
-        <section className="space-y-4 rounded-md border border-border bg-card p-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
           <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="repo-url">
+            <label className="block text-sm font-medium" htmlFor="repo-url">
               Repository URL
             </label>
             <input
               id="repo-url"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
             />
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="branch">
+              <label className="block text-sm font-medium" htmlFor="branch">
                 Branch
               </label>
               <input
                 id="branch"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                 value={branch}
                 onChange={(e) => setBranch(e.target.value)}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="compose-file">
+              <label className="block text-sm font-medium" htmlFor="compose-file">
                 Compose file
               </label>
               <input
                 id="compose-file"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                 value={composeFile}
                 onChange={(e) => setComposeFile(e.target.value)}
               />
@@ -529,13 +536,13 @@ export function NewProjectWizardPage() {
           {deployMode === 'image' ? (
             <>
               <div className="space-y-1">
-                <label className="text-sm font-medium" htmlFor="docker-hub">
+                <label className="block text-sm font-medium" htmlFor="docker-hub">
                   Docker Hub repository
                 </label>
                 <input
                   id="docker-hub"
                   placeholder="namespace/name"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
                   value={dockerHubRepo}
                   onChange={(e) => setDockerHubRepo(e.target.value)}
                 />
@@ -556,7 +563,7 @@ export function NewProjectWizardPage() {
                 Add this read-only deploy key under the repo&apos;s Settings → Deploy keys.
               </p>
               {publicKey ? (
-                <pre className="mt-2 overflow-x-auto rounded bg-card p-2 font-mono text-xs text-foreground">
+                <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
                   {publicKey}
                 </pre>
               ) : (
@@ -567,7 +574,7 @@ export function NewProjectWizardPage() {
           <button
             type="button"
             disabled={!canTestAccess || testAccessMutation.isPending}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => {
               if (registeredProject) {
                 testAccessMutation.mutate(registeredProject.slug)
@@ -585,15 +592,15 @@ export function NewProjectWizardPage() {
       ) : null}
 
       {step === 'domain' ? (
-        <section className="space-y-4 rounded-md border border-border bg-card p-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="primary-domain">
+              <label className="block text-sm font-medium" htmlFor="primary-domain">
                 Primary domain
               </label>
               <select
                 id="primary-domain"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                 value={primaryDomain}
                 onChange={(e) => setPrimaryDomain(e.target.value)}
               >
@@ -606,18 +613,22 @@ export function NewProjectWizardPage() {
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="primary-subdomain">
+              <label className="block text-sm font-medium" htmlFor="primary-subdomain">
                 Subdomain
               </label>
               <input
                 id="primary-subdomain"
                 placeholder="empty for root"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                 value={primarySubdomain}
+                aria-invalid={primarySubdomainResult.ok ? undefined : true}
+                aria-describedby={primarySubdomainResult.ok ? undefined : 'primary-subdomain-error'}
                 onChange={(e) => setPrimarySubdomain(e.target.value)}
               />
               {!primarySubdomainResult.ok ? (
-                <p className="text-sm text-destructive">{primarySubdomainResult.error}</p>
+                <p id="primary-subdomain-error" className="mt-1 text-sm text-destructive" role="alert">
+                  {primarySubdomainResult.error}
+                </p>
               ) : null}
             </div>
           </div>
@@ -640,7 +651,7 @@ export function NewProjectWizardPage() {
               <div key={index} className="grid gap-2 sm:grid-cols-4">
                 <select
                   aria-label={`Extra domain ${index + 1}`}
-                  className="rounded-md border border-border bg-background px-2 py-2 text-sm sm:col-span-2"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 sm:col-span-2"
                   value={row.domain}
                   onChange={(e) =>
                     setExtraHostnames((list) =>
@@ -659,7 +670,7 @@ export function NewProjectWizardPage() {
                 </select>
                 <input
                   aria-label={`Extra subdomain ${index + 1}`}
-                  className="rounded-md border border-border bg-background px-2 py-2 text-sm"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                   placeholder="subdomain"
                   value={row.subdomain}
                   onChange={(e) =>
@@ -672,7 +683,7 @@ export function NewProjectWizardPage() {
                 />
                 <select
                   aria-label={`Extra kind ${index + 1}`}
-                  className="rounded-md border border-border bg-background px-2 py-2 text-sm"
+                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                   value={row.kind}
                   onChange={(e) =>
                     setExtraHostnames((list) =>
@@ -691,7 +702,7 @@ export function NewProjectWizardPage() {
             ))}
             <button
               type="button"
-              className="text-sm text-accent cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() =>
                 setExtraHostnames((list) => [
                   ...list,
@@ -699,6 +710,7 @@ export function NewProjectWizardPage() {
                 ])
               }
             >
+              <Plus weight="regular" aria-hidden className="size-4" />
               Add hostname
             </button>
           </div>
@@ -706,7 +718,7 @@ export function NewProjectWizardPage() {
       ) : null}
 
       {step === 'database' ? (
-        <section className="space-y-4 rounded-md border border-border bg-card p-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Database</legend>
             {(['none', 'new', 'adopted'] as const).map((mode) => (
@@ -724,23 +736,23 @@ export function NewProjectWizardPage() {
           {databaseMode === 'new' ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1">
-                <label className="text-sm font-medium" htmlFor="db-name">
+                <label className="block text-sm font-medium" htmlFor="db-name">
                   Database name
                 </label>
                 <input
                   id="db-name"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
                   value={dbName}
                   onChange={(e) => setDbName(e.target.value)}
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-sm font-medium" htmlFor="db-user">
+                <label className="block text-sm font-medium" htmlFor="db-user">
                   Database user
                 </label>
                 <input
                   id="db-user"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm"
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
                   value={dbUser}
                   onChange={(e) => setDbUser(e.target.value)}
                 />
@@ -749,12 +761,12 @@ export function NewProjectWizardPage() {
           ) : null}
           {databaseMode === 'adopted' ? (
             <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="adopt-db">
+              <label className="block text-sm font-medium" htmlFor="adopt-db">
                 Unattached database
               </label>
               <select
                 id="adopt-db"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                 value={adoptedDbName}
                 onChange={(e) => setAdoptedDbName(e.target.value)}
               >
@@ -786,7 +798,7 @@ export function NewProjectWizardPage() {
               type="text"
               value={migrationService}
               placeholder="backend"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
               onChange={(e) => setMigrationService(e.target.value)}
             />
             <label htmlFor="migration-command" className="block text-sm font-medium">
@@ -797,7 +809,7 @@ export function NewProjectWizardPage() {
               type="text"
               value={migrationCommand}
               placeholder="bash /app/run_migrations.sh"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
               onChange={(e) => setMigrationCommand(e.target.value)}
             />
             <p className="text-xs text-muted-foreground">
@@ -815,7 +827,7 @@ export function NewProjectWizardPage() {
       ) : null}
 
       {step === 'environment' ? (
-        <section className="rounded-md border border-border bg-card p-4">
+        <section className="rounded-lg border border-border bg-card p-4">
           <EnvEditor
             rows={envRows}
             routePortEnvVars={routePortEnvVars}
@@ -828,7 +840,7 @@ export function NewProjectWizardPage() {
       ) : null}
 
       {step === 'review' ? (
-        <section className="space-y-3 rounded-md border border-border bg-card p-4 text-sm">
+        <section className="space-y-3 rounded-lg border border-border bg-card p-4 text-sm">
           <p>
             <span className="text-muted-foreground">Directory:</span>{' '}
             <span className="font-mono">/srv/apps/{slug}</span>
@@ -856,12 +868,14 @@ export function NewProjectWizardPage() {
               <li key={row.key}>{row.key}</li>
             ))}
           </ul>
-          {createError ? <p className="text-destructive">{createError}</p> : null}
+          {createError ? (
+            <p className="text-sm text-destructive" role="alert">{createError}</p>
+          ) : null}
         </section>
       ) : null}
 
       {step === 'progress' ? (
-        <section className="space-y-4 rounded-md border border-border bg-card p-4">
+        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
           {creationPollQuery.isPending && !creationState ? (
             <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
               <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
@@ -886,7 +900,7 @@ export function NewProjectWizardPage() {
               {creationState.status === 'ready' ? (
                 <button
                   type="button"
-                  className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => navigate(`/projects/${encodeURIComponent(activeCreationSlug ?? slug)}`)}
                 >
                   Open project
@@ -897,7 +911,7 @@ export function NewProjectWizardPage() {
           {isSshRepoUrl(repoUrl) && publicKey ? (
             <div className="text-sm text-muted-foreground">
               <p>Deploy key (read-only):</p>
-              <pre className="mt-1 overflow-x-auto rounded bg-background p-2 font-mono text-xs">
+              <pre className="mt-1 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
                 {publicKey}
               </pre>
             </div>
@@ -906,11 +920,11 @@ export function NewProjectWizardPage() {
       ) : null}
 
       {step !== 'progress' ? (
-        <div className="flex flex-wrap justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <button
             type="button"
             disabled={step === 'basics'}
-            className="rounded-md border border-border px-4 py-2 text-sm font-medium disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={goBack}
           >
             Back
@@ -919,16 +933,16 @@ export function NewProjectWizardPage() {
             <button
               type="button"
               disabled={createMutation.isPending}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={handleCreate}
             >
-              Create project
+              {createMutation.isPending ? 'Creating…' : 'Create project'}
             </button>
           ) : (
             <button
               type="button"
               disabled={!stepValid[step]}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={goContinue}
             >
               Continue
