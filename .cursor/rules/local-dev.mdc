@@ -1,0 +1,21 @@
+---
+description: Local development workflow for every agent session
+alwaysApply: true
+---
+
+# Local development
+
+Follow `AGENTS.md`. Each agent uses its own feature branch and does not edit `main` or commit another agent's files.
+
+1. `git checkout main && git pull --ff-only origin main`
+2. `git checkout -b <type>/<short-topic>` before any edit
+3. Confirm the user already has both terminals running. Do not start them.
+   - `cd panel/frontend && npm run dev`
+   - `ssh -N -L 8080:localhost:8080 netcup` (silent when up; local port 8080 must be listening)
+4. Implement. UI changes show at http://localhost:5173. Panel and agent changes wait for the VPS update.
+5. Open a pull request with only this branch's commits.
+6. Watch CI until every job passes before asking for a merge.
+7. The user merges.
+8. The user runs `git checkout main && sudo ./update.sh --pull` on the VPS.
+
+Do not merge, force-push, or run `update.sh`.
