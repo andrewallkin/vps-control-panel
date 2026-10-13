@@ -22,7 +22,7 @@ import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
-import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
+import { uploadDumpFile, uploadFailureMessage, type UploadProgress } from '../lib/chunkedUpload'
 import { ACCEPT, isAcceptedDump } from '../lib/dumpFile'
 import {
   adoptDatabase,
@@ -180,7 +180,7 @@ export function DatabasePage() {
         setPendingStepUp({ kind: 'upload', file })
         setStepUpOpen(true)
       } else {
-        setUploadError('Upload failed. Try again.')
+        setUploadError(uploadFailureMessage(error))
       }
     } finally {
       setUploading(false)

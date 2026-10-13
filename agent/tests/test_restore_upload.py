@@ -133,8 +133,24 @@ def test_non_pg_file(restore_client, settings):
     digest = hashlib.sha256(data).hexdigest()
     resp = client.post(f"/v1/restore/uploads/{upload_id}/complete", json={"sha256": digest})
     assert resp.status_code == 400
-    assert "not a pg_dumpall file" in resp.json()["detail"]
+    assert "pg_dumpall cluster dump" in resp.json()["detail"]
     assert (settings.restore_dir / f"{upload_id}.part").is_file()
+
+
+def test_mixed_case_suffix_full_flow(restore_client, settings):
+    client = restore_client
+    data = TINY_DUMP
+    resp = client.post(
+        "/v1/restore/uploads", json={"filename": "Cluster.SQL.GZ", "size": len(data)}
+    )
+    assert resp.status_code == 200, resp.text
+    upload_id = resp.json()["upload_id"]
+    put = client.put(f"/v1/restore/uploads/{upload_id}?offset=0", content=data)
+    assert put.status_code == 200, put.text
+    digest = hashlib.sha256(data).hexdigest()
+    done = client.post(f"/v1/restore/uploads/{upload_id}/complete", json={"sha256": digest})
+    assert done.status_code == 200, done.text
+    assert done.json()["kind"] == "gzip"
 
 
 def test_upload_id_rejects_path_traversal_and_short_id(settings):
