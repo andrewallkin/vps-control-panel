@@ -144,4 +144,39 @@ describe('LoginPage', () => {
 
     vi.useRealTimers()
   })
+
+  it('shows a session error when sign-in succeeds but the session check fails', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/auth/me')) {
+        return Promise.resolve(jsonResponse({ detail: 'unauthorized' }, 401))
+      }
+      if (url.includes('/api/auth/login') && init?.method === 'POST') {
+        return Promise.resolve(
+          jsonResponse({ username: 'admin', csrf_token: 'csrf-token' }),
+        )
+      }
+      return Promise.resolve(jsonResponse({}))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const user = userEvent.setup()
+    renderWithProviders(<LoginPage />, { routerProps: { initialEntries: ['/login'] } })
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/username/i)).toBeInTheDocument()
+    })
+
+    await user.type(screen.getByLabelText(/username/i), 'admin')
+    await user.type(screen.getByLabelText(/password/i), 'correct-password')
+    await user.type(screen.getByLabelText(/authenticator code/i), '123456')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+
+    expect(
+      await screen.findByText(/session could not be established/i),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Something went wrong. Try again.'),
+    ).not.toBeInTheDocument()
+  })
 })

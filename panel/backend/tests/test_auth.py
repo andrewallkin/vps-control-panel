@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 import vpscp_panel.db as db_module
 from vpscp_panel.auth import require_step_up
+from vpscp_panel.config import PanelSettings
 from vpscp_panel.main import create_app
 from vpscp_panel.models import AdminUser
 from vpscp_panel.settings_store import set_setting
@@ -142,6 +143,51 @@ def test_login_sets_cookie_flags(panel_settings, admin_user, frozen_time):
         assert "SameSite=strict" in cookie or "SameSite=Strict" in cookie
         assert "Path=/" in cookie
         assert "Secure" in cookie
+
+
+def test_login_cookie_not_secure_on_http_when_unset(panel_settings, admin_user, frozen_time):
+    panel_settings_auto = panel_settings.model_copy(update={"panel_cookie_secure": None})
+    app = create_app(settings=panel_settings_auto)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        response = client.post(
+            "http://testserver/api/auth/login",
+            json={
+                "username": "admin",
+                "password": admin_user["password"],
+                "code": totp_code(admin_user["totp_secret"], frozen_time),
+            },
+        )
+        assert response.status_code == 200
+        cookie = response.headers.get("set-cookie", "")
+        assert "vpscp_session=" in cookie
+        assert "Secure" not in cookie
+
+
+def test_login_cookie_secure_on_https_when_unset(panel_settings, admin_user, frozen_time):
+    panel_settings_auto = panel_settings.model_copy(update={"panel_cookie_secure": None})
+    app = create_app(settings=panel_settings_auto)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        response = client.post(
+            "https://testserver/api/auth/login",
+            json={
+                "username": "admin",
+                "password": admin_user["password"],
+                "code": totp_code(admin_user["totp_secret"], frozen_time),
+            },
+        )
+        assert response.status_code == 200
+        cookie = response.headers.get("set-cookie", "")
+        assert "vpscp_session=" in cookie
+        assert "Secure" in cookie
+
+
+def test_panel_cookie_secure_parsing():
+    assert PanelSettings(PANEL_SECRET_KEY="k").panel_cookie_secure is None
+    assert PanelSettings(PANEL_SECRET_KEY="k", PANEL_COOKIE_SECURE="").panel_cookie_secure is None
+    assert PanelSettings(PANEL_SECRET_KEY="k", PANEL_COOKIE_SECURE="0").panel_cookie_secure is False
+    assert PanelSettings(PANEL_SECRET_KEY="k", PANEL_COOKIE_SECURE="1").panel_cookie_secure is True
 
 
 def test_bad_origin_rejected(client, admin_user, frozen_time):
