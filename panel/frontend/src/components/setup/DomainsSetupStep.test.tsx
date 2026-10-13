@@ -39,6 +39,14 @@ describe('DomainsSetupStep', () => {
         ssl_mode: 'strict',
         ssl_mode_error: null,
         warning: null,
+        hostnames: [
+          {
+            fqdn: 'example.com',
+            kind: 'zone',
+            project_slug: null,
+            project_name: null,
+          },
+        ],
       },
     ])
     vi.mocked(reissueDomain).mockResolvedValue({ job_id: 'job-reissue-1' })

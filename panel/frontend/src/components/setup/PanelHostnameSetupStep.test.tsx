@@ -41,6 +41,14 @@ describe('PanelHostnameSetupStep', () => {
         ssl_mode: null,
         ssl_mode_error: null,
         warning: null,
+        hostnames: [
+          {
+            fqdn: 'example.com',
+            kind: 'zone',
+            project_slug: null,
+            project_name: null,
+          },
+        ],
       },
     ])
     vi.mocked(setPanelHostname).mockResolvedValue({ panel_hostname: 'panel.example.com' })

@@ -1,4 +1,3 @@
-import type { TooltipContentProps } from 'recharts'
 import {
   CartesianGrid,
   Line,
@@ -42,7 +41,9 @@ function MetricChartTooltip({
   active,
   payload,
   valueFormatter,
-}: TooltipContentProps<number, string> & {
+}: {
+  active?: boolean
+  payload?: ReadonlyArray<{ payload?: unknown; value?: unknown }>
   valueFormatter: (value: number) => string
 }) {
   if (!active || !payload?.length) {
@@ -119,8 +120,12 @@ export function MetricChart({
             tickFormatter={(v) => valueFormatter(Number(v))}
           />
           <Tooltip
-            content={(props) => (
-              <MetricChartTooltip {...props} valueFormatter={valueFormatter} />
+            content={({ active, payload }) => (
+              <MetricChartTooltip
+                active={active}
+                payload={payload}
+                valueFormatter={valueFormatter}
+              />
             )}
           />
           <Line
