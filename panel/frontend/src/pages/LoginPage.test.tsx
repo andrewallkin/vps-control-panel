@@ -88,7 +88,7 @@ describe('LoginPage', () => {
     await user.type(screen.getByLabelText(/authenticator code/i), '123456')
     await user.click(screen.getByRole('button', { name: /sign in/i }))
 
-    expect(await screen.findByText('Invalid credentials')).toBeInTheDocument()
+    expect(await screen.findByText('Invalid credentials.')).toBeInTheDocument()
   })
 
   it('shows lockout countdown on 429 and blocks resubmit', async () => {
