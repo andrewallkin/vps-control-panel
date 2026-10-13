@@ -20,10 +20,7 @@ describe('StatusStrip', () => {
   })
 
   it('formats backup last_run from finished_at', () => {
-    const iso = '2026-03-15T14:30:00.000Z'
-    const toLocaleStringSpy = vi
-      .spyOn(Date.prototype, 'toLocaleString')
-      .mockReturnValue('Mar 15, 2026, 2:30:00 PM')
+    const iso = new Date(2026, 9, 13, 15, 52, 2).toISOString()
 
     render(
       <StatusStrip
@@ -38,10 +35,7 @@ describe('StatusStrip', () => {
       />,
     )
 
-    expect(toLocaleStringSpy).toHaveBeenCalled()
-    const backupLine = screen.getByText('Mar 15, 2026, 2:30:00 PM')
-    expect(backupLine).toBeInTheDocument()
-    expect(backupLine.textContent).not.toBe('Invalid Date')
+    expect(screen.getByText('13 October 2026, 15:52:02')).toBeInTheDocument()
   })
 
   it('shows Never when last_run is null', () => {

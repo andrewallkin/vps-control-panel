@@ -19,7 +19,8 @@ import {
   memoryHistoryChart,
   percentChartFormatter,
 } from '../lib/chartData'
-import { formatBytes, formatLoad, formatPercent } from '../lib/format'
+import { diskMountLabel } from '../lib/diskLabel'
+import { formatBytes, formatPercent } from '../lib/format'
 
 export function DashboardPage() {
   const currentQuery = useCurrentMetricsQuery()
@@ -71,11 +72,10 @@ export function DashboardPage() {
             <div className="space-y-1 text-base">
               <p>{formatPercent(current.cpu_percent)}</p>
               <p className="text-sm text-muted-foreground">
-                load{' '}
                 <span className="text-foreground">
-                  {formatLoad(current.load1, current.cpu_count)} ·{' '}
-                  {formatLoad(current.load5, current.cpu_count)} ·{' '}
-                  {formatLoad(current.load15, current.cpu_count)}
+                  1 min {current.load1.toFixed(2)} · 5 min{' '}
+                  {current.load5.toFixed(2)} · 15 min{' '}
+                  {current.load15.toFixed(2)} · {current.cpu_count} cores
                 </span>
               </p>
             </div>
@@ -125,7 +125,10 @@ export function DashboardPage() {
             <ul className="space-y-2 text-sm">
               {current.disks.map((disk) => (
                 <li key={disk.path} className="flex flex-wrap justify-between gap-2">
-                  <span className="font-mono">{disk.path}</span>
+                  <span className="font-mono">
+                    {diskMountLabel(disk.path)}
+                    <span className="sr-only"> ({disk.path})</span>
+                  </span>
                   <span>
                     {formatBytes(disk.used)} used · {formatBytes(disk.free)} free (
                     {formatPercent(disk.percent)})

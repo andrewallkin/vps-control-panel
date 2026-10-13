@@ -14,6 +14,7 @@ _PRUNE_BUILD_CACHE_ARGS = ["docker", "builder", "prune", "-af", "--filter", "unt
 
 _PERCENT_SUFFIX_RE = re.compile(r"^(.+?) \(\d+%\)$")
 _RECLAIMED_RE = re.compile(r"^Total reclaimed space:\s*(.+)\s*$", re.MULTILINE)
+_BUILDX_TOTAL_RE = re.compile(r"^Total:\s+(.+)\s*$", re.MULTILINE)
 
 _TYPE_TO_KEY = {
     "Images": "images",
@@ -52,6 +53,18 @@ def _parse_docker_size(text: str) -> int:
     return parse_size(_strip_percent_suffix(text))
 
 
+def _parse_prune_reclaimed_bytes(stdout: str) -> int:
+    match = _RECLAIMED_RE.search(stdout)
+    if match:
+        return _parse_docker_size(match.group(1))
+    for buildx_match in _BUILDX_TOTAL_RE.finditer(stdout):
+        size_part = buildx_match.group(1).strip()
+        if size_part.lower().startswith("reclaimed"):
+            continue
+        return _parse_docker_size(size_part)
+    raise ValueError("prune output missing Total reclaimed space line")
+
+
 def docker_df(runner: Runner) -> DockerDiskUsage:
     result = runner(_DF_ARGS)
     categories = {key: _empty_category() for key in _TYPE_TO_KEY.values()}
@@ -72,17 +85,9 @@ def docker_df(runner: Runner) -> DockerDiskUsage:
 
 def prune_images(runner: Runner) -> dict[str, int]:
     result = runner(_PRUNE_ARGS)
-    match = _RECLAIMED_RE.search(result.stdout)
-    if not match:
-        raise ValueError("prune output missing Total reclaimed space line")
-    reclaimed = _parse_docker_size(match.group(1))
-    return {"reclaimed_bytes": reclaimed}
+    return {"reclaimed_bytes": _parse_prune_reclaimed_bytes(result.stdout)}
 
 
 def prune_build_cache(runner: Runner) -> dict[str, int]:
     result = runner(_PRUNE_BUILD_CACHE_ARGS)
-    match = _RECLAIMED_RE.search(result.stdout)
-    if not match:
-        raise ValueError("prune output missing Total reclaimed space line")
-    reclaimed = _parse_docker_size(match.group(1))
-    return {"reclaimed_bytes": reclaimed}
+    return {"reclaimed_bytes": _parse_prune_reclaimed_bytes(result.stdout)}

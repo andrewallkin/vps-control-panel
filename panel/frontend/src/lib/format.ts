@@ -1,5 +1,38 @@
 const BYTE_UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB'] as const
 
+const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const
+
+function pad2(value: number): string {
+  return value.toString().padStart(2, '0')
+}
+
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) {
+    return iso
+  }
+  const day = date.getDate()
+  const month = MONTH_NAMES[date.getMonth()]
+  const year = date.getFullYear()
+  const hours = pad2(date.getHours())
+  const minutes = pad2(date.getMinutes())
+  const seconds = pad2(date.getSeconds())
+  return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds}`
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
     return '—'

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -11,6 +12,12 @@ _PER_PAGE = 50
 
 class CloudflareError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class SslModeResult:
+    mode: str | None
+    error: str | None
 
 
 class CloudflareClient:
@@ -134,17 +141,17 @@ class CloudflareClient:
             )
         return zones
 
-    def get_ssl_mode(self, zone_id: str) -> str | None:
+    def get_ssl_mode(self, zone_id: str) -> SslModeResult:
         response = self._request_raw("GET", f"/zones/{zone_id}/settings/ssl")
         body = self._parse_body(response)
         if response.status_code == 403 or (not body.get("success") and self._is_auth_error(body)):
-            return None
+            return SslModeResult(mode=None, error="permission")
         if not body.get("success"):
             raise CloudflareError(self._error_message(body))
         result = body.get("result")
         if isinstance(result, dict) and result.get("value") is not None:
-            return str(result["value"])
-        return None
+            return SslModeResult(mode=str(result["value"]), error=None)
+        return SslModeResult(mode=None, error=None)
 
     def find_dns_records_at_name(self, zone_id: str, fqdn: str) -> list[dict[str, Any]]:
         page = 1

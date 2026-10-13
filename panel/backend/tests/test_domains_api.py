@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 import vpscp_panel.db as db_module
 from vpscp_panel.agent_client import AgentClient
 from vpscp_panel.main import create_app
+from vpscp_panel.models import Project, ProjectHostname
 from vpscp_panel.settings_store import get_setting, set_setting
 
 SECRET_TOKEN = "cf-secret-token-should-not-leak"
@@ -94,8 +95,13 @@ def _domains_transport(agent_requests, agent_state):
             )
         if path.endswith("/ssl-mode") and method == "GET":
             zone_id = path.rsplit("/", 2)[-2]
-            mode = agent_state["ssl_modes"].get(zone_id, "strict")
-            return httpx.Response(200, json={"mode": mode})
+            overrides = agent_state.get("ssl_mode_overrides", {})
+            if zone_id in overrides:
+                payload = overrides[zone_id]
+            else:
+                mode = agent_state["ssl_modes"].get(zone_id, "strict")
+                payload = {"mode": mode, "error": None}
+            return httpx.Response(200, json=payload)
         if path == "/v1/domains" and method == "POST":
             body = json.loads(request.content.decode())
             agent_state["domains"].append(body)
@@ -255,7 +261,16 @@ def test_register_domain_tolerates_issue_failure(domains_client, auth, agent_sta
     assert len(agent_state["domains"]) == 1
     listed = domains_client.get("/api/domains")
     assert listed.status_code == 200
-    assert listed.json()[0]["name"] == DOMAIN
+    item = listed.json()[0]
+    assert item["name"] == DOMAIN
+    assert item["hostnames"] == [
+        {
+            "fqdn": DOMAIN,
+            "kind": "zone",
+            "project_slug": None,
+            "project_name": None,
+        }
+    ]
 
 
 def test_register_domain_reports_issue_job_on_success(domains_client, auth, agent_state):
@@ -316,6 +331,82 @@ def test_panel_hostname_posts_site_spec_and_dns(domains_client, auth, agent_stat
     assert agent_state["dns_upserts"] == [{"fqdn": f"panel.{DOMAIN}"}]
     nginx_calls = [r for r in agent_requests if r.url.path == "/v1/nginx/sites"]
     assert len(nginx_calls) == 1
+    listed = domains_client.get("/api/domains")
+    assert listed.status_code == 200
+    hostnames = listed.json()[0]["hostnames"]
+    assert hostnames == [
+        {
+            "fqdn": DOMAIN,
+            "kind": "zone",
+            "project_slug": None,
+            "project_name": None,
+        },
+        {
+            "fqdn": f"panel.{DOMAIN}",
+            "kind": "panel",
+            "project_slug": None,
+            "project_name": None,
+        },
+    ]
+
+
+def test_list_domains_includes_project_hostnames(domains_client, auth, frozen_time):
+    _post_token(domains_client, auth)
+    _register_domain(domains_client, auth)
+    assert db_module.SessionLocal is not None
+    with db_module.SessionLocal() as db:
+        db.add(
+            Project(
+                slug="blog",
+                display_name="Blog",
+                repo_url="https://example.com/blog.git",
+                branch="main",
+                compose_file="compose.yml",
+                deploy_mode="compose",
+                database_mode="none",
+                write_database_url=False,
+                creation_state="{}",
+                created_at=frozen_time,
+            )
+        )
+        db.add(
+            ProjectHostname(
+                project_slug="blog",
+                domain=DOMAIN,
+                subdomain="app",
+                kind="primary",
+            )
+        )
+        db.commit()
+    response = domains_client.get("/api/domains")
+    assert response.status_code == 200
+    hostnames = response.json()[0]["hostnames"]
+    assert {
+        "fqdn": f"app.{DOMAIN}",
+        "kind": "primary",
+        "project_slug": "blog",
+        "project_name": "Blog",
+    } in hostnames
+    assert {
+        "fqdn": DOMAIN,
+        "kind": "zone",
+        "project_slug": None,
+        "project_name": None,
+    } in hostnames
+
+
+def test_list_domains_ssl_mode_permission_error(domains_client, auth, agent_state):
+    _post_token(domains_client, auth)
+    _register_domain(domains_client, auth)
+    agent_state["ssl_mode_overrides"] = {
+        ZONE_ID: {"mode": None, "error": "permission"},
+    }
+    response = domains_client.get("/api/domains")
+    assert response.status_code == 200
+    item = response.json()[0]
+    assert item["ssl_mode"] is None
+    assert item["ssl_mode_error"] == "permission"
+    assert item["warning"] is None
 
 
 def test_list_domains_ssl_mode_warning(domains_client, auth, agent_state):

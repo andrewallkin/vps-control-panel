@@ -39,6 +39,7 @@ describe('PanelHostnameSetupStep', () => {
         cert_status: 'valid',
         cert_expires_at: null,
         ssl_mode: null,
+        ssl_mode_error: null,
         warning: null,
       },
     ])

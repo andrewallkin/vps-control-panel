@@ -1,6 +1,6 @@
 import { CheckCircle, Clock, Warning, XCircle } from '@phosphor-icons/react'
 import { StatusBadge } from '../StatusBadge'
-import { formatBytes } from '../../lib/format'
+import { formatBytes, formatDateTime } from '../../lib/format'
 import type { BackupStatus } from '../../lib/backupsApi'
 
 function ResultStatus({ success, error }: { success?: boolean; error?: string | null }) {
@@ -88,9 +88,7 @@ export function BackupStatusCard({ status, loading }: BackupStatusCardProps) {
           <div>
             <dt className="text-muted-foreground">Last run</dt>
             <dd className="mt-0.5 font-medium">
-              {lastRun?.finished_at
-                ? new Date(lastRun.finished_at).toLocaleString()
-                : 'Never'}
+              {lastRun?.finished_at ? formatDateTime(lastRun.finished_at) : 'Never'}
             </dd>
           </div>
           <div>
@@ -123,7 +121,7 @@ export function BackupStatusCard({ status, loading }: BackupStatusCardProps) {
             <dt className="text-muted-foreground">Next run</dt>
             <dd className="mt-0.5 inline-flex items-center gap-1.5 font-medium">
               <Clock weight="regular" aria-hidden className="size-4 text-muted-foreground" />
-              {status?.next_run ? new Date(status.next_run).toLocaleString() : '—'}
+              {status?.next_run ? formatDateTime(status.next_run) : '—'}
             </dd>
           </div>
         </dl>

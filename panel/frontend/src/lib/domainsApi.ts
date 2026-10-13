@@ -11,13 +11,24 @@ export interface CloudflareZonesResponse {
   zones: CloudflareZone[]
 }
 
+export type DomainHostnameKind = 'zone' | 'panel' | 'primary' | 'alias' | 'redirect'
+
+export interface DomainHostname {
+  fqdn: string
+  kind: DomainHostnameKind
+  project_slug: string | null
+  project_name: string | null
+}
+
 export interface DomainRow {
   name: string
   zone_id: string
   cert_status: string
   cert_expires_at: string | null
   ssl_mode: string | null
+  ssl_mode_error: 'permission' | null
   warning: string | null
+  hostnames: DomainHostname[]
 }
 
 export interface ServerSettings {

@@ -161,6 +161,26 @@ def test_prune_build_cache_zero_reclaimed():
     assert prune_build_cache(runner) == {"reclaimed_bytes": 0}
 
 
+def test_prune_build_cache_parses_buildx_total_line():
+    runner = FakeRunner()
+    runner.on(
+        lambda args: args == PRUNE_BUILD_CACHE_ARGS,
+        stdout="ID\tRECLAIMABLE\tSIZE\tLAST ACCESSED\nabc123\ttrue\t1GB\t1 hour ago\nTotal:\t2.1GB\n",
+    )
+
+    assert prune_build_cache(runner) == {"reclaimed_bytes": int(2.1 * 1000**3)}
+
+
+def test_prune_build_cache_buildx_zero_reclaimed():
+    runner = FakeRunner()
+    runner.on(
+        lambda args: args == PRUNE_BUILD_CACHE_ARGS,
+        stdout="Total:\t0B\n",
+    )
+
+    assert prune_build_cache(runner) == {"reclaimed_bytes": 0}
+
+
 def test_get_docker_df_not_audited(docker_client):
     client, runner = docker_client
     runner.on(lambda args: args == DF_ARGS, stdout=DOCKER_DF_LINES)
