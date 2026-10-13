@@ -216,7 +216,14 @@ export function DomainsPage() {
               <tr key={row.name}>
                 <td className="px-3 py-2">
                   <div className="flex flex-col gap-1">
-                    {row.hostnames.map((entry) => (
+                    {(row.hostnames ?? [
+                      {
+                        fqdn: row.name,
+                        kind: 'zone' as const,
+                        project_slug: null,
+                        project_name: null,
+                      },
+                    ]).map((entry) => (
                       <div key={entry.fqdn} className="flex flex-wrap items-baseline gap-x-2">
                         <span className="font-mono text-sm">{entry.fqdn}</span>
                         <span className="text-xs text-muted-foreground">
@@ -239,7 +246,7 @@ export function DomainsPage() {
                 <td className="px-3 py-2">
                   <SslModeBadge
                     sslMode={row.ssl_mode}
-                    sslModeError={row.ssl_mode_error}
+                    sslModeError={row.ssl_mode_error ?? null}
                     warning={row.warning}
                   />
                 </td>
