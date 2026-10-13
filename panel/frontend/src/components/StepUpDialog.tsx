@@ -102,16 +102,22 @@ export function StepUpDialog({
             maxLength={6}
             value={code}
             disabled={disabled}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? 'step-up-code-error' : undefined}
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
             onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
           />
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? (
+            <p id="step-up-code-error" className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
         </div>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             type="button"
             disabled={disabled}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onCancel}
           >
             Cancel
@@ -119,7 +125,7 @@ export function StepUpDialog({
           <button
             type="submit"
             disabled={disabled || code.trim().length !== 6}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
