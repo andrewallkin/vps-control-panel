@@ -53,3 +53,11 @@ async def docker_prune_images(
     agent: Annotated[AgentClient, Depends(_agent)],
 ) -> dict:
     return await agent.post("/v1/docker/prune-images")
+
+
+@router.post("/api/docker/prune-build-cache")
+async def docker_prune_build_cache(
+    _session: Annotated[Session, Depends(require_csrf)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+) -> dict:
+    return await agent.post("/v1/docker/prune-build-cache")

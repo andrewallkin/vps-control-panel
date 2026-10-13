@@ -30,6 +30,12 @@ export function pruneUnusedImages(): Promise<PruneImagesResult> {
   })
 }
 
+export function pruneBuildCache(): Promise<PruneImagesResult> {
+  return apiJson<PruneImagesResult>('/api/docker/prune-build-cache', {
+    method: 'POST',
+  })
+}
+
 export function fetchDashboardSummary(): Promise<DashboardSummary> {
   return apiJson<DashboardSummary>('/api/dashboard/summary')
 }

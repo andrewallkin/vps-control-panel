@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError } from '../../lib/api'
-import { pruneUnusedImages } from '../../lib/dashboardApi'
+import { pruneBuildCache, pruneUnusedImages } from '../../lib/dashboardApi'
 import type { DockerDf } from '../../lib/dashboardTypes'
 import { formatBytes } from '../../lib/format'
 import { SLOW_POLL_STALE_MS, useQueryStale } from '../../hooks/useQueryStale'
@@ -18,17 +18,18 @@ export interface DockerDiskCardProps {
 }
 
 export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardProps) {
-  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [imagesConfirmOpen, setImagesConfirmOpen] = useState(false)
+  const [buildCacheConfirmOpen, setBuildCacheConfirmOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [inlineError, setInlineError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const now = useTickingNow()
   const isStale = useQueryStale(dataUpdatedAt, SLOW_POLL_STALE_MS)
 
-  const pruneMutation = useMutation({
+  const pruneImagesMutation = useMutation({
     mutationFn: pruneUnusedImages,
     onSuccess: (result) => {
-      setConfirmOpen(false)
+      setImagesConfirmOpen(false)
       setInlineError(null)
       setToast(`Reclaimed ${formatBytes(result.reclaimed_bytes)}`)
       void queryClient.invalidateQueries({ queryKey: ['docker', 'df'] })
@@ -42,6 +43,27 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
       }
     },
   })
+
+  const pruneBuildCacheMutation = useMutation({
+    mutationFn: pruneBuildCache,
+    onSuccess: (result) => {
+      setBuildCacheConfirmOpen(false)
+      setInlineError(null)
+      setToast(`Reclaimed ${formatBytes(result.reclaimed_bytes)}`)
+      void queryClient.invalidateQueries({ queryKey: ['docker', 'df'] })
+    },
+    onError: (error: unknown) => {
+      if (error instanceof ApiError) {
+        const body = error.body as { detail?: string }
+        setInlineError(body?.detail ?? error.message)
+      } else {
+        setInlineError('Prune failed')
+      }
+    },
+  })
+
+  const anyPrunePending =
+    pruneImagesMutation.isPending || pruneBuildCacheMutation.isPending
 
   const rows = df
     ? [
@@ -77,16 +99,36 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
             ))}
           </ul>
         )}
-        <button
-          type="button"
-          className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => {
-            setInlineError(null)
-            setConfirmOpen(true)
-          }}
-        >
-          Prune unused images
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={anyPrunePending}
+            onClick={() => {
+              if (anyPrunePending) {
+                return
+              }
+              setInlineError(null)
+              setImagesConfirmOpen(true)
+            }}
+          >
+            Prune unused images
+          </button>
+          <button
+            type="button"
+            className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={anyPrunePending}
+            onClick={() => {
+              if (anyPrunePending) {
+                return
+              }
+              setInlineError(null)
+              setBuildCacheConfirmOpen(true)
+            }}
+          >
+            Prune build cache
+          </button>
+        </div>
         {inlineError ? (
           <p className="text-sm text-destructive" role="alert">
             {inlineError}
@@ -94,17 +136,30 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
         ) : null}
       </section>
       <ConfirmDialog
-        open={confirmOpen}
+        open={imagesConfirmOpen}
         title="Prune unused images"
         description="This deletes unused Docker images older than 24 hours. Running containers are not affected."
         confirmLabel="Prune images"
-        busy={pruneMutation.isPending}
+        busy={pruneImagesMutation.isPending}
         onCancel={() => {
-          if (!pruneMutation.isPending) {
-            setConfirmOpen(false)
+          if (!pruneImagesMutation.isPending) {
+            setImagesConfirmOpen(false)
           }
         }}
-        onConfirm={() => pruneMutation.mutate()}
+        onConfirm={() => pruneImagesMutation.mutate()}
+      />
+      <ConfirmDialog
+        open={buildCacheConfirmOpen}
+        title="Prune build cache"
+        description="This deletes unused Docker build cache older than 24 hours. Images and running containers are not affected."
+        confirmLabel="Prune build cache"
+        busy={pruneBuildCacheMutation.isPending}
+        onCancel={() => {
+          if (!pruneBuildCacheMutation.isPending) {
+            setBuildCacheConfirmOpen(false)
+          }
+        }}
+        onConfirm={() => pruneBuildCacheMutation.mutate()}
       />
       {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </>

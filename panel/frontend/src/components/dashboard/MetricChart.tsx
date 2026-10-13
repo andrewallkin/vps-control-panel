@@ -7,10 +7,12 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { chartAxisTicks, historyTimeLabel } from '../../lib/chartData'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 
 export interface ChartPoint {
   ts: string
+  time: number
   label: string
   value: number
 }
@@ -23,6 +25,10 @@ export interface MetricChartProps {
   yDomain?: [number | 'auto', number | 'auto']
 }
 
+function axisTickFormatter(tick: number): string {
+  return historyTimeLabel(new Date(tick).toISOString())
+}
+
 export function MetricChart({
   data,
   paused,
@@ -31,6 +37,7 @@ export function MetricChart({
   yDomain,
 }: MetricChartProps) {
   const reduced = useReducedMotion()
+  const xTicks = chartAxisTicks(data.map((point) => point.time))
 
   if (paused) {
     return (
@@ -58,11 +65,15 @@ export function MetricChart({
             vertical={false}
           />
           <XAxis
-            dataKey="label"
+            dataKey="time"
+            type="number"
+            scale="time"
+            domain={['dataMin', 'dataMax']}
+            ticks={xTicks}
             tick={{ fill: 'var(--color-muted-foreground)', fontSize: 10 }}
             tickLine={false}
             axisLine={{ stroke: 'var(--color-border)' }}
-            minTickGap={24}
+            tickFormatter={axisTickFormatter}
           />
           <YAxis
             domain={yDomain ?? ['auto', 'auto']}
@@ -80,6 +91,16 @@ export function MetricChart({
               fontSize: 12,
             }}
             labelStyle={{ color: 'var(--color-foreground)' }}
+            labelFormatter={(_label, payload) => {
+              const row = payload?.[0]?.payload as ChartPoint | undefined
+              if (row?.ts) {
+                return historyTimeLabel(row.ts)
+              }
+              if (row?.time != null) {
+                return historyTimeLabel(new Date(row.time).toISOString())
+              }
+              return ''
+            }}
             formatter={(value) => [
               valueFormatter(typeof value === 'number' ? value : Number(value)),
               '',
