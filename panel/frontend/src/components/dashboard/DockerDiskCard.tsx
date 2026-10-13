@@ -4,7 +4,7 @@ import { ApiError } from '../../lib/api'
 import { pruneUnusedImages } from '../../lib/dashboardApi'
 import type { DockerDf } from '../../lib/dashboardTypes'
 import { formatBytes } from '../../lib/format'
-import { useQueryStale } from '../../hooks/useQueryStale'
+import { SLOW_POLL_STALE_MS, useQueryStale } from '../../hooks/useQueryStale'
 import { useTickingNow } from '../../hooks/useTickingNow'
 import { formatSecondsAgo } from '../../lib/format'
 import { ConfirmDialog } from '../ConfirmDialog'
@@ -23,7 +23,7 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
   const [inlineError, setInlineError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const now = useTickingNow()
-  const isStale = useQueryStale(dataUpdatedAt)
+  const isStale = useQueryStale(dataUpdatedAt, SLOW_POLL_STALE_MS)
 
   const pruneMutation = useMutation({
     mutationFn: pruneUnusedImages,

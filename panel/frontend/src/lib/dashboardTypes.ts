@@ -1,3 +1,5 @@
+import type { BackupLastRun } from './backupsApi'
+
 export interface DiskMetrics {
   path: string
   total: number
@@ -68,7 +70,7 @@ export interface DashboardWarning {
 
 export interface DashboardSummary {
   backup: {
-    last_run: string | null
+    last_run: BackupLastRun | null
     overdue: boolean
     failed: boolean
   } | null

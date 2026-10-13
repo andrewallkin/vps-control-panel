@@ -2,7 +2,8 @@ import { Pause, Play } from '@phosphor-icons/react'
 import { useState, type ReactNode } from 'react'
 import {
   oldestSuccessfulUpdateAt,
-  useAnyQueryStale,
+  SLOW_POLL_STALE_MS,
+  useQueryStale,
 } from '../../hooks/useQueryStale'
 import { useTickingNow } from '../../hooks/useTickingNow'
 import { formatSecondsAgo } from '../../lib/format'
@@ -42,7 +43,15 @@ export function MetricCard({
       ? [dataUpdatedAt, historyDataUpdatedAt]
       : [dataUpdatedAt]
   const displayUpdatedAt = oldestSuccessfulUpdateAt(...freshnessTimestamps)
-  const isStale = useAnyQueryStale(...freshnessTimestamps)
+  const isCurrentStale = useQueryStale(dataUpdatedAt)
+  const isHistoryStale = useQueryStale(
+    historyDataUpdatedAt ?? 0,
+    SLOW_POLL_STALE_MS,
+  )
+  const isStale =
+    historyDataUpdatedAt != null
+      ? isCurrentStale || isHistoryStale
+      : isCurrentStale
 
   return (
     <section className="flex flex-col space-y-3 rounded-lg border border-border bg-card p-4">

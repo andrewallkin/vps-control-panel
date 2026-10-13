@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  SLOW_POLL_STALE_MS,
   STALE_MS,
   oldestSuccessfulUpdateAt,
   useAnyQueryStale,
@@ -62,6 +63,29 @@ describe('useQueryStale', () => {
     const { result } = renderHook(() => useQueryStale(0))
     act(() => {
       vi.advanceTimersByTime(STALE_MS + 1000)
+    })
+    expect(result.current).toBe(true)
+  })
+
+  it('marks a 20s-old timestamp stale at 15s threshold but not at 75s', () => {
+    const updatedAt = Date.now() - 20_000
+    const { result: fast } = renderHook(() => useQueryStale(updatedAt, STALE_MS))
+    expect(fast.current).toBe(true)
+    const { result: slow } = renderHook(() =>
+      useQueryStale(updatedAt, SLOW_POLL_STALE_MS),
+    )
+    expect(slow.current).toBe(false)
+  })
+
+  it('uses custom threshold when dataUpdatedAt is 0', () => {
+    const { result } = renderHook(() => useQueryStale(0, SLOW_POLL_STALE_MS))
+    expect(result.current).toBe(false)
+    act(() => {
+      vi.advanceTimersByTime(SLOW_POLL_STALE_MS - 1000)
+    })
+    expect(result.current).toBe(false)
+    act(() => {
+      vi.advanceTimersByTime(2000)
     })
     expect(result.current).toBe(true)
   })

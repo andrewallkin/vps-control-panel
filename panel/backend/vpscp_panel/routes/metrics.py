@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request
 
@@ -21,21 +21,21 @@ async def metrics_current(
     return await agent.get("/v1/metrics/current")
 
 
-@router.get("/api/metrics/history")
+@router.get("/api/metrics/history", response_model=None)
 async def metrics_history(
     _session: Annotated[Session, Depends(current_session)],
     agent: Annotated[AgentClient, Depends(_agent)],
     hours: str | None = None,
-) -> dict:
+) -> Any:
     params = {"hours": hours} if hours is not None else None
     return await agent.get("/v1/metrics/history", params=params)
 
 
-@router.get("/api/metrics/containers")
+@router.get("/api/metrics/containers", response_model=None)
 async def metrics_containers(
     _session: Annotated[Session, Depends(current_session)],
     agent: Annotated[AgentClient, Depends(_agent)],
-) -> dict:
+) -> Any:
     return await agent.get("/v1/metrics/containers")
 
 
