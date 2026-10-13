@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { AddDomainDialog } from '../components/domains/AddDomainDialog'
 import { CertStatusBadge } from '../components/domains/CertStatusBadge'
+import { PanelHostnameHint } from '../components/domains/PanelHostnameHint'
 import { RemoveDomainDialog } from '../components/domains/RemoveDomainDialog'
 import { SslModeBadge } from '../components/domains/SslModeBadge'
 import { LogViewer } from '../components/setup/LogViewer'
@@ -11,6 +12,8 @@ import {
   deleteDomain,
   fetchCloudflareZones,
   fetchDomains,
+  fetchPanelHostname,
+  panelHostnameUsesDomain,
   reissueDomain,
   registerDomain,
 } from '../lib/domainsApi'
@@ -35,6 +38,12 @@ export function DomainsPage() {
     queryFn: fetchDomains,
     refetchIntervalInBackground: false,
     refetchInterval: issueJobId ? 5000 : false,
+  })
+
+  const panelHostnameQuery = useQuery({
+    queryKey: ['panel-hostname'],
+    queryFn: fetchPanelHostname,
+    refetchIntervalInBackground: false,
   })
 
   const zoneNameById = useMemo(() => {
@@ -90,6 +99,15 @@ export function DomainsPage() {
   const zones = zonesQuery.data?.zones ?? []
   const canAdd = zonesQuery.data?.configured === true && zones.length > 0
 
+  const panelHostname = panelHostnameQuery.data?.panel_hostname ?? null
+  const panelHostnameReady = !panelHostnameQuery.isPending
+  const domains = domainsQuery.data ?? []
+  const panelHostnameMatchesZone =
+    panelHostnameReady &&
+    panelHostname !== null &&
+    domains.some((row) => panelHostnameUsesDomain(panelHostname, row.name))
+  const tableLoading = domainsQuery.isPending || panelHostnameQuery.isPending
+
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -136,6 +154,19 @@ export function DomainsPage() {
         </p>
       ) : null}
 
+      {panelHostnameQuery.isError ? (
+        <p className="text-sm text-destructive" role="alert">
+          Could not load panel hostname.
+        </p>
+      ) : null}
+
+      {panelHostnameReady && panelHostname && !panelHostnameMatchesZone ? (
+        <p className="text-sm text-muted-foreground">
+          <span>Panel hostname </span>
+          <span className="font-mono">{panelHostname}</span>
+        </p>
+      ) : null}
+
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-border bg-muted/40 text-muted-foreground">
@@ -158,16 +189,24 @@ export function DomainsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {domainsQuery.isPending ? (
+            {tableLoading ? (
               <tr>
                 <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
                   Loading domains…
                 </td>
               </tr>
             ) : null}
-            {(domainsQuery.data ?? []).map((row) => (
+            {!tableLoading
+              ? domains.map((row) => (
               <tr key={row.name}>
-                <td className="px-3 py-2 font-medium">{row.name}</td>
+                <td className="px-3 py-2 font-medium">
+                  {row.name}
+                  {panelHostnameReady &&
+                  panelHostname &&
+                  panelHostnameUsesDomain(panelHostname, row.name) ? (
+                    <PanelHostnameHint fqdn={panelHostname} />
+                  ) : null}
+                </td>
                 <td className="px-3 py-2 font-mono text-xs">
                   {zoneNameById.get(row.zone_id) ?? row.zone_id}
                 </td>
@@ -204,10 +243,9 @@ export function DomainsPage() {
                   </div>
                 </td>
               </tr>
-            ))}
-            {!domainsQuery.isPending &&
-            !domainsQuery.isError &&
-            (domainsQuery.data ?? []).length === 0 ? (
+            ))
+              : null}
+            {!tableLoading && !domainsQuery.isError && domains.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
                   No domains registered yet.

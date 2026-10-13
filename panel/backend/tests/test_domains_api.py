@@ -283,6 +283,16 @@ def test_delete_refused_when_panel_hostname_uses_domain(domains_client, auth):
     assert response.json() == {"detail": "domain_in_use_by_panel_hostname"}
 
 
+def test_get_panel_hostname_before_save(domains_client, auth):
+    response = domains_client.get("/api/panel-hostname")
+    assert response.status_code == 200
+    assert response.json() == {"panel_hostname": None}
+
+
+def test_get_panel_hostname_unauthenticated(domains_client):
+    assert domains_client.get("/api/panel-hostname").status_code == 401
+
+
 def test_panel_hostname_posts_site_spec_and_dns(domains_client, auth, agent_state, agent_requests):
     _post_token(domains_client, auth)
     _register_domain(domains_client, auth)
@@ -293,6 +303,9 @@ def test_panel_hostname_posts_site_spec_and_dns(domains_client, auth, agent_stat
     )
     assert response.status_code == 200
     assert response.json() == {"panel_hostname": f"panel.{DOMAIN}"}
+    get_response = domains_client.get("/api/panel-hostname")
+    assert get_response.status_code == 200
+    assert get_response.json() == {"panel_hostname": f"panel.{DOMAIN}"}
     spec = agent_state["panel_site"]["spec"]
     assert spec["site_id"] == "vpscp-panel"
     assert spec["panel"] is True
