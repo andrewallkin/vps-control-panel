@@ -93,7 +93,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uvx --from shellcheck-py shellcheck -x install.sh update.sh lib/common.sh
+      - run: uvx --from shellcheck-py shellcheck -x install.sh update.sh lib/common.sh lib/ssh.sh tests/test_ssh.sh
+      - run: bash tests/test_ssh.sh
 
   stack:
     runs-on: ubuntu-24.04

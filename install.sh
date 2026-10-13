@@ -5,6 +5,8 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 . "${REPO_DIR}/lib/common.sh"
+# shellcheck source=lib/ssh.sh
+. "${REPO_DIR}/lib/ssh.sh"
 STACK_DIR=/srv/vpscp/stack
 PANEL_DIR=/srv/vpscp/panel
 AGENT_DIR=/opt/vpscp/agent
@@ -93,12 +95,16 @@ harden_ssh() {
     echo "skipped: run via sudo from a non-root user so their SSH key can be checked"
     return
   fi
-  local keys
+  local keys fps
   keys="$(getent passwd "${user}" | cut -d: -f6)/.ssh/authorized_keys"
-  if [[ ! -s "${keys}" ]]; then
-    echo "skipped: ${keys} is empty; add your SSH key first"
+  if ! fps="$(ssh_authorized_keys_fingerprints "${keys}")"; then
+    echo "skipped: ${keys} has no valid SSH public key; add one first (e.g. ssh-copy-id ${user}@<server-ip>)"
     return
   fi
+  echo "After hardening, only these keys can log in as ${user}:"
+  printf '%s\n' "${fps}" | sed 's/^/  /'
+  echo "Continue only if one of them matches a private key on your machine"
+  echo "(compare with: ssh-keygen -lf ~/.ssh/*.pub)"
   if [[ "${ASSUME_YES}" != "1" ]]; then
     if [[ ! -t 0 ]]; then
       echo "skipped: not interactive (set VPSCP_ASSUME_YES=1 to apply)"
@@ -112,6 +118,7 @@ harden_ssh() {
   sshd -t
   systemctl reload ssh
   echo "applied (${conf})"
+  echo "Keep this session open and verify a new key-based login before disconnecting."
 }
 
 setup_swap() {
@@ -303,14 +310,21 @@ main() {
   verify
   log "Done"
   echo "Agent socket: ${AGENT_SOCKET}"
-  local panel_user server_ip
+  local panel_user server_ip keys
   panel_user="${SUDO_USER:-${USER:-root}}"
-  server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  server_ip="$(agent_curl http://agent/v1/server/settings 2>/dev/null | jq -r '.public_ipv4 // empty' 2>/dev/null || true)"
+  if [[ -z "${server_ip}" ]]; then
+    server_ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
   if [[ -z "${server_ip}" ]]; then
     server_ip="<server-ip>"
   fi
-  echo "Panel: ssh -L 8080:localhost:8080 ${panel_user}@${server_ip}"
-  echo "  then open http://localhost:8080"
+  keys="$(getent passwd "${panel_user}" | cut -d: -f6)/.ssh/authorized_keys"
+  ssh_tunnel_hints "${panel_user}" "${server_ip}" "${keys}"
+  echo "then open http://localhost:8080"
+  if [[ -f /etc/ssh/sshd_config.d/10-vpscp.conf ]]; then
+    echo "SSH hardening is applied; to revert: sudo rm -f /etc/ssh/sshd_config.d/10-vpscp.conf && sudo systemctl reload ssh"
+  fi
 }
 
 main "$@"
