@@ -233,6 +233,38 @@ def test_restore_allows_admin_role_collision(restore_job_env):
     assert result["benign_errors"] == 1
 
 
+def test_restore_allows_newer_pg_dump_transaction_timeout(restore_job_env):
+    """pg_dump >= 17 emits `SET transaction_timeout = 0;` per database section.
+    postgres:16 rejects the unknown parameter and skips the SET; the rest of
+    the section still applies, so these errors are benign.
+    """
+    settings, runner, db, psql, store = restore_job_env
+    upload_id = _complete_upload(store, TINY_DUMP)
+    runner.on("LIMIT 1", stdout="")
+    runner.on("ORDER BY 1", stdout="")
+    runner.on("pg_roles", stdout="pgadmin\n")
+    runner.set_pipe_through(
+        lines=[
+            'psql:<stdin>:6: ERROR:  unrecognized configuration parameter "transaction_timeout"',
+            'psql:<stdin>:18: ERROR:  role "pgadmin" already exists',
+            'psql:<stdin>:90: ERROR:  unrecognized configuration parameter "transaction_timeout"',
+        ],
+        returncode=0,
+    )
+
+    result = restore_cluster(
+        _ctx(db),
+        settings=settings,
+        psql=psql,
+        runner=runner,
+        db=db,
+        upload_id=upload_id,
+    )
+
+    assert result["error_count"] == 0
+    assert result["benign_errors"] == 3
+
+
 def test_restore_refuses_nonempty_cluster_without_overwrite(restore_job_env):
     """Restoring over an existing cluster must refuse with the drop list
     instead of silently mis-applying the dump."""
