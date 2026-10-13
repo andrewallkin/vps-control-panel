@@ -50,6 +50,8 @@ def mock_transport(agent_requests):
             return httpx.Response(200, json={"images": []})
         if path == "/v1/docker/prune-images":
             return httpx.Response(200, json={"reclaimed": 0})
+        if path == "/v1/docker/prune-build-cache":
+            return httpx.Response(200, json={"reclaimed": 0})
         if path.startswith("/v1/jobs/") and path.endswith("/events"):
             return httpx.Response(200, content=b"event: ping\ndata: {}\n\n")
         if path.startswith("/v1/jobs/"):
@@ -203,6 +205,22 @@ def test_docker_prune_proxies(api_client, auth, agent_requests):
     )
     assert response.status_code == 200
     assert agent_requests[-1].url.path == "/v1/docker/prune-images"
+    assert agent_requests[-1].method == "POST"
+
+
+def test_docker_prune_build_cache_requires_csrf(api_client, auth):
+    response = api_client.post("/api/docker/prune-build-cache")
+    assert response.status_code == 403
+    assert response.json() == {"detail": "csrf_failed"}
+
+
+def test_docker_prune_build_cache_proxies(api_client, auth, agent_requests):
+    response = api_client.post(
+        "/api/docker/prune-build-cache",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+    )
+    assert response.status_code == 200
+    assert agent_requests[-1].url.path == "/v1/docker/prune-build-cache"
     assert agent_requests[-1].method == "POST"
 
 

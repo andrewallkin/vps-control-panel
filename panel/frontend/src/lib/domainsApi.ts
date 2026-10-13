@@ -87,6 +87,10 @@ export async function updateServerSettings(
   })
 }
 
+export async function fetchPanelHostname(): Promise<{ panel_hostname: string | null }> {
+  return apiJson<{ panel_hostname: string | null }>('/api/panel-hostname')
+}
+
 export async function setPanelHostname(payload: {
   domain: string
   subdomain: string
@@ -96,6 +100,19 @@ export async function setPanelHostname(payload: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+}
+
+/** True when hostname is the zone apex or exactly one label under the zone. */
+export function panelHostnameUsesDomain(panelHostname: string, domain: string): boolean {
+  if (panelHostname === domain) {
+    return true
+  }
+  const suffix = `.${domain}`
+  if (!panelHostname.endsWith(suffix)) {
+    return false
+  }
+  const label = panelHostname.slice(0, -suffix.length)
+  return !label.includes('.')
 }
 
 export function certDaysLeft(expiresAt: string | null, nowMs: number): number | null {

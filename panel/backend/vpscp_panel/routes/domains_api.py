@@ -256,6 +256,17 @@ def _panel_fqdn(domain: str, subdomain: str) -> str:
     return f"{subdomain}.{domain}"
 
 
+@router.get("/api/panel-hostname")
+async def get_panel_hostname(
+    db: Annotated[DbSession, Depends(get_db)],
+    _session: Annotated[Session, Depends(current_session)],
+) -> dict[str, str | None]:
+    raw = get_setting(db, "panel_hostname")
+    if isinstance(raw, str) and raw:
+        return {"panel_hostname": raw}
+    return {"panel_hostname": None}
+
+
 @router.post("/api/panel-hostname")
 async def set_panel_hostname(
     body: PanelHostnameBody,

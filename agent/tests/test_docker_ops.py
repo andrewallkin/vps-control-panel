@@ -7,11 +7,19 @@ from fastapi.testclient import TestClient
 from tests.fakes import FakeRunner
 from vpscp_agent import audit
 from vpscp_agent.commands import CommandError, CommandResult
-from vpscp_agent.docker_ops import docker_df, prune_images
+from vpscp_agent.docker_ops import docker_df, prune_build_cache, prune_images
 from vpscp_agent.main import create_app
 
 DF_ARGS = ["docker", "system", "df", "--format", "{{json .}}"]
 PRUNE_ARGS = ["docker", "image", "prune", "-af", "--filter", "until=24h"]
+PRUNE_BUILD_CACHE_ARGS = [
+    "docker",
+    "builder",
+    "prune",
+    "-af",
+    "--filter",
+    "until=24h",
+]
 
 DOCKER_DF_LINES = (
     "\n".join(
@@ -132,6 +140,27 @@ def test_prune_images_zero_reclaimed():
     assert prune_images(runner) == {"reclaimed_bytes": 0}
 
 
+def test_prune_build_cache_parses_reclaimed_bytes():
+    runner = FakeRunner()
+    runner.on(
+        lambda args: args == PRUNE_BUILD_CACHE_ARGS,
+        stdout="Deleted build cache objects:\n...\nTotal reclaimed space: 1.234GB\n",
+    )
+
+    assert prune_build_cache(runner) == {"reclaimed_bytes": 1_234_000_000}
+    assert runner.calls[0]["args"] == PRUNE_BUILD_CACHE_ARGS
+
+
+def test_prune_build_cache_zero_reclaimed():
+    runner = FakeRunner()
+    runner.on(
+        lambda args: args == PRUNE_BUILD_CACHE_ARGS,
+        stdout="Total reclaimed space: 0B\n",
+    )
+
+    assert prune_build_cache(runner) == {"reclaimed_bytes": 0}
+
+
 def test_get_docker_df_not_audited(docker_client):
     client, runner = docker_client
     runner.on(lambda args: args == DF_ARGS, stdout=DOCKER_DF_LINES)
@@ -162,6 +191,26 @@ def test_post_prune_images_audited(docker_client):
     assert len(audit.list_events(db)) == before + 1
     event = audit.list_events(db)[0]
     assert event.operation == "docker.prune_images"
+    assert event.params == {}
+    assert event.ok is True
+
+
+def test_post_prune_build_cache_audited(docker_client):
+    client, runner = docker_client
+    runner.on(
+        lambda args: args == PRUNE_BUILD_CACHE_ARGS,
+        stdout="Total reclaimed space: 512MB\n",
+    )
+    db = client.app.state.db
+    before = len(audit.list_events(db))
+
+    response = client.post("/v1/docker/prune-build-cache")
+
+    assert response.status_code == 200
+    assert response.json() == {"reclaimed_bytes": 512_000_000}
+    assert len(audit.list_events(db)) == before + 1
+    event = audit.list_events(db)[0]
+    assert event.operation == "docker.prune_build_cache"
     assert event.params == {}
     assert event.ok is True
 
@@ -197,6 +246,18 @@ def test_get_docker_df_returns_503_on_docker_failure(docker_client):
             PRUNE_ARGS,
             subprocess.TimeoutExpired(["docker", "image", "prune"], 120),
         ),
+        (
+            "post",
+            "/v1/docker/prune-build-cache",
+            PRUNE_BUILD_CACHE_ARGS,
+            FileNotFoundError("docker"),
+        ),
+        (
+            "post",
+            "/v1/docker/prune-build-cache",
+            PRUNE_BUILD_CACHE_ARGS,
+            subprocess.TimeoutExpired(["docker", "builder", "prune"], 120),
+        ),
     ],
 )
 def test_docker_routes_return_503_on_missing_docker_or_timeout(
@@ -221,6 +282,21 @@ def test_post_prune_images_returns_503_on_docker_failure(docker_client):
     )
 
     response = client.post("/v1/docker/prune-images")
+
+    assert response.status_code == 503
+    assert "docker unavailable" in response.json()["detail"]
+
+
+def test_post_prune_build_cache_returns_503_on_docker_failure(docker_client):
+    client, runner = docker_client
+    runner.responses.append(
+        (
+            lambda args: args == PRUNE_BUILD_CACHE_ARGS,
+            CommandError(CommandResult(1, "", "daemon down")),
+        )
+    )
+
+    response = client.post("/v1/docker/prune-build-cache")
 
     assert response.status_code == 503
     assert "docker unavailable" in response.json()["detail"]

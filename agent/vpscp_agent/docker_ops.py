@@ -10,6 +10,7 @@ from vpscp_agent.container_metrics import parse_size
 
 _DF_ARGS = ["docker", "system", "df", "--format", "{{json .}}"]
 _PRUNE_ARGS = ["docker", "image", "prune", "-af", "--filter", "until=24h"]
+_PRUNE_BUILD_CACHE_ARGS = ["docker", "builder", "prune", "-af", "--filter", "until=24h"]
 
 _PERCENT_SUFFIX_RE = re.compile(r"^(.+?) \(\d+%\)$")
 _RECLAIMED_RE = re.compile(r"^Total reclaimed space:\s*(.+)\s*$", re.MULTILINE)
@@ -71,6 +72,15 @@ def docker_df(runner: Runner) -> DockerDiskUsage:
 
 def prune_images(runner: Runner) -> dict[str, int]:
     result = runner(_PRUNE_ARGS)
+    match = _RECLAIMED_RE.search(result.stdout)
+    if not match:
+        raise ValueError("prune output missing Total reclaimed space line")
+    reclaimed = _parse_docker_size(match.group(1))
+    return {"reclaimed_bytes": reclaimed}
+
+
+def prune_build_cache(runner: Runner) -> dict[str, int]:
+    result = runner(_PRUNE_BUILD_CACHE_ARGS)
     match = _RECLAIMED_RE.search(result.stdout)
     if not match:
         raise ValueError("prune output missing Total reclaimed space line")
