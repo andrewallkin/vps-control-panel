@@ -23,7 +23,6 @@ server {
     add_header X-Frame-Options SAMEORIGIN always;
 {% if panel %}
     add_header X-Robots-Tag noindex always;
-    add_header Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'" always;
 {% endif %}
 
 {% for route in routes %}
