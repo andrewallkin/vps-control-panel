@@ -222,7 +222,7 @@ export function SettingsPage() {
     currentPassword.length > 0 && newPassword.length >= 12 && passwordCode.trim().length > 0
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
         <p className="text-sm text-muted-foreground">
@@ -230,9 +230,13 @@ export function SettingsPage() {
         </p>
       </div>
 
-      {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
+      {formError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {formError}
+        </p>
+      ) : null}
       {formSuccess ? (
-        <p className="inline-flex items-center gap-2 text-sm text-accent">
+        <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
           <CheckCircle weight="regular" aria-hidden className="size-4" />
           {formSuccess}
         </p>
@@ -248,16 +252,20 @@ export function SettingsPage() {
 
         <div className="space-y-3">
           <h3 className="text-sm font-semibold">Password</h3>
-          {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
+          {passwordError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {passwordError}
+            </p>
+          ) : null}
           {passwordSuccess ? (
-            <p className="inline-flex items-center gap-2 text-sm text-accent">
+            <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
               <CheckCircle weight="regular" aria-hidden className="size-4" />
               {passwordSuccess}
             </p>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label htmlFor="settings-current-password" className="text-sm font-medium">
+            <div className="space-y-1">
+              <label htmlFor="settings-current-password" className="block text-sm font-medium">
                 Current password
               </label>
               <input
@@ -265,12 +273,12 @@ export function SettingsPage() {
                 type="password"
                 autoComplete="current-password"
                 value={currentPassword}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 onChange={(event) => setCurrentPassword(event.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <label htmlFor="settings-new-password" className="text-sm font-medium">
+            <div className="space-y-1">
+              <label htmlFor="settings-new-password" className="block text-sm font-medium">
                 New password
               </label>
               <input
@@ -278,13 +286,13 @@ export function SettingsPage() {
                 type="password"
                 autoComplete="new-password"
                 value={newPassword}
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 onChange={(event) => setNewPassword(event.target.value)}
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <label htmlFor="settings-password-code" className="text-sm font-medium">
+          <div className="space-y-1">
+            <label htmlFor="settings-password-code" className="block text-sm font-medium">
               Authenticator code
             </label>
             <input
@@ -293,14 +301,14 @@ export function SettingsPage() {
               inputMode="numeric"
               autoComplete="one-time-code"
               value={passwordCode}
-              className="w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+              className="mt-1 w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setPasswordCode(event.target.value)}
             />
           </div>
           <button
             type="button"
             disabled={!passwordValid || passwordMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => passwordMutation.mutate()}
           >
             {passwordMutation.isPending ? (
@@ -312,9 +320,13 @@ export function SettingsPage() {
 
         <div className="space-y-3 border-t border-border pt-4">
           <h3 className="text-sm font-semibold">Authenticator (TOTP)</h3>
-          {totpError ? <p className="text-sm text-destructive">{totpError}</p> : null}
+          {totpError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {totpError}
+            </p>
+          ) : null}
           {totpSuccess && !totpPending ? (
-            <p className="inline-flex items-center gap-2 text-sm text-accent">
+            <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
               <CheckCircle weight="regular" aria-hidden className="size-4" />
               {totpSuccess}
             </p>
@@ -322,7 +334,7 @@ export function SettingsPage() {
           {!totpPending ? (
             <button
               type="button"
-              className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
                 setTotpError(null)
                 setTotpSuccess(null)
@@ -342,8 +354,8 @@ export function SettingsPage() {
                 </code>
               </p>
               <OtpQrCode uri={totpPending.otpauth_uri} />
-              <div className="space-y-2">
-                <label htmlFor="settings-totp-confirm" className="text-sm font-medium">
+              <div className="space-y-1">
+                <label htmlFor="settings-totp-confirm" className="block text-sm font-medium">
                   Confirmation code
                 </label>
                 <input
@@ -352,14 +364,14 @@ export function SettingsPage() {
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   value={totpConfirmCode}
-                  className="w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+                  className="mt-1 w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                   onChange={(event) => setTotpConfirmCode(event.target.value)}
                 />
               </div>
               <button
                 type="button"
                 disabled={!totpConfirmCode.trim() || totpConfirmMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => totpConfirmMutation.mutate()}
               >
                 {totpConfirmMutation.isPending ? (
@@ -374,11 +386,16 @@ export function SettingsPage() {
         <div className="space-y-3 border-t border-border pt-4">
           <h3 className="text-sm font-semibold">Sessions</h3>
           {sessionsQuery.isError ? (
-            <p className="text-sm text-destructive">Could not load sessions.</p>
+            <p className="text-sm text-destructive" role="alert">
+              Could not load sessions.
+            </p>
           ) : sessionsQuery.isPending ? (
             <p className="text-sm text-muted-foreground">Loading sessions…</p>
           ) : (
             <ul className="divide-y divide-border rounded-md border border-border">
+              {(sessionsQuery.data ?? []).length === 0 ? (
+                <li className="px-3 py-3 text-sm text-muted-foreground">No sessions yet.</li>
+              ) : null}
               {(sessionsQuery.data ?? []).map((row) => (
                 <li
                   key={row.id}
@@ -400,7 +417,7 @@ export function SettingsPage() {
                   </div>
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={revokeSessionMutation.isPending}
                     onClick={() => revokeSessionMutation.mutate(row.id)}
                   >
@@ -430,7 +447,7 @@ export function SettingsPage() {
         {!replaceOpen ? (
           <button
             type="button"
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => {
               setReplaceOpen(true)
               setFormError(null)
@@ -444,7 +461,7 @@ export function SettingsPage() {
               Required permissions: Zone:Read and DNS:Edit for your zones. Zone Settings:Read is
               optional (SSL mode warnings).
             </p>
-            <label htmlFor="settings-cf-token" className="text-sm font-medium">
+            <label htmlFor="settings-cf-token" className="block text-sm font-medium">
               API token
             </label>
             <input
@@ -452,13 +469,13 @@ export function SettingsPage() {
               type="password"
               autoComplete="off"
               value={tokenDraft}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setTokenDraft(event.target.value)}
             />
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => {
                   setReplaceOpen(false)
                   setTokenDraft('')
@@ -469,7 +486,7 @@ export function SettingsPage() {
               <button
                 type="button"
                 disabled={!tokenDraft.trim() || tokenMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => {
                   const token = tokenDraft.trim()
                   if (cloudflareConfigured) {
@@ -506,16 +523,20 @@ export function SettingsPage() {
         ) : (
           <p className="text-sm text-muted-foreground">Not configured</p>
         )}
-        {registryError ? <p className="text-sm text-destructive">{registryError}</p> : null}
+        {registryError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {registryError}
+          </p>
+        ) : null}
         {registrySuccess ? (
-          <p className="inline-flex items-center gap-2 text-sm text-accent">
+          <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
             <CheckCircle weight="regular" aria-hidden className="size-4" />
             {registrySuccess}
           </p>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label htmlFor="settings-registry-username" className="text-sm font-medium">
+          <div className="space-y-1">
+            <label htmlFor="settings-registry-username" className="block text-sm font-medium">
               Username
             </label>
             <input
@@ -523,12 +544,12 @@ export function SettingsPage() {
               type="text"
               autoComplete="username"
               value={registryUsername}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setRegistryUsername(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <label htmlFor="settings-registry-token" className="text-sm font-medium">
+          <div className="space-y-1">
+            <label htmlFor="settings-registry-token" className="block text-sm font-medium">
               Access token
             </label>
             <input
@@ -536,7 +557,7 @@ export function SettingsPage() {
               type="password"
               autoComplete="new-password"
               value={registryToken}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setRegistryToken(event.target.value)}
             />
           </div>
@@ -544,7 +565,7 @@ export function SettingsPage() {
         <button
           type="button"
           disabled={!registryUsername.trim() || !registryToken.trim() || registryMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => {
             const body = { username: registryUsername.trim(), token: registryToken.trim() }
             setPendingAction({ kind: 'registry', body })
@@ -562,8 +583,8 @@ export function SettingsPage() {
         <h2 id="server-settings-heading" className="text-base font-semibold">
           Server settings
         </h2>
-        <div className="space-y-2">
-          <label htmlFor="settings-acme-email" className="text-sm font-medium">
+        <div className="space-y-1">
+          <label htmlFor="settings-acme-email" className="block text-sm font-medium">
             ACME email
           </label>
           <input
@@ -571,12 +592,12 @@ export function SettingsPage() {
             type="email"
             value={acmeEmail}
             disabled={settingsQuery.isPending}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onChange={(event) => setAcmeOverride(event.target.value)}
           />
         </div>
-        <div className="space-y-2">
-          <label htmlFor="settings-public-ipv4" className="text-sm font-medium">
+        <div className="space-y-1">
+          <label htmlFor="settings-public-ipv4" className="block text-sm font-medium">
             Server public IPv4
           </label>
           <input
@@ -585,14 +606,14 @@ export function SettingsPage() {
             inputMode="decimal"
             value={publicIpv4}
             disabled={settingsQuery.isPending}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onChange={(event) => setIpv4Override(event.target.value)}
           />
         </div>
         <button
           type="button"
           disabled={settingsMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() =>
             settingsMutation.mutate({
               acme_email: acmeEmail.trim(),

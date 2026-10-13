@@ -12,5 +12,5 @@ export function OtpQrCode({ uri }: { uri: string }) {
     void QRCode.toCanvas(canvas, uri, { margin: 1, width: 180 })
   }, [uri])
 
-  return <canvas ref={canvasRef} aria-label="Authenticator QR code" role="img" />
+  return <canvas ref={canvasRef} aria-label="QR code for setting up your authenticator app" role="img" />
 }
