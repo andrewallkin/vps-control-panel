@@ -51,13 +51,16 @@ export function ProjectsListPage() {
       ) : null}
 
       {projectsQuery.isError ? (
-        <p className="text-sm text-destructive">Could not load projects.</p>
+        <p className="text-sm text-destructive" role="alert">Could not load projects.</p>
       ) : null}
 
       {!projectsQuery.isPending && projects.length === 0 ? (
-        <div className="rounded-md border border-border bg-card p-6 text-center">
+        <div className="rounded-lg border border-border bg-card p-4 text-center">
           <p className="text-sm text-muted-foreground">There are no projects yet.</p>
-          <Link to="/projects/new" className="mt-3 inline-block text-sm font-medium text-accent">
+          <Link
+            to="/projects/new"
+            className="mt-3 inline-block text-sm font-medium underline-offset-2 hover:underline cursor-pointer text-accent"
+          >
             Create your first project
           </Link>
         </div>

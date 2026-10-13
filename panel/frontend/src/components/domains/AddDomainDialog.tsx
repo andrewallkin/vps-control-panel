@@ -56,15 +56,15 @@ export function AddDomainDialog({
         </p>
 
         <div className="mt-4 space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="add-domain-zone" className="text-sm font-medium">
+          <div>
+            <label htmlFor="add-domain-zone" className="block text-sm font-medium">
               Cloudflare zone
             </label>
             <select
               id="add-domain-zone"
               value={effectiveZoneId}
               disabled={busy || zones.length === 0}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setZoneId(event.target.value)}
             >
               <option value="">Select a zone…</option>
@@ -76,8 +76,8 @@ export function AddDomainDialog({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="add-domain-name" className="text-sm font-medium">
+          <div>
+            <label htmlFor="add-domain-name" className="block text-sm font-medium">
               Domain name
             </label>
             <input
@@ -85,7 +85,7 @@ export function AddDomainDialog({
               type="text"
               value={domainName}
               readOnly
-              className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground read-only:opacity-80"
             />
           </div>
         </div>
@@ -94,7 +94,7 @@ export function AddDomainDialog({
           <button
             type="button"
             disabled={busy}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onCancel}
           >
             Cancel
@@ -102,7 +102,7 @@ export function AddDomainDialog({
           <button
             type="button"
             disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() =>
               onSubmit({ name: domainName.trim(), zone_id: effectiveZoneId })
             }

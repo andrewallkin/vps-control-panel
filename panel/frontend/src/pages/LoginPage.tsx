@@ -92,7 +92,7 @@ export function LoginPage() {
       if (err.status === 401) {
         const body = err.body as { detail?: string }
         if (body?.detail === 'invalid_credentials') {
-          setSubmitError('Invalid credentials')
+          setSubmitError('Invalid credentials.')
           return
         }
       }
@@ -153,7 +153,7 @@ export function LoginPage() {
               autoComplete="username"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-primary px-3 py-2 text-sm text-foreground transition-colors duration-200"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-invalid={fieldErrors.username ? true : undefined}
               aria-describedby={fieldErrors.username ? 'username-error' : undefined}
             />
@@ -175,7 +175,7 @@ export function LoginPage() {
               autoComplete="current-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 w-full rounded-md border border-border bg-primary px-3 py-2 text-sm text-foreground transition-colors duration-200"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-invalid={fieldErrors.password ? true : undefined}
               aria-describedby={fieldErrors.password ? 'password-error' : undefined}
             />
@@ -199,7 +199,7 @@ export function LoginPage() {
               maxLength={6}
               value={code}
               onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-              className="mt-1 w-full rounded-md border border-border bg-primary px-3 py-2 font-mono text-sm tracking-widest text-foreground transition-colors duration-200"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm tracking-widest text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-invalid={fieldErrors.code ? true : undefined}
               aria-describedby={fieldErrors.code ? 'code-error' : undefined}
             />
@@ -225,7 +225,7 @@ export function LoginPage() {
           <button
             type="submit"
             disabled={locked || loginMutation.isPending}
-            className="w-full rounded-md bg-accent px-4 py-2 text-sm font-medium text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 cursor-pointer"
+            className="inline-flex w-full items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loginMutation.isPending ? 'Signing in…' : 'Sign in'}
           </button>

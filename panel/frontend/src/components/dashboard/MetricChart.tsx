@@ -35,7 +35,7 @@ export function MetricChart({
   if (paused) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        Chart paused
+        Chart paused.
       </p>
     )
   }
@@ -43,7 +43,7 @@ export function MetricChart({
   if (data.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
-        No history yet
+        No history yet.
       </p>
     )
   }

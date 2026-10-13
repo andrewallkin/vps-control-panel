@@ -23,7 +23,7 @@ export function MigrationRunControls({
     }
     return (
       <div className="rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-sm">
-        <p className="font-medium text-warning">
+        <p className="font-medium text-warning" role="status">
           Migrations are not configured for this project.
         </p>
         <p className="mt-1 text-muted-foreground">
@@ -54,7 +54,7 @@ export function MigrationRunControls({
       <button
         type="button"
         disabled={runNowDisabled}
-        className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={onRunNow}
       >
         Run migrations

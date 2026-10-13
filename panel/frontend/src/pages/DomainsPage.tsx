@@ -102,7 +102,7 @@ export function DomainsPage() {
         <button
           type="button"
           disabled={!canAdd}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => setAddOpen(true)}
         >
           <Plus weight="regular" aria-hidden className="size-4" />
@@ -111,85 +111,105 @@ export function DomainsPage() {
       </div>
 
       {!zonesQuery.data?.configured ? (
-        <p className="text-sm text-warning">
-          Cloudflare is not configured. Add an API token in Settings before registering domains.
+        <div className="rounded-lg border border-warning/50 bg-warning/10 px-4 py-3">
+          <p className="text-sm text-warning">
+            Cloudflare is not configured. Add an API token in Settings before registering domains.
+          </p>
+        </div>
+      ) : null}
+
+      {actionError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {actionError}
         </p>
       ) : null}
 
-      {actionError ? <p className="text-sm text-destructive">{actionError}</p> : null}
+      {zonesQuery.isError ? (
+        <p className="text-sm text-destructive" role="alert">
+          Could not load Cloudflare zones.
+        </p>
+      ) : null}
+
+      {domainsQuery.isError ? (
+        <p className="text-sm text-destructive" role="alert">
+          Could not load domains.
+        </p>
+      ) : null}
 
       <div className="overflow-x-auto rounded-lg border border-border bg-card">
-        <table className="min-w-full text-left text-sm">
-          <thead className="border-b border-border text-muted-foreground">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-border bg-muted/40 text-muted-foreground">
             <tr>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-3 py-2 font-medium">
                 Domain
               </th>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-3 py-2 font-medium">
                 Zone
               </th>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-3 py-2 font-medium">
                 Certificate
               </th>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-3 py-2 font-medium">
                 SSL mode
               </th>
-              <th scope="col" className="px-4 py-3 font-medium">
+              <th scope="col" className="px-3 py-2 font-medium">
                 <span className="sr-only">Actions</span>
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-border">
             {domainsQuery.isPending ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-muted-foreground">
+                <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
                   Loading domains…
                 </td>
               </tr>
             ) : null}
             {(domainsQuery.data ?? []).map((row) => (
-              <tr key={row.name} className="border-b border-border last:border-b-0">
-                <td className="px-4 py-3 font-medium">{row.name}</td>
-                <td className="px-4 py-3 font-mono text-xs">
+              <tr key={row.name}>
+                <td className="px-3 py-2 font-medium">{row.name}</td>
+                <td className="px-3 py-2 font-mono text-xs">
                   {zoneNameById.get(row.zone_id) ?? row.zone_id}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2">
                   <CertStatusBadge
                     certStatus={row.cert_status}
                     certExpiresAt={row.cert_expires_at}
                     nowMs={nowMs}
                   />
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2">
                   <SslModeBadge sslMode={row.ssl_mode} warning={row.warning} />
                 </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
+                <td className="px-3 py-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <button
                       type="button"
                       disabled={reissueMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => reissueMutation.mutate(row.name)}
                     >
-                      <ArrowsClockwise weight="regular" aria-hidden className="size-3.5" />
+                      <ArrowsClockwise weight="regular" aria-hidden className="size-4" />
                       Reissue
                     </button>
                     <button
                       type="button"
                       disabled={removeMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => setRemoveTarget(row.name)}
                     >
-                      <Trash weight="regular" aria-hidden className="size-3.5" />
+                      <Trash weight="regular" aria-hidden className="size-4" />
                       Remove
                     </button>
                   </div>
                 </td>
               </tr>
             ))}
-            {!domainsQuery.isPending && (domainsQuery.data ?? []).length === 0 ? (
+            {!domainsQuery.isPending &&
+            !domainsQuery.isError &&
+            (domainsQuery.data ?? []).length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-muted-foreground">
+                <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
                   No domains registered yet.
                 </td>
               </tr>
@@ -199,7 +219,7 @@ export function DomainsPage() {
       </div>
 
       {issueJobId ? (
-        <section className="space-y-2" aria-labelledby="issue-log-heading">
+        <section className="space-y-3" aria-labelledby="issue-log-heading">
           <h2 id="issue-log-heading" className="text-base font-semibold">
             Certificate issue log
           </h2>

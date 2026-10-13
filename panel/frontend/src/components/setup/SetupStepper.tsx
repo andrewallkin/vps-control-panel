@@ -87,7 +87,11 @@ export function SetupStepper({ active, steps, hasValidCert = false }: SetupStepp
           )
 
         return (
-          <li key={stepId} className="flex min-w-0 items-center gap-2 sm:flex-1 sm:min-w-[8rem]">
+          <li
+            key={stepId}
+            aria-current={state === 'current' ? 'step' : undefined}
+            className="flex min-w-0 items-center gap-2 sm:flex-1 sm:min-w-[8rem]"
+          >
             <div className="flex min-w-0 items-center gap-2">
               {icon}
               <span

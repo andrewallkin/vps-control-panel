@@ -248,7 +248,6 @@ export function BackupSettingsForm({
         </h2>
       ) : null}
 
-      {formError ? <p className="text-sm text-destructive">{formError}</p> : null}
       {formSuccess ? (
         <p className="inline-flex items-center gap-2 text-sm text-accent">
           <CheckCircle weight="regular" aria-hidden className="size-4" />
@@ -266,7 +265,7 @@ export function BackupSettingsForm({
             </p>
             <button
               type="button"
-              className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => setReplaceKeyOpen(true)}
             >
               Replace key
@@ -297,7 +296,7 @@ export function BackupSettingsForm({
               value={serviceAccountDraft}
               autoComplete="off"
               spellCheck={false}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setServiceAccountDraft(event.target.value)}
             />
             <input
@@ -309,14 +308,14 @@ export function BackupSettingsForm({
             />
             <label
               htmlFor={`${idPrefix}-service-account-file`}
-              className="inline-block cursor-pointer rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted"
+              className="inline-block cursor-pointer rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted"
             >
               Choose .json file
             </label>
             {settings.credentials_configured ? (
               <button
                 type="button"
-                className="ml-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+                className="ml-2 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => {
                   setReplaceKeyOpen(false)
                   setServiceAccountDraft('')
@@ -332,15 +331,15 @@ export function BackupSettingsForm({
         ) : null}
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor={bucketFieldId} className="text-sm font-medium">
+      <div>
+        <label htmlFor={bucketFieldId} className="block text-sm font-medium">
           GCS bucket
         </label>
         <input
           id={bucketFieldId}
           type="text"
           value={bucket}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           onChange={(event) => setBucket(event.target.value)}
         />
       </div>
@@ -370,8 +369,8 @@ export function BackupSettingsForm({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-2">
-          <label htmlFor={`${idPrefix}-minute`} className="text-sm font-medium">
+        <div>
+          <label htmlFor={`${idPrefix}-minute`} className="block text-sm font-medium">
             Minute
           </label>
           <input
@@ -380,12 +379,12 @@ export function BackupSettingsForm({
             min={0}
             max={59}
             value={scheduleMinute}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onChange={(event) => setScheduleMinute(Number.parseInt(event.target.value, 10) || 0)}
           />
         </div>
-        <div className="space-y-2">
-          <label htmlFor={`${idPrefix}-timezone`} className="text-sm font-medium">
+        <div>
+          <label htmlFor={`${idPrefix}-timezone`} className="block text-sm font-medium">
             Timezone
           </label>
           <input
@@ -393,7 +392,7 @@ export function BackupSettingsForm({
             type="text"
             list={listId}
             value={timezoneQuery}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onChange={(event) => {
               setTimezoneQuery(event.target.value)
               setTimezone(event.target.value)
@@ -412,8 +411,8 @@ export function BackupSettingsForm({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor={`${idPrefix}-retention`} className="text-sm font-medium">
+      <div>
+        <label htmlFor={`${idPrefix}-retention`} className="block text-sm font-medium">
           Retention (days)
         </label>
         <input
@@ -422,7 +421,7 @@ export function BackupSettingsForm({
           min={1}
           max={3650}
           value={retentionDays}
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           onChange={(event) => setRetentionDays(Number.parseInt(event.target.value, 10) || 1)}
         />
       </div>
@@ -470,7 +469,8 @@ export function BackupSettingsForm({
             autoComplete="new-password"
             value={passphraseDraft}
             placeholder="New archive passphrase"
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            aria-label="New archive passphrase"
+            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onChange={(event) => setPassphraseDraft(event.target.value)}
           />
         ) : null}
@@ -481,6 +481,7 @@ export function BackupSettingsForm({
 
       {testResult ? (
         <p
+          role={testResult.ok ? 'status' : 'alert'}
           className={`inline-flex items-center gap-2 text-sm ${
             testResult.ok ? 'text-accent' : 'text-destructive'
           }`}
@@ -492,23 +493,28 @@ export function BackupSettingsForm({
         </p>
       ) : null}
 
+      {formError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {formError}
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
           disabled={testMutation.isPending}
-          className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleTest}
         >
           {testMutation.isPending ? (
             <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : (
-            'Test credentials'
-          )}
+          ) : null}
+          Test credentials
         </button>
         <button
           type="button"
           disabled={saveMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={handleSave}
         >
           {saveMutation.isPending ? (

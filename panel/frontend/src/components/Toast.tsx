@@ -15,7 +15,7 @@ export function Toast({ message, onDismiss, durationMs = 5000 }: ToastProps) {
   return (
     <div
       role="status"
-      className="fixed bottom-4 right-4 z-50 max-w-sm rounded-md border border-border bg-card px-4 py-3 text-sm shadow-lg transition-opacity duration-200"
+      className="fixed bottom-4 right-4 z-50 max-w-sm rounded-lg border border-border bg-card px-4 py-3 text-sm shadow-lg"
     >
       {message}
     </div>

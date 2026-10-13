@@ -36,7 +36,7 @@ function SortHeaderButton({
   return (
     <button
       type="button"
-      className="inline-flex w-full items-center justify-end gap-1 rounded px-1 py-0.5 text-left text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+      className="inline-flex w-full items-center justify-end gap-1 rounded px-1 py-0.5 text-left text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={onClick}
     >
       {label}
@@ -73,7 +73,7 @@ export function ContainersTable({
   }
 
   return (
-    <section className="rounded-lg border border-border bg-card p-4">
+    <section className="space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold">Containers</h2>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -82,17 +82,17 @@ export function ContainersTable({
         </div>
       </div>
       {isLoading && !containers ? (
-        <p className="mt-4 text-sm text-muted-foreground">Loading…</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       ) : !containers?.length ? (
-        <p className="mt-4 text-sm text-muted-foreground">No containers</p>
+        <p className="text-sm text-muted-foreground">No containers yet.</p>
       ) : (
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[480px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-border text-xs text-muted-foreground">
-                <th className="py-2 pr-4 font-medium">Project</th>
-                <th className="py-2 pr-4 font-medium">Name</th>
-                <th className="py-2 pr-4 font-medium text-right">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[480px] text-left text-xs">
+            <thead className="border-b border-border bg-muted/40 text-muted-foreground">
+              <tr>
+                <th scope="col" className="px-3 py-2 font-medium">Project</th>
+                <th scope="col" className="px-3 py-2 font-medium">Name</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">
                   <SortHeaderButton
                     label="CPU"
                     active={sortKey === 'cpu_percent'}
@@ -100,7 +100,7 @@ export function ContainersTable({
                     onClick={() => toggleSort('cpu_percent')}
                   />
                 </th>
-                <th className="py-2 font-medium text-right">
+                <th scope="col" className="px-3 py-2 text-right font-medium">
                   <SortHeaderButton
                     label="Memory"
                     active={sortKey === 'mem_percent'}
@@ -110,18 +110,18 @@ export function ContainersTable({
                 </th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {grouped.map((group) =>
                 group.containers.map((row, index) => (
-                  <tr key={`${group.project}-${row.name}`} className="border-b border-border/60">
-                    <td className="py-2 pr-4 text-muted-foreground">
+                  <tr key={`${group.project}-${row.name}`}>
+                    <td className="px-3 py-2 text-muted-foreground">
                       {index === 0 ? group.project : ''}
                     </td>
-                    <td className="py-2 pr-4 font-mono text-xs">{row.name}</td>
-                    <td className="py-2 pr-4 text-right font-mono text-xs">
+                    <td className="px-3 py-2 font-mono">{row.name}</td>
+                    <td className="px-3 py-2 text-right font-mono">
                       {formatPercent(row.cpu_percent)}
                     </td>
-                    <td className="py-2 text-right font-mono text-xs">
+                    <td className="px-3 py-2 text-right font-mono">
                       {formatBytes(row.mem_used)} / {formatBytes(row.mem_limit)} (
                       {formatPercent(row.mem_percent)})
                     </td>

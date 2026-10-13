@@ -57,11 +57,11 @@ export function ProjectWizardStepper({ active }: ProjectWizardStepperProps) {
         const state = stepState(stepId, active === 'progress' ? 'review' : active)
         const icon =
           state === 'done' ? (
-            <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />
+            <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0 text-accent" />
           ) : state === 'current' ? (
-            <CircleDashed weight="regular" aria-hidden className="size-5 shrink-0 text-foreground" />
+            <CircleDashed weight="regular" aria-hidden className="size-4 shrink-0 text-foreground" />
           ) : (
-            <Circle weight="regular" aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+            <Circle weight="regular" aria-hidden className="size-4 shrink-0 text-muted-foreground" />
           )
         return (
           <li key={stepId} className="flex min-w-0 items-center gap-2 sm:flex-1 sm:min-w-[7rem]">

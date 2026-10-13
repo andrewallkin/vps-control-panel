@@ -76,7 +76,7 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
 
       {savedHostname ? (
         <div className="space-y-2 rounded-lg border border-border bg-card p-4">
-          <p className="inline-flex items-center gap-2 text-sm text-accent">
+          <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
             <CheckCircle weight="regular" aria-hidden className="size-4" />
             Panel URL
           </p>
@@ -88,7 +88,7 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
           </p>
           <button
             type="button"
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onContinue}
           >
             Continue
@@ -104,7 +104,7 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
               id="panel-hostname-domain"
               value={effectiveDomain}
               disabled={domainOptions.length === 0}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setDomain(event.target.value)}
             >
               {domainOptions.map((name) => (
@@ -137,13 +137,19 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
                 type="text"
                 value={subdomain}
                 autoComplete="off"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-invalid={fieldError ? true : undefined}
+                aria-describedby={fieldError ? 'panel-hostname-subdomain-error' : undefined}
                 onChange={(event) => {
                   setSubdomain(event.target.value)
                   setFieldError(null)
                 }}
               />
-              {fieldError ? <p className="text-sm text-destructive">{fieldError}</p> : null}
+              {fieldError ? (
+                <p id="panel-hostname-subdomain-error" className="text-sm text-destructive" role="alert">
+                  {fieldError}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -152,12 +158,16 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
             <span className="font-mono text-foreground break-all">{preview}</span>
           </p>
 
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          ) : null}
 
           <button
             type="button"
             disabled={!effectiveDomain || mutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => {
               setFieldError(null)
               const check = validateSubdomain(normalizedSubdomain)

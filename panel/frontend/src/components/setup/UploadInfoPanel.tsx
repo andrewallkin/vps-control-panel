@@ -35,7 +35,7 @@ export function UploadInfoPanel({ info }: UploadInfoPanelProps) {
             Databases found
           </h4>
           {info.databases.length === 0 ? (
-            <p className="mt-1 text-sm">None detected</p>
+            <p className="mt-1 text-sm">None detected.</p>
           ) : (
             <ul className="mt-1 list-disc pl-5 text-sm">
               {info.databases.map((name) => (
@@ -49,7 +49,7 @@ export function UploadInfoPanel({ info }: UploadInfoPanelProps) {
             Roles found
           </h4>
           {info.roles.length === 0 ? (
-            <p className="mt-1 text-sm">None detected</p>
+            <p className="mt-1 text-sm">None detected.</p>
           ) : (
             <ul className="mt-1 list-disc pl-5 text-sm">
               {info.roles.map((name) => (

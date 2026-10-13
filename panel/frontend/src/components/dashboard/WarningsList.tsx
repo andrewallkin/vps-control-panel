@@ -11,9 +11,12 @@ export function WarningsList({ warnings }: WarningsListProps) {
   }
 
   return (
-    <section aria-label="Warnings" className="rounded-lg border border-border bg-card p-4">
+    <section
+      aria-label="Warnings"
+      className="space-y-3 rounded-lg border border-border bg-card p-4"
+    >
       <h2 className="text-sm font-semibold">Warnings</h2>
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className="flex flex-col gap-2">
         {warnings.map((warning) => (
           <li key={`${warning.code}-${warning.message}`} className="flex flex-wrap items-center gap-2">
             <StatusBadge

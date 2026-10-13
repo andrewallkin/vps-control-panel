@@ -86,7 +86,11 @@ export function DomainsSetupStep({ onCertReady }: DomainsSetupStepProps) {
         certificate shows as valid.
       </p>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
       {issueError ? (
         <div className="space-y-1 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3">
           <p className="text-sm font-medium text-destructive">Certificate issuance failed.</p>
@@ -114,7 +118,7 @@ export function DomainsSetupStep({ onCertReady }: DomainsSetupStepProps) {
                 <button
                   type="button"
                   disabled={reissueMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => reissueMutation.mutate(row.name)}
                 >
                   {reissueMutation.isPending ? (
@@ -130,7 +134,7 @@ export function DomainsSetupStep({ onCertReady }: DomainsSetupStepProps) {
 
       <button
         type="button"
-        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         onClick={() => setAddOpen(true)}
       >
         <Plus weight="regular" aria-hidden className="size-4" />

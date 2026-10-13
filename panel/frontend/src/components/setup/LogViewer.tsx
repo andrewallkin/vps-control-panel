@@ -98,12 +98,12 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
             placeholder="Search log…"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="w-full rounded-md border border-border bg-background py-2 pl-8 pr-3 text-sm"
+            className="w-full rounded-md border border-border bg-background py-2 pl-8 pr-3 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => setPaused((value) => !value)}
           aria-pressed={paused}
         >
@@ -116,7 +116,7 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
         </button>
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={downloadLog}
         >
           <DownloadSimple weight="regular" aria-hidden className="size-4" />
@@ -130,7 +130,7 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
         tabIndex={0}
       >
         {displayLines.length === 0 ? (
-          <p className="text-muted-foreground">{ended ? 'No log lines.' : 'Waiting for log…'}</p>
+          <p className="text-muted-foreground">{ended ? 'No log lines yet.' : 'Waiting for log…'}</p>
         ) : (
           displayLines.map((line, index) => (
             <div key={`${index}-${line.slice(0, 24)}`}>{line}</div>

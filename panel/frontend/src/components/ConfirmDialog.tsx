@@ -1,3 +1,4 @@
+import { Spinner } from '@phosphor-icons/react'
 import { useEffect, useId, useRef } from 'react'
 
 export interface ConfirmDialogProps {
@@ -70,7 +71,7 @@ export function ConfirmDialog({
             ref={cancelRef}
             type="button"
             disabled={busy}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onCancel}
           >
             {cancelLabel}
@@ -78,9 +79,10 @@ export function ConfirmDialog({
           <button
             type="button"
             disabled={busy}
-            className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onConfirm}
           >
+            {busy ? <Spinner weight="regular" aria-hidden className="size-4 animate-spin" /> : null}
             {confirmLabel}
           </button>
         </div>

@@ -54,7 +54,7 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
 
   return (
     <>
-      <section className="flex flex-col rounded-lg border border-border bg-card p-4">
+      <section className="flex flex-col space-y-3 rounded-lg border border-border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h2 className="text-sm font-semibold text-muted-foreground">Docker disk</h2>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -63,9 +63,9 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
           </div>
         </div>
         {isLoading && !df ? (
-          <p className="mt-3 text-sm text-muted-foreground">Loading…</p>
+          <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <ul className="mt-3 space-y-2 text-sm">
+          <ul className="space-y-2 text-sm">
             {rows.map(({ label, data }) => (
               <li key={label} className="flex flex-wrap justify-between gap-2">
                 <span className="text-muted-foreground">{label}</span>
@@ -79,7 +79,7 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
         )}
         <button
           type="button"
-          className="mt-4 w-fit rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+          className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => {
             setInlineError(null)
             setConfirmOpen(true)
@@ -88,7 +88,7 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
           Prune unused images
         </button>
         {inlineError ? (
-          <p className="mt-2 text-sm text-destructive" role="alert">
+          <p className="text-sm text-destructive" role="alert">
             {inlineError}
           </p>
         ) : null}

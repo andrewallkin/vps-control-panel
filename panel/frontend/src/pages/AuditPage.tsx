@@ -30,7 +30,7 @@ function AuditResultBadge({ ok }: { ok: boolean }) {
 
 function AuditRow({ entry }: { entry: AuditEntry }) {
   return (
-    <tr className="border-b border-border last:border-b-0">
+    <tr>
       <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
         {formatAuditTime(entry.time)}
       </td>
@@ -39,7 +39,7 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
       <td className="px-3 py-2">
         <details>
           <summary className="cursor-pointer text-sm text-muted-foreground">Params</summary>
-          <pre className="mt-2 max-h-40 overflow-auto rounded-md bg-muted/40 p-2 font-mono text-xs">
+          <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs">
             {JSON.stringify(entry.params, null, 2)}
           </pre>
         </details>
@@ -102,7 +102,7 @@ export function AuditPage() {
   }, [auditQuery])
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Audit</h1>
         <p className="text-sm text-muted-foreground">
@@ -116,25 +116,25 @@ export function AuditPage() {
         </h2>
         <div className="flex flex-wrap gap-3">
           <div className="space-y-1">
-            <label htmlFor="audit-filter-operation" className="text-sm font-medium">
+            <label htmlFor="audit-filter-operation" className="block text-sm font-medium">
               Operation
             </label>
             <input
               id="audit-filter-operation"
               type="text"
               value={operationFilter}
-              className="w-full min-w-[12rem] rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+              className="w-full min-w-[12rem] rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setOperationFilter(event.target.value)}
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="audit-filter-ok" className="text-sm font-medium">
+            <label htmlFor="audit-filter-ok" className="block text-sm font-medium">
               Result
             </label>
             <select
               id="audit-filter-ok"
               value={okFilter}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) =>
                 setOkFilter(event.target.value as 'all' | 'ok' | 'failed')
               }
@@ -145,26 +145,26 @@ export function AuditPage() {
             </select>
           </div>
           <div className="space-y-1">
-            <label htmlFor="audit-filter-since" className="text-sm font-medium">
+            <label htmlFor="audit-filter-since" className="block text-sm font-medium">
               Since
             </label>
             <input
               id="audit-filter-since"
               type="datetime-local"
               value={sinceFilter}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setSinceFilter(event.target.value)}
             />
           </div>
           <div className="space-y-1">
-            <label htmlFor="audit-filter-until" className="text-sm font-medium">
+            <label htmlFor="audit-filter-until" className="block text-sm font-medium">
               Until
             </label>
             <input
               id="audit-filter-until"
               type="datetime-local"
               value={untilFilter}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setUntilFilter(event.target.value)}
             />
           </div>
@@ -172,38 +172,43 @@ export function AuditPage() {
       </section>
 
       {auditQuery.isError ? (
-        <p className="text-sm text-destructive">Could not load audit log.</p>
+        <p className="text-sm text-destructive" role="alert">
+          Could not load audit log.
+        </p>
       ) : (
         <section className="space-y-3" aria-labelledby="audit-log-heading">
           <h2 id="audit-log-heading" className="text-base font-semibold">
             Events
           </h2>
-          <div className="overflow-x-auto rounded-lg border border-border">
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
             <table className="w-full min-w-[800px] text-left text-sm">
               <thead className="border-b border-border bg-muted/40 text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Time</th>
-                  <th className="px-3 py-2 font-medium">Source</th>
-                  <th className="px-3 py-2 font-medium">Operation</th>
-                  <th className="px-3 py-2 font-medium">Params</th>
-                  <th className="px-3 py-2 font-medium">Result</th>
-                  <th className="px-3 py-2 text-right font-medium">Duration</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Time</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Source</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Operation</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Params</th>
+                  <th scope="col" className="px-3 py-2 font-medium">Result</th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">Duration</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-border">
                 {auditQuery.isPending ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                      <Spinner
-                        weight="regular"
-                        aria-hidden
-                        className="mx-auto size-5 animate-spin"
-                      />
+                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                      <span className="inline-flex items-center gap-2">
+                        <Spinner
+                          weight="regular"
+                          aria-hidden
+                          className="size-4 animate-spin"
+                        />
+                        Loading audit log…
+                      </span>
                     </td>
                   </tr>
                 ) : entries.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
                       No audit entries match these filters.
                     </td>
                   </tr>

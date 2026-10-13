@@ -14,7 +14,7 @@ const RUN_POLL_TIMEOUT_MS = 30000
 
 export function BackupsPage() {
   const queryClient = useQueryClient()
-  const [runMessage, setRunMessage] = useState<string | null>(null)
+  const [runMessage, setRunMessage] = useState<{ text: string; error: boolean } | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -44,7 +44,7 @@ export function BackupsPage() {
   const runMutation = useMutation({
     mutationFn: runBackupNow,
     onSuccess: async () => {
-      setRunMessage('Backup triggered. Waiting for status…')
+      setRunMessage({ text: 'Backup triggered. Waiting for status…', error: false })
       const baseline = statusQuery.data?.last_run?.finished_at ?? null
       clearRunPolling()
       pollRef.current = setInterval(() => {
@@ -52,7 +52,7 @@ export function BackupsPage() {
       }, RUN_POLL_MS)
       timeoutRef.current = setTimeout(() => {
         clearRunPolling()
-        setRunMessage('Timed out waiting for backup status. Refresh later.')
+        setRunMessage({ text: 'Timed out waiting for backup status. Refresh later.', error: false })
       }, RUN_POLL_TIMEOUT_MS)
 
       const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
@@ -64,18 +64,18 @@ export function BackupsPage() {
         if (finishedAt && finishedAt !== baseline) {
           clearRunPolling()
           unsubscribe()
-          setRunMessage('Backup run finished.')
+          setRunMessage({ text: 'Backup run finished.', error: false })
           void queryClient.invalidateQueries({ queryKey: ['backups', 'status'] })
         }
       })
     },
     onError: () => {
-      setRunMessage('Could not start backup run.')
+      setRunMessage({ text: 'Could not start backup run.', error: true })
     },
   })
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8">
+    <div className="mx-auto flex max-w-2xl flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Backups</h1>
         <p className="text-sm text-muted-foreground">
@@ -85,11 +85,11 @@ export function BackupsPage() {
 
       <BackupStatusCard status={statusQuery.data} loading={statusQuery.isPending} />
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={runMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => runMutation.mutate()}
         >
           {runMutation.isPending ? (
@@ -97,11 +97,21 @@ export function BackupsPage() {
           ) : null}
           Run backup now
         </button>
-        {runMessage ? <p className="text-sm text-muted-foreground">{runMessage}</p> : null}
+        {runMessage ? (
+          runMessage.error ? (
+            <p className="text-sm text-destructive" role="alert">
+              {runMessage.text}
+            </p>
+          ) : (
+            <p className="text-sm text-muted-foreground">{runMessage.text}</p>
+          )
+        ) : null}
       </div>
 
       {settingsQuery.isError ? (
-        <p className="text-sm text-destructive">Could not load backup settings.</p>
+        <p className="text-sm text-destructive" role="alert">
+          Could not load backup settings.
+        </p>
       ) : settingsQuery.data ? (
         <div className="rounded-lg border border-border bg-card p-4">
           <BackupSettingsForm

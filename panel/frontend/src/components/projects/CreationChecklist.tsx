@@ -27,13 +27,13 @@ export function CreationChecklist({ steps, onRetry, retryPending }: CreationChec
         {steps.map((step) => {
           const icon =
             step.status === 'done' ? (
-              <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />
+              <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0 text-accent" />
             ) : step.status === 'failed' ? (
-              <XCircle weight="regular" aria-hidden className="size-5 shrink-0 text-destructive" />
+              <XCircle weight="regular" aria-hidden className="size-4 shrink-0 text-destructive" />
             ) : step.status === 'running' ? (
-              <CircleDashed weight="regular" aria-hidden className="size-5 shrink-0 text-foreground" />
+              <CircleDashed weight="regular" aria-hidden className="size-4 shrink-0 text-foreground" />
             ) : (
-              <Circle weight="regular" aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+              <Circle weight="regular" aria-hidden className="size-4 shrink-0 text-muted-foreground" />
             )
           return (
             <li key={step.name} className="flex flex-col gap-1">
@@ -52,10 +52,10 @@ export function CreationChecklist({ steps, onRetry, retryPending }: CreationChec
         <button
           type="button"
           disabled={retryPending}
-          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background disabled:opacity-50 cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={onRetry}
         >
-          Retry
+          {retryPending ? 'Retrying…' : 'Retry'}
         </button>
       ) : null}
     </div>

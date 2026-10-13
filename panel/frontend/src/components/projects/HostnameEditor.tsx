@@ -51,12 +51,12 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
       {primary ? (
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="primary-domain">
+            <label className="block text-sm font-medium" htmlFor="primary-domain">
               Primary domain
             </label>
             <select
               id="primary-domain"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
               value={primary.domain}
               onChange={(event) => updatePrimary({ domain: event.target.value })}
             >
@@ -68,12 +68,12 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
             </select>
           </div>
           <div className="space-y-1">
-            <label className="text-sm font-medium" htmlFor="primary-subdomain">
+            <label className="block text-sm font-medium" htmlFor="primary-subdomain">
               Subdomain
             </label>
             <input
               id="primary-subdomain"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
               value={primary.subdomain}
               onChange={(event) => updatePrimary({ subdomain: event.target.value })}
             />
@@ -86,7 +86,7 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
           <div key={`${row.domain}-${index}`} className="grid gap-2 sm:grid-cols-4">
             <select
               aria-label={`Extra domain ${index + 1}`}
-              className="rounded-md border border-border bg-background px-2 py-2 text-sm sm:col-span-2"
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 sm:col-span-2"
               value={row.domain}
               onChange={(event) => updateExtra(index, { domain: event.target.value })}
             >
@@ -98,14 +98,14 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
             </select>
             <input
               aria-label={`Extra subdomain ${index + 1}`}
-              className="rounded-md border border-border bg-background px-2 py-2 text-sm"
+              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
               value={row.subdomain}
               onChange={(event) => updateExtra(index, { subdomain: event.target.value })}
             />
             <div className="flex gap-2">
               <select
                 aria-label={`Extra kind ${index + 1}`}
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-2 text-sm"
+                className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
                 value={row.kind}
                 onChange={(event) =>
                   updateExtra(index, {
@@ -118,17 +118,18 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
               </select>
               <button
                 type="button"
-                className="rounded-md border border-border px-2 py-2 text-muted-foreground hover:bg-muted cursor-pointer"
+                className="rounded-md p-2 transition-colors duration-200 hover:bg-muted cursor-pointer"
                 onClick={() => removeExtra(index)}
               >
                 <Trash weight="regular" aria-hidden className="size-4" />
+                <span className="sr-only">Remove hostname</span>
               </button>
             </div>
           </div>
         ))}
         <button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={addExtra}
         >
           <Plus weight="regular" aria-hidden className="size-4" />

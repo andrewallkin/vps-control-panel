@@ -117,7 +117,7 @@ export function Layout() {
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby={drawerTitleId}
-                className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-card shadow-lg transition-transform duration-200"
+                className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-card shadow-lg"
               >
                 <div className="flex items-center justify-between border-b border-border px-4 py-3">
                   <p id={drawerTitleId} className="text-sm font-semibold">

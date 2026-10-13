@@ -73,7 +73,7 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
   const registryConfigured = registryQuery.data?.configured === true
 
   return (
-    <section className="space-y-6" aria-labelledby="optional-step-heading">
+    <section className="space-y-4" aria-labelledby="optional-step-heading">
       <div className="space-y-2">
         <h2 id="optional-step-heading" className="text-base font-semibold">
           Optional
@@ -107,7 +107,7 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
           </button>
         </div>
         {registryConfigured ? (
-          <p className="inline-flex items-center gap-2 text-sm">
+          <p className="inline-flex items-center gap-2 text-sm font-medium">
             <CheckCircle weight="regular" aria-hidden className="size-4 text-accent" />
             Configured as{' '}
             <span className="font-mono">{registryQuery.data?.username ?? '—'}</span>
@@ -115,9 +115,13 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
         ) : (
           <p className="text-sm text-muted-foreground">Not configured</p>
         )}
-        {registryError ? <p className="text-sm text-destructive">{registryError}</p> : null}
+        {registryError ? (
+          <p className="text-sm text-destructive" role="alert">
+            {registryError}
+          </p>
+        ) : null}
         {registrySuccess ? (
-          <p className="inline-flex items-center gap-2 text-sm text-accent">
+          <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
             <CheckCircle weight="regular" aria-hidden className="size-4" />
             {registrySuccess}
           </p>
@@ -132,7 +136,7 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
               type="text"
               autoComplete="username"
               value={username}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setUsername(event.target.value)}
             />
           </div>
@@ -143,9 +147,9 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
             <input
               id="setup-registry-token"
               type="password"
-              autoComplete="new-password"
+              autoComplete="current-password"
               value={token}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setToken(event.target.value)}
             />
           </div>
@@ -153,7 +157,7 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
         <button
           type="button"
           disabled={!username.trim() || !token.trim() || registryMutation.isPending}
-          className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() =>
             registryMutation.mutate({ username: username.trim(), token: token.trim() })
           }
@@ -194,29 +198,30 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
             showHeading={false}
           />
         ) : backupQuery.isError ? (
-          <p className="text-sm text-destructive">Could not load backup settings.</p>
+          <p className="text-sm text-destructive" role="alert">
+            Could not load backup settings.
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">Loading backup settings…</p>
         )}
       </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={skipMutation.isPending}
-          className="rounded-md border border-border px-4 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+          className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={() => skipMutation.mutate()}
         >
           {skipMutation.isPending ? (
             <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : (
-            'Skip'
-          )}
+          ) : null}
+          Skip
         </button>
         <button
           type="button"
-          className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
           onClick={onContinueToFinish}
         >
           Continue to finish

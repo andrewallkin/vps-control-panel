@@ -502,8 +502,11 @@ export function ProjectPage() {
   if (projectQuery.isError || !project) {
     return (
       <div className="space-y-2">
-        <p className="text-sm text-destructive">Project not found.</p>
-        <Link to="/projects" className="text-sm text-accent">
+        <p className="text-sm text-destructive" role="alert">Could not load project.</p>
+        <Link
+          to="/projects"
+          className="text-sm font-medium underline-offset-2 hover:underline cursor-pointer text-accent"
+        >
           Back to projects
         </Link>
       </div>
@@ -545,20 +548,27 @@ export function ProjectPage() {
       {activeTab === 'overview' ? (
         <div role="tabpanel" className="space-y-6">
           <section className="space-y-3">
-            <h2 className="text-sm font-semibold">Services</h2>
-            <div className="overflow-x-auto rounded-md border border-border">
-              <table className="min-w-full text-sm">
-                <thead className="border-b border-border bg-muted/40 text-left text-xs text-muted-foreground">
+            <h2 className="text-base font-semibold">Services</h2>
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/40 text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Service</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Image</th>
-                    <th className="px-3 py-2 font-medium">Started</th>
-                    <th className="px-3 py-2 text-right font-medium">CPU</th>
-                    <th className="px-3 py-2 text-right font-medium">Memory</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Service</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Status</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Image</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Started</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">CPU</th>
+                    <th scope="col" className="px-3 py-2 text-right font-medium">Memory</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
+                  {(psQuery.data?.services ?? []).length === 0 && !psQuery.isPending ? (
+                    <tr>
+                      <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                        No services yet.
+                      </td>
+                    </tr>
+                  ) : null}
                   {(psQuery.data?.services ?? []).map((svc) => {
                     const containerName = `${slug}-${svc.name}`
                     const metrics = metricsByContainer.get(containerName)
@@ -585,8 +595,8 @@ export function ProjectPage() {
             </div>
           </section>
           {publicUrls.length > 0 ? (
-            <section className="space-y-2">
-              <h2 className="text-sm font-semibold">URLs</h2>
+            <section className="space-y-3">
+              <h2 className="text-base font-semibold">URLs</h2>
               <ul className="space-y-1 text-sm">
                 {publicUrls.map((url) => (
                   <li key={url}>
@@ -604,12 +614,12 @@ export function ProjectPage() {
       {activeTab === 'deploy' ? (
         <div role="tabpanel" className="space-y-6">
           {latestDeploy?.status === 'failed_after_switch' ? (
-            <div className="rounded-md border border-warning/50 bg-warning/10 p-4 text-sm">
-              <p>This deploy failed after the new version was started</p>
+            <div className="rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-sm">
+              <p>This deploy failed after the new version was started.</p>
               <button
                 type="button"
                 disabled={!latestSucceeded || redeployMutation.isPending}
-                className="mt-3 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 cursor-pointer"
+                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => latestSucceeded && redeployMutation.mutate(latestSucceeded.id)}
               >
                 Roll back to last good deploy
@@ -622,7 +632,7 @@ export function ProjectPage() {
               Image services are not configured.{' '}
               <button
                 type="button"
-                className="text-accent hover:underline cursor-pointer"
+                className="text-sm font-medium underline-offset-2 hover:underline cursor-pointer text-accent"
                 onClick={() => selectTab('settings')}
               >
                 Open Settings
@@ -647,7 +657,7 @@ export function ProjectPage() {
                 const options = normalizeRegistryTags(svc.tags)
                 return (
                   <div key={svc.image_env_var} className="rounded-md border border-border p-4">
-                    <p className="mb-2 text-sm font-medium">{svc.service}</p>
+                    <p className="mb-2 text-sm font-semibold">{svc.service}</p>
                     <TagPicker
                       tags={options}
                       selectedName={selectedTags[svc.image_env_var] ?? options[0]?.name ?? ''}
@@ -661,32 +671,32 @@ export function ProjectPage() {
               <button
                 type="button"
                 disabled={deployMutation.isPending || Object.keys(selectedTags).length === 0}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => deployMutation.mutate({ tags: selectedTags, run_migrations: runMigrations })}
               >
-                Deploy
+                {deployMutation.isPending ? 'Deploying…' : 'Deploy'}
               </button>
             </div>
           ) : project.deploy_mode === 'build' ? (
             <button
               type="button"
               disabled={deployMutation.isPending}
-              className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => deployMutation.mutate({ build: true, run_migrations: runMigrations })}
             >
-              Build &amp; deploy
+              {deployMutation.isPending ? 'Deploying…' : 'Build & deploy'}
             </button>
           ) : null}
 
           {liveDeployLog ? (
-            <pre className="max-h-64 overflow-auto rounded-md border border-border bg-card p-3 font-mono text-xs">
+            <pre className="max-h-64 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs">
               {liveDeployLog}
             </pre>
           ) : null}
 
           {migrateJobId ? (
-            <div className="space-y-2">
-              <h2 className="text-sm font-semibold">Migration log</h2>
+            <div className="space-y-3">
+              <h2 className="text-base font-semibold">Migration log</h2>
               <LogViewer
                 key={migrateJobId}
                 jobId={migrateJobId}
@@ -695,9 +705,12 @@ export function ProjectPage() {
             </div>
           ) : null}
 
-          <section className="space-y-2">
-            <h2 className="text-sm font-semibold">Deploy history</h2>
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold">Deploy history</h2>
             <ul className="divide-y divide-border rounded-md border border-border">
+              {!deploysQuery.isPending && deploys.length === 0 ? (
+                <li className="px-3 py-3 text-sm text-muted-foreground">No deploys yet.</li>
+              ) : null}
               {deploys.map((row) => (
                 <li
                   key={row.id}
@@ -710,7 +723,7 @@ export function ProjectPage() {
                   {row.status === 'succeeded' ? (
                     <button
                       type="button"
-                      className="rounded-md border border-border px-2 py-1 text-xs font-medium hover:bg-muted cursor-pointer"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => redeployMutation.mutate(row.id)}
                     >
                       Redeploy
@@ -725,12 +738,12 @@ export function ProjectPage() {
 
       {activeTab === 'logs' ? (
         <div role="tabpanel" className="space-y-3">
-          <label className="text-sm font-medium" htmlFor="log-service">
+          <label className="block text-sm font-medium" htmlFor="log-service">
             Service
           </label>
           <select
             id="log-service"
-            className="w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="mt-1 w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
             value={logService}
             onChange={(event) => setLogService(event.target.value)}
           >
@@ -762,27 +775,27 @@ export function ProjectPage() {
               <button
                 type="button"
                 disabled={!envDirty || envSaveMutation.isPending}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() =>
                   envSaveMutation.mutate({ rows: envRows, loadedKeys: loadedEnvKeys })
                 }
               >
-                Save
+                {envSaveMutation.isPending ? 'Saving…' : 'Save'}
               </button>
               {restartPrompt ? (
-                <div className="rounded-md border border-border bg-card p-4 text-sm">
+                <div className="rounded-lg border border-border bg-card p-4 text-sm">
                   <p>Restart services?</p>
-                  <div className="mt-2 flex gap-2">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     <button
                       type="button"
-                      className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background cursor-pointer"
+                      className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => restartMutation.mutate()}
                     >
                       Restart
                     </button>
                     <button
                       type="button"
-                      className="rounded-md border border-border px-3 py-2 text-sm cursor-pointer"
+                      className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                       onClick={() => setRestartPrompt(false)}
                     >
                       Dismiss
@@ -797,7 +810,9 @@ export function ProjectPage() {
 
       {activeTab === 'routing' ? (
         <div role="tabpanel" className="space-y-4">
-          {routingError ? <p className="text-sm text-destructive">{routingError}</p> : null}
+          {routingError ? (
+            <p className="text-sm text-destructive" role="alert">{routingError}</p>
+          ) : null}
           <HostnameEditor
             hostnames={hostnamesDraft}
             domains={(domainsQuery.data ?? []).map((row) => row.name)}
@@ -807,10 +822,10 @@ export function ProjectPage() {
           <button
             type="button"
             disabled={routingMutation.isPending}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => routingMutation.mutate()}
           >
-            Save routing
+            {routingMutation.isPending ? 'Saving…' : 'Save routing'}
           </button>
         </div>
       ) : null}
@@ -835,7 +850,7 @@ export function ProjectPage() {
             <button
               type="button"
               disabled={rotateMutation.isPending}
-              className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-muted cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => setRotateConfirmOpen(true)}
             >
               Rotate password
@@ -854,19 +869,19 @@ export function ProjectPage() {
             onCancel={() => setRotateConfirmOpen(false)}
           />
           {dbRestartPrompt ? (
-            <div className="rounded-md border border-border bg-card p-4 text-sm">
+            <div className="rounded-lg border border-border bg-card p-4 text-sm">
               <p>Restart services?</p>
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className="rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => restartMutation.mutate()}
                 >
                   Restart
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-border px-3 py-2 text-sm cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => setDbRestartPrompt(false)}
                 >
                   Dismiss
@@ -874,15 +889,18 @@ export function ProjectPage() {
               </div>
             </div>
           ) : null}
-          <section className="space-y-2">
-            <h2 className="text-sm font-semibold">Dumps</h2>
+          <section className="space-y-3">
+            <h2 className="text-base font-semibold">Dumps</h2>
             <ul className="divide-y divide-border rounded-md border border-border">
+              {!dumpsQuery.isPending && (dumpsQuery.data ?? []).length === 0 ? (
+                <li className="px-3 py-3 text-sm text-muted-foreground">No dumps yet.</li>
+              ) : null}
               {(dumpsQuery.data ?? []).map((dump) => (
                 <li key={dump.name} className="flex items-center justify-between px-3 py-2 text-sm">
                   <span className="font-mono">{dump.name}</span>
                   <a
                     href={projectDumpDownloadUrl(slug, dump.name)}
-                    className="text-accent hover:underline"
+                    className="text-sm font-medium underline-offset-2 hover:underline cursor-pointer text-accent"
                   >
                     Download
                   </a>
@@ -912,18 +930,18 @@ export function ProjectPage() {
           {project.deploy_mode === 'image' ? (
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-semibold">Image services</h2>
+                <h2 className="text-base font-semibold">Image services</h2>
                 <button
                   type="button"
                   disabled={detectComposeBusy}
-                  className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50 cursor-pointer"
+                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => void detectFromCompose()}
                 >
-                  Detect from compose
+                  {detectComposeBusy ? 'Detecting…' : 'Detect from compose'}
                 </button>
               </div>
               {detectComposeError ? (
-                <p className="text-sm text-destructive">{detectComposeError}</p>
+                <p className="text-sm text-destructive" role="alert">{detectComposeError}</p>
               ) : null}
               <ServiceMappingEditor
                 services={servicesDraft}
@@ -933,43 +951,43 @@ export function ProjectPage() {
               <button
                 type="button"
                 disabled={!servicesMappingValid || servicesSaveMutation.isPending}
-                className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => servicesSaveMutation.mutate()}
               >
-                Save services
+                {servicesSaveMutation.isPending ? 'Saving…' : 'Save services'}
               </button>
             </section>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="migration-command">
+              <label className="block text-sm font-medium" htmlFor="migration-command">
                 Migration command
               </label>
               <input
                 id="migration-command"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
                 value={migrationCommand}
                 onChange={(event) => setMigrationCommand(event.target.value)}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium" htmlFor="migration-service">
+              <label className="block text-sm font-medium" htmlFor="migration-service">
                 Migration service
               </label>
               <input
                 id="migration-service"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
                 value={migrationService}
                 onChange={(event) => setMigrationService(event.target.value)}
               />
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <label className="text-sm font-medium" htmlFor="health-check-url">
+              <label className="block text-sm font-medium" htmlFor="health-check-url">
                 Health check URL
               </label>
               <input
                 id="health-check-url"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
                 value={healthCheckUrl}
                 onChange={(event) => setHealthCheckUrl(event.target.value)}
               />
@@ -978,10 +996,10 @@ export function ProjectPage() {
           <button
             type="button"
             disabled={settingsMutation.isPending}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background hover:opacity-90 disabled:opacity-50 cursor-pointer"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => settingsMutation.mutate()}
           >
-            Save settings
+            {settingsMutation.isPending ? 'Saving…' : 'Save settings'}
           </button>
           <ProjectDeleteSection
             slug={slug}
