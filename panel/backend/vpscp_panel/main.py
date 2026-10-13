@@ -33,7 +33,8 @@ from vpscp_panel.routes.settings_api import router as settings_api_router
 from vpscp_panel.routes.setup import router as setup_router
 
 CONTENT_SECURITY_POLICY = (
-    "default-src 'self'; img-src 'self' data:; font-src 'self' data:; "
+    "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; "
+    "img-src 'self' data:; font-src 'self' data:; "
     "style-src 'self' 'unsafe-inline'; "
     "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
 )
