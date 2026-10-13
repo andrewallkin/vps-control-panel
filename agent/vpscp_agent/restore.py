@@ -82,9 +82,10 @@ def validate_dump(
     path: Path, *, filename: str | None = None, passphrase: str | None = None
 ) -> DumpScan:
     name = filename if filename is not None else path.name
-    if name.endswith((".sql.gz", ".sql.gz.age")):
+    lowered = name.lower()
+    if lowered.endswith((".sql.gz", ".sql.gz.age")):
         kind = "gzip"
-    elif name.endswith((".sql", ".sql.age")):
+    elif lowered.endswith((".sql", ".sql.age")):
         kind = "plain"
     else:
         raise ValueError("unsupported dump extension")
@@ -98,7 +99,9 @@ def validate_dump(
         raise
 
     if not header_ok:
-        raise ValueError("not a pg_dumpall file")
+        raise ValueError(
+            "not a pg_dumpall cluster dump (single-database pg_dump/phpMyAdmin exports are not supported)"
+        )
 
     return DumpScan(kind=kind, header_ok=header_ok, databases=databases, roles=roles)
 
@@ -143,8 +146,9 @@ _SUPERUSER_GRANT_RE = re.compile(
 
 
 def _stored_suffix(filename: str) -> str:
+    lowered = filename.lower()
     for suffix in (".sql.gz.age", ".sql.age", ".sql.gz", ".sql"):
-        if filename.endswith(suffix):
+        if lowered.endswith(suffix):
             return suffix
     raise ValueError("unsupported dump extension")
 
@@ -196,7 +200,7 @@ def _open_dump_sql_stream(
 
 
 def _open_plain_or_gzip(path: Path, display: str) -> BinaryIO:
-    if display.endswith((".sql.gz", ".sql.gz.age")):
+    if display.lower().endswith((".sql.gz", ".sql.gz.age")):
         return gzip.open(path, "rb")
     return path.open("rb")
 
@@ -246,7 +250,7 @@ class UploadStore:
         self._dir = settings.restore_dir
 
     def create(self, filename: str, size: int) -> str:
-        if not filename.endswith(ALLOWED_SUFFIXES):
+        if not filename.lower().endswith(ALLOWED_SUFFIXES):
             raise ValueError(f"filename must end with one of {ALLOWED_SUFFIXES}")
         if size > self._settings.max_upload_bytes:
             raise ValueError("upload exceeds max_upload_bytes")

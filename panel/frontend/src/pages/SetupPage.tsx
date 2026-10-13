@@ -21,7 +21,7 @@ import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { SetupStepper } from '../components/setup/SetupStepper'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import { authQueryKey } from '../lib/auth'
-import { uploadDumpFile, type UploadProgress } from '../lib/chunkedUpload'
+import { uploadDumpFile, uploadFailureMessage, type UploadProgress } from '../lib/chunkedUpload'
 import { ACCEPT, isAcceptedDump } from '../lib/dumpFile'
 import { ApiError } from '../lib/api'
 import { fetchCloudflareZones, fetchDomains, fetchServerSettings } from '../lib/domainsApi'
@@ -206,7 +206,7 @@ export function SetupPage() {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setUploadError('Upload cancelled.')
       } else {
-        setUploadError('Upload failed. Try again or start with an empty database.')
+        setUploadError(uploadFailureMessage(error))
       }
     } finally {
       setUploading(false)

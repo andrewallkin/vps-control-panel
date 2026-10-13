@@ -1,4 +1,5 @@
 import { createSHA256 } from 'hash-wasm'
+import { ApiError } from './api'
 import {
   completeSetupUpload,
   createSetupUpload,
@@ -10,6 +11,28 @@ import {
 
 export const CHUNK_SIZE = 8 * 1024 * 1024
 const MAX_CHUNK_RETRIES = 3
+
+const UPLOAD_FALLBACK_MESSAGE =
+  'Upload failed. Try again or start with an empty database.'
+
+export function uploadFailureMessage(error: unknown): string {
+  let current: unknown = error
+  for (let i = 0; i < 3; i += 1) {
+    if (current instanceof ApiError) {
+      const body = current.body as { detail?: unknown } | null
+      if (typeof body?.detail === 'string' && body.detail.length > 0) {
+        return `Upload failed: ${body.detail}. Fix the file and try again, or start with an empty database.`
+      }
+      return UPLOAD_FALLBACK_MESSAGE
+    }
+    if (current instanceof Error && current.cause !== undefined && current.cause !== null) {
+      current = current.cause
+      continue
+    }
+    break
+  }
+  return UPLOAD_FALLBACK_MESSAGE
+}
 
 export interface ChunkSlice {
   offset: number

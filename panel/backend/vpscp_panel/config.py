@@ -17,7 +17,7 @@ class PanelSettings(BaseSettings):
         default=Path("/app/static"),
         validation_alias="PANEL_STATIC_DIR",
     )
-    panel_cookie_secure: bool = Field(default=True, validation_alias="PANEL_COOKIE_SECURE")
+    panel_cookie_secure: bool | None = Field(default=None, validation_alias="PANEL_COOKIE_SECURE")
 
     @field_validator("panel_data_dir", "agent_socket", "panel_static_dir", mode="before")
     @classmethod
@@ -26,13 +26,18 @@ class PanelSettings(BaseSettings):
 
     @field_validator("panel_cookie_secure", mode="before")
     @classmethod
-    def _coerce_cookie_secure(cls, value: object) -> bool:
+    def _coerce_cookie_secure(cls, value: object) -> bool | None:
+        if value is None:
+            return None
         if isinstance(value, bool):
             return value
         if isinstance(value, int):
             return value != 0
         if isinstance(value, str):
-            return value.strip().lower() in {"1", "true", "yes", "on"}
+            stripped = value.strip().lower()
+            if stripped == "":
+                return None
+            return stripped in {"1", "true", "yes", "on"}
         return bool(value)
 
     @property

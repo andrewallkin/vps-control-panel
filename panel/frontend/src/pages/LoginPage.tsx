@@ -65,12 +65,18 @@ export function LoginPage() {
   const loginMutation = useMutation({
     mutationFn: loginRequest,
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: authQueryKey })
-      const refreshed = await queryClient.fetchQuery({
-        queryKey: authQueryKey,
-        queryFn: fetchMe,
-      })
-      navigate(refreshed.setup_complete ? '/' : '/setup', { replace: true })
+      try {
+        await queryClient.invalidateQueries({ queryKey: authQueryKey })
+        const refreshed = await queryClient.fetchQuery({
+          queryKey: authQueryKey,
+          queryFn: fetchMe,
+        })
+        navigate(refreshed.setup_complete ? '/' : '/setup', { replace: true })
+      } catch {
+        setSubmitError(
+          'Sign-in succeeded, but the session could not be established. Your browser may be blocking the session cookie (Safari over http://localhost) — try Chrome or Firefox, or open the panel over HTTPS.',
+        )
+      }
     },
     onError: (err: unknown) => {
       if (!(err instanceof ApiError)) {

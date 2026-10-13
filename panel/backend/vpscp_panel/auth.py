@@ -67,13 +67,16 @@ def _settings(request: Request) -> PanelSettings:
     return request.app.state.settings
 
 
-def _cookie_kwargs(settings: PanelSettings) -> dict:
+def _cookie_kwargs(settings: PanelSettings, request: Request) -> dict:
+    secure = settings.panel_cookie_secure
+    if secure is None:
+        secure = request.url.scheme == "https"
     return {
         "key": SESSION_COOKIE,
         "httponly": True,
         "samesite": "strict",
         "path": "/",
-        "secure": settings.panel_cookie_secure,
+        "secure": secure,
     }
 
 
@@ -291,7 +294,7 @@ def login(
         ts=now,
     )
     raw_token, row = _create_session(db, admin, request, now)
-    response.set_cookie(value=raw_token, **_cookie_kwargs(settings))
+    response.set_cookie(value=raw_token, **_cookie_kwargs(settings, request))
     return {"username": admin.username, "csrf_token": row.csrf_token}
 
 
@@ -315,6 +318,7 @@ def me(
 
 @router.post("/logout")
 def logout(
+    request: Request,
     response: Response,
     db: Annotated[DbSession, Depends(get_db)],
     session: Annotated[Session, Depends(require_csrf)],
@@ -322,7 +326,7 @@ def logout(
 ) -> dict[str, bool]:
     db.delete(session)
     db.commit()
-    response.delete_cookie(**_cookie_kwargs(settings))
+    response.delete_cookie(**_cookie_kwargs(settings, request))
     return {"ok": True}
 
 

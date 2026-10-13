@@ -1,5 +1,32 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CHUNK_SIZE, listChunkSlices, uploadDumpFile } from './chunkedUpload'
+import { ApiError } from './api'
+import {
+  CHUNK_SIZE,
+  listChunkSlices,
+  uploadDumpFile,
+  uploadFailureMessage,
+} from './chunkedUpload'
+
+describe('uploadFailureMessage', () => {
+  it('surfaces the server detail from an ApiError', () => {
+    const err = new ApiError(400, {
+      detail: 'not a pg_dumpall cluster dump (single-database dumps are not supported)',
+    })
+    const message = uploadFailureMessage(err)
+    expect(message).toContain('not a pg_dumpall cluster dump')
+  })
+
+  it('surfaces the server detail from a wrapped chunk error', () => {
+    const err = new Error('chunk upload failed', {
+      cause: new ApiError(400, { detail: 'offset mismatch: expected 8388608' }),
+    })
+    expect(uploadFailureMessage(err)).toContain('offset mismatch: expected 8388608')
+  })
+
+  it('falls back to a generic message without a server detail', () => {
+    expect(uploadFailureMessage(new Error('network down'))).toMatch(/upload failed/i)
+  })
+})
 
 describe('listChunkSlices', () => {
   it('splits file size into 8 MiB chunks', () => {
