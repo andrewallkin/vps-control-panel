@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session as DbSession
 from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import current_session, get_db, require_csrf
 from vpscp_panel.models import Domain, Project, ProjectHostname, Session
-from vpscp_panel.project_creation import hostname_fqdn
 from vpscp_panel.panel_events import panel_audited
+from vpscp_panel.project_creation import hostname_fqdn
 from vpscp_panel.routes.setup import require_setup_mutate
 from vpscp_panel.settings_store import get_setting, set_setting
 from vpscp_panel.setup_helpers import (
@@ -180,9 +180,7 @@ def _build_zone_hostnames(
     return hostnames
 
 
-async def _ssl_mode_for_zone(
-    agent: AgentClient, zone_id: str
-) -> tuple[str | None, str | None]:
+async def _ssl_mode_for_zone(agent: AgentClient, zone_id: str) -> tuple[str | None, str | None]:
     try:
         result = await agent.get(f"/v1/dns/zones/{zone_id}/ssl-mode")
     except AgentError:
@@ -210,9 +208,7 @@ async def list_domains(
 
     project_by_domain: dict[str, list[tuple[ProjectHostname, Project]]] = defaultdict(list)
     hostname_rows = db.execute(
-        select(ProjectHostname, Project).join(
-            Project, ProjectHostname.project_slug == Project.slug
-        )
+        select(ProjectHostname, Project).join(Project, ProjectHostname.project_slug == Project.slug)
     ).all()
     for ph, project in hostname_rows:
         project_by_domain[ph.domain].append((ph, project))

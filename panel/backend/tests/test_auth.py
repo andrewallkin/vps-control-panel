@@ -205,9 +205,7 @@ def test_bad_origin_rejected(client, admin_user, frozen_time):
     assert response.json() == {"detail": "bad_origin"}
 
 
-def test_login_behind_tls_proxy_accepts_https_origin(
-    panel_settings, admin_user, frozen_time
-):
+def test_login_behind_tls_proxy_accepts_https_origin(panel_settings, admin_user, frozen_time):
     panel_settings_auto = panel_settings.model_copy(update={"panel_cookie_secure": None})
     app = create_app(settings=panel_settings_auto)
     app.state.clock = lambda: frozen_time
