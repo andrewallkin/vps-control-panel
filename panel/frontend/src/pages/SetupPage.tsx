@@ -249,8 +249,8 @@ export function SetupPage() {
     stepStatus(steps, 'cloudflare') === 'done' || zonesQuery.data?.configured === true
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <div className="space-y-2">
+    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+      <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">First-run setup</h1>
         <p className="text-sm text-muted-foreground">
           Configure the database, Cloudflare, domains, and panel URL before using the dashboard.
@@ -260,7 +260,9 @@ export function SetupPage() {
       <SetupStepper active={activeStep} steps={steps} hasValidCert={hasValidCert} />
 
       {setupQuery.isError ? (
-        <p className="text-sm text-destructive">Could not load setup status.</p>
+        <p className="text-sm text-destructive" role="alert">
+          Could not load setup status.
+        </p>
       ) : null}
 
       {activeStep === 'database' && databaseStatus === 'pending' && !effectiveRestoreJobId ? (
@@ -276,7 +278,7 @@ export function SetupPage() {
             <button
               type="button"
               disabled={emptyMutation.isPending || uploading}
-              className="flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+              className="flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => emptyMutation.mutate()}
             >
               <Database weight="regular" aria-hidden className="size-6 text-accent" />
@@ -305,7 +307,7 @@ export function SetupPage() {
               <button
                 type="button"
                 disabled={uploading}
-                className="mt-3 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => fileInputRef.current?.click()}
               >
                 Choose file
@@ -330,7 +332,7 @@ export function SetupPage() {
               />
               <button
                 type="button"
-                className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={cancelUpload}
               >
                 <Trash weight="regular" aria-hidden className="size-4" />
@@ -339,14 +341,18 @@ export function SetupPage() {
             </div>
           ) : null}
 
-          {uploadError ? <p className="text-sm text-destructive">{uploadError}</p> : null}
+          {uploadError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {uploadError}
+            </p>
+          ) : null}
 
           {uploadInfo ? (
             <div className="space-y-3">
               <UploadInfoPanel info={uploadInfo} />
               <button
                 type="button"
-                className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:opacity-90 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => {
                   setConfirmDialogKey((value) => value + 1)
                   setConfirmOpen(true)
@@ -446,7 +452,7 @@ export function SetupPage() {
           <button
             type="button"
             disabled={finishMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => finishMutation.mutate()}
           >
             {finishMutation.isPending ? (
@@ -455,7 +461,9 @@ export function SetupPage() {
             Finish setup
           </button>
           {finishMutation.isError ? (
-            <p className="text-sm text-destructive">Could not complete setup.</p>
+            <p className="text-sm text-destructive" role="alert">
+              Could not complete setup.
+            </p>
           ) : null}
         </section>
       ) : null}

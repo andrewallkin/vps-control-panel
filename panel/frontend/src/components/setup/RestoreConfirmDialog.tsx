@@ -88,6 +88,7 @@ export function RestoreConfirmDialog({
                 id={overwriteId}
                 type="checkbox"
                 checked={overwrite}
+                className="size-4 rounded border-border"
                 onChange={(event) => setOverwrite(event.target.checked)}
               />
               Overwrite existing data
@@ -105,14 +106,14 @@ export function RestoreConfirmDialog({
           disabled={busy}
           value={confirmText}
           onChange={(event) => setConfirmText(event.target.value)}
-          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+          className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
         />
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             ref={cancelRef}
             type="button"
             disabled={busy}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onCancel}
           >
             Cancel
@@ -120,7 +121,7 @@ export function RestoreConfirmDialog({
           <button
             type="button"
             disabled={!canConfirm}
-            className="rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => onConfirm(overwrite)}
           >
             Restore cluster

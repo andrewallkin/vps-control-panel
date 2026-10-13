@@ -37,6 +37,7 @@ export function CloudflareSetupStep({
   const [savingEmail, setSavingEmail] = useState(false)
 
   const emailValid = ACME_EMAIL_RE.test(acmeEmailValue.trim())
+  const emailInvalid = acmeEmailValue.trim() !== '' && !emailValid
   const emailDirty = acmeEmailValue.trim() !== acmeEmail.trim()
   const continueDisabled = zonesLoading || !emailValid || savingEmail
 
@@ -91,7 +92,7 @@ export function CloudflareSetupStep({
         <label htmlFor="setup-acme-email" className="text-sm font-medium">
           ACME email
         </label>
-        <p className="text-xs text-muted-foreground">
+        <p id="setup-acme-email-helper" className="text-sm text-muted-foreground">
           Let's Encrypt expiry and account notices for certificate issuance.
         </p>
         <input
@@ -100,18 +101,30 @@ export function CloudflareSetupStep({
           autoComplete="email"
           value={acmeEmailValue}
           placeholder="ops@example.com"
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-invalid={emailInvalid ? true : undefined}
+          aria-describedby={
+            emailInvalid
+              ? 'setup-acme-email-helper setup-acme-email-error'
+              : 'setup-acme-email-helper'
+          }
           onChange={(event) => setAcmeEmailValue(event.target.value)}
         />
-        {acmeEmailValue.trim() && !emailValid ? (
-          <p className="text-sm text-destructive">Enter a valid email address.</p>
+        {emailInvalid ? (
+          <p id="setup-acme-email-error" className="text-sm text-destructive" role="alert">
+            Enter a valid email address.
+          </p>
         ) : null}
-        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
       </div>
 
       {showConfigured ? (
         <div className="space-y-3">
-          <p className="inline-flex items-center gap-2 text-sm text-accent">
+          <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
             <CheckCircle weight="regular" aria-hidden className="size-4" />
             Token saved
           </p>
@@ -130,14 +143,16 @@ export function CloudflareSetupStep({
               ))}
             </ul>
           ) : zonesError ? (
-            <p className="text-sm text-destructive">{zonesError}</p>
+            <p className="text-sm text-destructive" role="alert">
+              {zonesError}
+            </p>
           ) : (
             <p className="text-sm text-muted-foreground">No zones returned for this token.</p>
           )}
           <button
             type="button"
             disabled={continueDisabled}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleContinue}
           >
             Continue
@@ -153,13 +168,13 @@ export function CloudflareSetupStep({
             type="password"
             autoComplete="off"
             value={token}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             onChange={(event) => setToken(event.target.value)}
           />
           <button
             type="button"
             disabled={!token.trim() || mutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => mutation.mutate()}
           >
             {mutation.isPending ? (
