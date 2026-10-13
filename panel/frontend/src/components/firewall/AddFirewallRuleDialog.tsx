@@ -68,8 +68,8 @@ export function AddFirewallRuleDialog({
         </p>
 
         <div className="mt-4 space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="fw-add-port" className="text-sm font-medium">
+          <div>
+            <label htmlFor="fw-add-port" className="block text-sm font-medium">
               Port or range
             </label>
             <input
@@ -79,20 +79,20 @@ export function AddFirewallRuleDialog({
               placeholder="80 or 8000:8010"
               value={port}
               disabled={busy}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-mono"
               onChange={(event) => setPort(event.target.value)}
             />
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="fw-add-proto" className="text-sm font-medium">
+          <div>
+            <label htmlFor="fw-add-proto" className="block text-sm font-medium">
               Protocol
             </label>
             <select
               id="fw-add-proto"
               value={proto}
               disabled={busy}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setProto(event.target.value as 'tcp' | 'udp')}
             >
               <option value="tcp">tcp</option>
@@ -100,15 +100,15 @@ export function AddFirewallRuleDialog({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="fw-add-action" className="text-sm font-medium">
+          <div>
+            <label htmlFor="fw-add-action" className="block text-sm font-medium">
               Action
             </label>
             <select
               id="fw-add-action"
               value={action}
               disabled={busy}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setAction(event.target.value as 'allow' | 'deny')}
             >
               <option value="allow">allow</option>
@@ -116,8 +116,8 @@ export function AddFirewallRuleDialog({
             </select>
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="fw-add-source" className="text-sm font-medium">
+          <div>
+            <label htmlFor="fw-add-source" className="block text-sm font-medium">
               Source
             </label>
             <input
@@ -126,13 +126,13 @@ export function AddFirewallRuleDialog({
               placeholder="any or 203.0.113.0/24"
               value={source}
               disabled={busy}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed font-mono"
               onChange={(event) => setSource(event.target.value)}
             />
           </div>
 
-          <div className="space-y-2">
-            <label htmlFor="fw-add-comment" className="text-sm font-medium">
+          <div>
+            <label htmlFor="fw-add-comment" className="block text-sm font-medium">
               Comment <span className="text-muted-foreground">(optional)</span>
             </label>
             <input
@@ -140,7 +140,7 @@ export function AddFirewallRuleDialog({
               type="text"
               value={comment}
               disabled={busy}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setComment(event.target.value)}
             />
           </div>
@@ -150,7 +150,7 @@ export function AddFirewallRuleDialog({
           <button
             type="button"
             disabled={busy}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={onCancel}
           >
             Cancel
@@ -158,7 +158,7 @@ export function AddFirewallRuleDialog({
           <button
             type="button"
             disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => {
               if (parsedPort === null) {
                 return
