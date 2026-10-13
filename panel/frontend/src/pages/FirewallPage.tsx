@@ -22,14 +22,20 @@ import {
   type FirewallRule,
 } from '../lib/firewallApi'
 import {
+  CF_LOCK_REASON,
+  CF_ONLY_SUMMARY,
   EXPOSURE_GUIDANCE,
   formatAction,
+  formatFamily,
+  formatProcess,
+  formatSource,
   isCloudflareOnlyMode,
   isRuleLocked,
-  LOCK_TOOLTIP_CF_RULES,
-  LOCK_TOOLTIP_WEB_PORTS,
+  KEPT_OPEN_LABEL,
   portFromTo,
+  splitExposure,
   SSH_DELETE_HELPER,
+  WEB_LOCK_REASON,
 } from '../lib/firewallUtils'
 import { authQueryKey } from '../lib/auth'
 
@@ -49,34 +55,42 @@ function apiErrorDetail(error: unknown): string {
   return ''
 }
 
-function lockTooltip(rule: FirewallRule, cfOnly: boolean): string {
+function lockReason(rule: FirewallRule, cfOnly: boolean): string {
   if (cfOnly && rule.comment === 'cf') {
-    return LOCK_TOOLTIP_CF_RULES
+    return CF_LOCK_REASON
   }
-  return LOCK_TOOLTIP_WEB_PORTS
+  return WEB_LOCK_REASON
 }
 
-function ExposureStatus({ row }: { row: { external: boolean; expected: boolean; port: number } }) {
-  if (row.external && row.expected) {
+function serviceAndProcess(process: string): { service: string; program: string } {
+  if (!process) {
+    return { service: '—', program: '—' }
+  }
+  const label = formatProcess(process)
+  if (label === process) {
+    return { service: process, program: '—' }
+  }
+  return { service: label, program: process }
+}
+
+function PublicStatus({ expected, port }: { expected: boolean; port: number }) {
+  if (expected) {
     return (
       <span className="inline-flex items-center gap-1.5 text-sm font-medium text-accent">
         <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0" />
-        <span>Expected</span>
+        <span>Public</span>
       </span>
     )
   }
-  if (row.external && !row.expected) {
-    return (
-      <span
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-destructive"
-        aria-label={`Unexpected exposure on port ${row.port}`}
-      >
-        <XCircle weight="regular" aria-hidden className="size-4 shrink-0" />
-        <span>Unexpected</span>
-      </span>
-    )
-  }
-  return <span className="text-sm text-muted-foreground">—</span>
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-sm font-medium text-destructive"
+      aria-label={`Problem: port ${port} is reachable from the internet`}
+    >
+      <XCircle weight="regular" aria-hidden className="size-4 shrink-0" />
+      <span>Problem</span>
+    </span>
+  )
 }
 
 export function FirewallPage() {
@@ -105,6 +119,10 @@ export function FirewallPage() {
     [rulesQuery.data],
   )
   const rules = rulesQuery.data ?? []
+  const exposure = useMemo(
+    () => splitExposure(exposureQuery.data ?? []),
+    [exposureQuery.data],
+  )
 
   const runPending = async (mutation: PendingMutation) => {
     if (!mutation) {
@@ -165,7 +183,7 @@ export function FirewallPage() {
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Firewall</h1>
           <p className="text-sm text-muted-foreground">
-            UFW rules, Cloudflare-only web exposure, and listening socket report.
+            Who can reach this server, and which programs are listening.
           </p>
         </div>
         <button
@@ -187,10 +205,7 @@ export function FirewallPage() {
             <h2 id="cf-only-heading" className="text-base font-semibold">
               Cloudflare-only mode
             </h2>
-            <p className="text-sm text-muted-foreground">
-              When enabled, open HTTP/HTTPS rules are replaced with Cloudflare published IP ranges.
-              Mode is on when any rule carries the <span className="font-mono">cf</span> comment.
-            </p>
+            <p className="text-sm text-muted-foreground">{CF_ONLY_SUMMARY}</p>
           </div>
           <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
             <input
@@ -222,6 +237,7 @@ export function FirewallPage() {
           Rules
         </h2>
         <p className="text-sm text-muted-foreground">{SSH_DELETE_HELPER}</p>
+        <p className="text-sm text-muted-foreground">{cfOnly ? CF_LOCK_REASON : WEB_LOCK_REASON}</p>
         {rulesQuery.isError ? (
           <p className="text-sm text-destructive" role="alert">
             Could not load rules.
@@ -236,6 +252,9 @@ export function FirewallPage() {
                   Port / range
                 </th>
                 <th scope="col" className="px-3 py-2 font-medium">
+                  Family
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium">
                   Proto
                 </th>
                 <th scope="col" className="px-3 py-2 font-medium">
@@ -247,7 +266,7 @@ export function FirewallPage() {
                 <th scope="col" className="px-3 py-2 font-medium">
                   Comment
                 </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="px-3 py-2 text-right font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -255,7 +274,7 @@ export function FirewallPage() {
             <tbody className="divide-y divide-border">
               {rulesQuery.isPending ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-3 py-6 text-sm text-muted-foreground">
                     Loading rules…
                   </td>
                 </tr>
@@ -263,29 +282,38 @@ export function FirewallPage() {
               {rules.map((rule) => {
                 const locked = isRuleLocked(rule, cfOnly)
                 const portLabel = portFromTo(rule.to)
+                const reason = lockReason(rule, cfOnly)
+                const sourceLabel = formatSource(rule.from)
                 return (
                   <tr key={rule.number}>
                     <td className="px-3 py-2 font-mono text-xs">{portLabel}</td>
+                    <td className="px-3 py-2">{formatFamily(rule.v6)}</td>
                     <td className="px-3 py-2 font-mono text-xs">{rule.proto}</td>
                     <td className="px-3 py-2">{formatAction(rule.action)}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{rule.from}</td>
+                    <td className={sourceLabel === rule.from ? 'px-3 py-2 font-mono text-xs' : 'px-3 py-2'}>
+                      {sourceLabel}
+                    </td>
                     <td className="px-3 py-2 text-muted-foreground">{rule.comment || '—'}</td>
                     <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        {locked ? (
-                          <span
-                            className="inline-flex text-muted-foreground"
-                            title={lockTooltip(rule, cfOnly)}
-                            aria-label={`${portLabel} locked`}
-                          >
-                            <Lock weight="regular" aria-hidden className="size-4" />
-                          </span>
-                        ) : null}
+                      <div className="flex items-center justify-end gap-2">
+                        <span className="inline-flex w-[7.5rem] shrink-0 items-center justify-end">
+                          {locked ? (
+                            <span
+                              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                              title={reason}
+                              aria-label={`${portLabel} locked`}
+                            >
+                              <Lock weight="regular" aria-hidden className="size-4 shrink-0" />
+                              <span>{KEPT_OPEN_LABEL}</span>
+                            </span>
+                          ) : null}
+                        </span>
                         <button
                           type="button"
                           disabled={locked || deleteMutation.isPending}
                           aria-label={`Delete rule ${rule.number}`}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={locked ? reason : undefined}
+                          className="inline-flex w-[5.75rem] shrink-0 items-center justify-center gap-1.5 rounded-md border border-destructive/50 bg-transparent px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-muted-foreground disabled:hover:bg-transparent"
                           onClick={() => setDeleteTarget(rule)}
                         >
                           <Trash weight="regular" aria-hidden className="size-4" />
@@ -298,7 +326,7 @@ export function FirewallPage() {
               })}
               {!rulesQuery.isPending && !rulesQuery.isError && rules.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                  <td colSpan={7} className="px-3 py-6 text-sm text-muted-foreground">
                     No firewall rules yet.
                   </td>
                 </tr>
@@ -319,60 +347,131 @@ export function FirewallPage() {
           </p>
         ) : null}
 
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  Address
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  Port
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  Proto
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  Process
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  Status
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {exposureQuery.isPending ? (
+        <div className="space-y-2">
+          <h3 className="text-sm font-medium">Reachable from the internet</h3>
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
                 <tr>
-                  <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
-                    Loading exposure…
-                  </td>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Port
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Protocol
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Service
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Process
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Reach
+                  </th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    Status
+                  </th>
                 </tr>
-              ) : null}
-              {(exposureQuery.data ?? []).map((row) => (
-                <tr
-                  key={`${row.address}-${row.port}-${row.proto}`}
-                >
-                  <td className="px-3 py-2 font-mono text-xs">{row.address}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{row.port}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{row.proto}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{row.process || '—'}</td>
-                  <td className="px-3 py-2">
-                    <ExposureStatus row={row} />
-                  </td>
-                </tr>
-              ))}
-              {!exposureQuery.isPending &&
-              !exposureQuery.isError &&
-              (exposureQuery.data ?? []).length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
-                    No listening sockets reported.
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {exposureQuery.isPending ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                      Loading exposure…
+                    </td>
+                  </tr>
+                ) : null}
+                {exposure.publicListeners.map((row) => {
+                  const names = serviceAndProcess(row.process)
+                  return (
+                  <tr key={row.key}>
+                    <td className="px-3 py-2 font-mono text-xs">{row.port}</td>
+                    <td className="px-3 py-2 font-mono text-xs">{row.proto}</td>
+                    <td className="px-3 py-2">{names.service}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                      {names.program}
+                    </td>
+                    <td className="px-3 py-2">{row.reach}</td>
+                    <td className="px-3 py-2">
+                      <PublicStatus expected={row.expected} port={row.port} />
+                    </td>
+                  </tr>
+                  )
+                })}
+                {!exposureQuery.isPending &&
+                !exposureQuery.isError &&
+                exposure.publicListeners.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                      Nothing is reachable from the internet.
+                    </td>
+                  </tr>
+                ) : null}
+              </tbody>
+            </table>
+          </div>
         </div>
+
+        {!exposureQuery.isPending && !exposureQuery.isError && exposure.localListeners.length > 0 ? (
+          <details className="space-y-2">
+            <summary className="cursor-pointer text-sm font-medium">
+              Only on this machine ({exposure.localListeners.length})
+            </summary>
+            <p className="text-sm text-muted-foreground">
+              These programs are not reachable from the internet.
+            </p>
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border bg-muted/40 text-muted-foreground">
+                  <tr>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Address
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Port
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Protocol
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Service
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Process
+                    </th>
+                    <th scope="col" className="px-3 py-2 font-medium">
+                      Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {exposure.localListeners.map((row) => {
+                    const names = serviceAndProcess(row.process)
+                    return (
+                    <tr key={row.key}>
+                      <td className="px-3 py-2">
+                        <span className="font-mono text-xs">{row.address}</span>
+                        {row.scopeLabel ? (
+                          <span className="ml-1.5 text-xs text-muted-foreground">{row.scopeLabel}</span>
+                        ) : null}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">{row.port}</td>
+                      <td className="px-3 py-2 font-mono text-xs">{row.proto}</td>
+                      <td className="px-3 py-2">{names.service}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                        {names.program}
+                      </td>
+                      <td className="px-3 py-2 text-sm text-muted-foreground">
+                        {row.blockedByFirewall ? 'Blocked by the firewall' : 'Local only'}
+                      </td>
+                    </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </details>
+        ) : null}
       </section>
 
       {addMutation.isPending ? (
@@ -407,7 +506,7 @@ export function FirewallPage() {
       <ConfirmDialog
         open={cfConfirmOn === true}
         title="Enable Cloudflare-only mode"
-        description="Turning this on replaces the open 80/443 rules with Cloudflare's published IP ranges."
+        description="The site will accept HTTP and HTTPS only from Cloudflare's addresses. Visiting this server's IP on ports 80 and 443 will stop working. SSH is unchanged."
         confirmLabel="Enable"
         busy={cfMutation.isPending}
         onCancel={() => setCfConfirmOn(null)}

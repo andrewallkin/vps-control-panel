@@ -1,4 +1,5 @@
-import { screen, waitFor } from '@testing-library/react'
+import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FirewallPage } from './FirewallPage'
 import { renderWithProviders } from '../test/renderWithProviders'
@@ -50,11 +51,27 @@ const exposureRows = [
     expected: true,
   },
   {
+    address: '::',
+    port: 22,
+    process: 'sshd',
+    proto: 'tcp',
+    external: true,
+    expected: true,
+  },
+  {
     address: '0.0.0.0',
     port: 10001,
     process: 'app',
     proto: 'tcp',
     external: true,
+    expected: false,
+  },
+  {
+    address: '127.0.0.53%lo',
+    port: 53,
+    process: 'systemd-resolve',
+    proto: 'tcp',
+    external: false,
     expected: false,
   },
 ]
@@ -92,6 +109,10 @@ describe('FirewallPage', () => {
     expect(httpsDelete).toBeDefined()
     expect(httpsDelete).toBeDisabled()
     expect(screen.getByLabelText(/443.*locked/i)).toBeInTheDocument()
+    const rules = within(screen.getByRole('region', { name: 'Rules' }))
+    expect(rules.getAllByText('Kept open').length).toBeGreaterThan(0)
+    expect(rules.getAllByRole('cell', { name: /^IPv4$/ })).toHaveLength(baseRules.length)
+    expect(rules.getAllByRole('cell', { name: 'Anyone on the internet' })).toHaveLength(baseRules.length)
   })
 
   it('marks unexpected external exposure with a red indicator', async () => {
@@ -101,8 +122,11 @@ describe('FirewallPage', () => {
       expect(screen.getByText('10001')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('Unexpected')).toBeInTheDocument()
-    expect(screen.getByLabelText(/unexpected exposure on port 10001/i)).toBeInTheDocument()
+    expect(screen.getByText('Problem')).toBeInTheDocument()
+    expect(screen.getByLabelText(/problem: port 10001 is reachable from the internet/i)).toBeInTheDocument()
+    expect(screen.getByText('IPv4 and IPv6')).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'SSH' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'sshd' })).toBeInTheDocument()
   })
 
   it('shows the expected external ports guidance sentence', async () => {
@@ -110,8 +134,28 @@ describe('FirewallPage', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText('Expected: only 22, 80, 443 reachable'),
+        screen.getByText(
+          'Public listeners should be SSH (22) and the web server (80 and 443). Anything else listening for the whole internet is marked as a problem.',
+        ),
       ).toBeInTheDocument()
     })
+  })
+
+  it('keeps machine-local listeners collapsed until opened', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<FirewallPage />)
+
+    const summary = await screen.findByText(/only on this machine \(1\)/i)
+    const details = summary.closest('details')
+    expect(details).not.toHaveAttribute('open')
+
+    await user.click(summary)
+
+    expect(details).toHaveAttribute('open')
+    expect(screen.getByText('127.0.0.53')).toBeInTheDocument()
+    expect(screen.getByText('loopback interface')).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'DNS stub' })).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'systemd-resolve' })).toBeInTheDocument()
+    expect(screen.getByText('Local only')).toBeInTheDocument()
   })
 })
