@@ -104,6 +104,80 @@ def test_metrics_history_forwards_hours(api_client, auth, agent_requests):
     assert agent_requests[-1].url.params.get("hours") == "24"
 
 
+@pytest.fixture
+def mock_transport_agent_list_shapes(agent_requests):
+    history_point = {
+        "ts": "2026-01-01T00:00:00+00:00",
+        "cpu_percent": 12.5,
+        "load1": 0.5,
+        "mem_used": 1000,
+        "mem_total": 8000,
+        "swap_used": 0,
+        "swap_total": 2000,
+        "disks": [
+            {"path": "/", "total": 100, "used": 50, "free": 50, "percent": 50.0},
+        ],
+    }
+    container_row = {
+        "name": "web",
+        "project": "app",
+        "cpu_percent": 1.2,
+        "mem_used": 100_000_000,
+        "mem_limit": 500_000_000,
+        "mem_percent": 20.0,
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        agent_requests.append(request)
+        path = request.url.path
+        if path == "/v1/metrics/history":
+            return httpx.Response(200, json=[history_point])
+        if path == "/v1/metrics/containers":
+            return httpx.Response(200, json=[container_row])
+        return httpx.Response(404, json={"detail": "not found"})
+
+    return httpx.MockTransport(handler)
+
+
+@pytest.fixture
+def api_client_agent_list_shapes(panel_settings, frozen_time, mock_transport_agent_list_shapes):
+    agent = AgentClient("/fake.sock", transport=mock_transport_agent_list_shapes)
+    app = create_app(settings=panel_settings, agent=agent)
+    app.state.clock = lambda: frozen_time
+    with TestClient(app) as client:
+        yield client
+
+
+def test_metrics_history_proxies_agent_list_shape(
+    api_client_agent_list_shapes, admin_user, frozen_time, agent_requests
+):
+    auth = login(api_client_agent_list_shapes, admin_user, frozen_time)
+    assert auth
+    response = api_client_agent_list_shapes.get("/api/metrics/history")
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    assert len(body) == 1
+    assert body[0]["ts"] == "2026-01-01T00:00:00+00:00"
+    assert body[0]["cpu_percent"] == 12.5
+    assert agent_requests[-1].url.path == "/v1/metrics/history"
+
+
+def test_metrics_containers_proxies_agent_list_shape(
+    api_client_agent_list_shapes, admin_user, frozen_time, agent_requests
+):
+    auth = login(api_client_agent_list_shapes, admin_user, frozen_time)
+    assert auth
+    response = api_client_agent_list_shapes.get("/api/metrics/containers")
+    assert response.status_code == 200
+    body = response.json()
+    assert isinstance(body, list)
+    assert len(body) == 1
+    assert body[0]["name"] == "web"
+    assert body[0]["project"] == "app"
+    assert agent_requests[-1].url.path == "/v1/metrics/containers"
+
+
 def test_metrics_containers_proxies(api_client, auth, agent_requests):
     response = api_client.get("/api/metrics/containers")
     assert response.status_code == 200

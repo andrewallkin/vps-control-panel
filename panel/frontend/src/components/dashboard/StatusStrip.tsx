@@ -1,8 +1,22 @@
+import type { BackupLastRun } from '../../lib/backupsApi'
 import type { DashboardSummary } from '../../lib/dashboardTypes'
 import { StatusBadge } from '../StatusBadge'
 
 export interface StatusStripProps {
   summary: DashboardSummary | undefined
+}
+
+export function formatBackupLastRun(
+  lastRun: BackupLastRun | null | undefined,
+): string {
+  if (!lastRun?.finished_at) {
+    return 'Never'
+  }
+  const date = new Date(lastRun.finished_at)
+  if (Number.isNaN(date.getTime())) {
+    return lastRun.finished_at
+  }
+  return date.toLocaleString()
 }
 
 function formatCertExpiry(iso: string | null | undefined): string {
@@ -55,9 +69,7 @@ export function StatusStrip({ summary }: StatusStripProps) {
         ) : (
           <>
             <p className="mt-1 text-sm font-mono">
-              {backup.last_run
-                ? new Date(backup.last_run).toLocaleString()
-                : 'Never'}
+              {formatBackupLastRun(backup.last_run)}
             </p>
             {backup.failed ? (
               <StatusBadge variant="critical" label="Last backup failed" />
