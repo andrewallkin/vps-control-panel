@@ -1,4 +1,5 @@
 import ipaddress
+from collections import defaultdict
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -8,7 +9,8 @@ from sqlalchemy.orm import Session as DbSession
 
 from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import current_session, get_db, require_csrf
-from vpscp_panel.models import Domain, Session
+from vpscp_panel.models import Domain, Project, ProjectHostname, Session
+from vpscp_panel.project_creation import hostname_fqdn
 from vpscp_panel.panel_events import panel_audited
 from vpscp_panel.routes.setup import require_setup_mutate
 from vpscp_panel.settings_store import get_setting, set_setting
@@ -126,15 +128,72 @@ async def _sync_tls_into_db(db: DbSession, agent: AgentClient) -> dict[str, dict
     return by_domain
 
 
-async def _ssl_mode_for_zone(agent: AgentClient, zone_id: str) -> str | None:
+def _hostname_entry(
+    fqdn: str,
+    kind: str,
+    *,
+    project_slug: str | None = None,
+    project_name: str | None = None,
+) -> dict[str, Any]:
+    return {
+        "fqdn": fqdn,
+        "kind": kind,
+        "project_slug": project_slug,
+        "project_name": project_name,
+    }
+
+
+def _build_zone_hostnames(
+    domain_name: str,
+    panel_hostname: str | None,
+    project_rows: list[tuple[ProjectHostname, Project]],
+) -> list[dict[str, Any]]:
+    by_fqdn: dict[str, dict[str, Any]] = {}
+
+    for ph, project in project_rows:
+        fqdn = hostname_fqdn(ph.domain, ph.subdomain)
+        by_fqdn[fqdn] = _hostname_entry(
+            fqdn,
+            ph.kind,
+            project_slug=project.slug,
+            project_name=project.display_name,
+        )
+
+    if domain_name not in by_fqdn:
+        by_fqdn[domain_name] = _hostname_entry(domain_name, "zone")
+
+    if panel_hostname and panel_hostname_uses_domain(panel_hostname, domain_name):
+        if panel_hostname in by_fqdn:
+            if by_fqdn[panel_hostname]["kind"] == "zone":
+                by_fqdn[panel_hostname] = _hostname_entry(panel_hostname, "panel")
+        else:
+            by_fqdn[panel_hostname] = _hostname_entry(panel_hostname, "panel")
+
+    hostnames = list(by_fqdn.values())
+
+    def _sort_key(entry: dict[str, Any]) -> tuple[int, str]:
+        if entry["kind"] == "zone":
+            return (0, entry["fqdn"])
+        return (1, entry["fqdn"])
+
+    hostnames.sort(key=_sort_key)
+    return hostnames
+
+
+async def _ssl_mode_for_zone(
+    agent: AgentClient, zone_id: str
+) -> tuple[str | None, str | None]:
     try:
         result = await agent.get(f"/v1/dns/zones/{zone_id}/ssl-mode")
     except AgentError:
-        return None
+        return None, None
     if not isinstance(result, dict):
-        return None
+        return None, None
     mode = result.get("mode")
-    return mode if isinstance(mode, str) else None
+    ssl_mode = mode if isinstance(mode, str) else None
+    error = result.get("error")
+    ssl_mode_error = "permission" if error == "permission" else None
+    return ssl_mode, ssl_mode_error
 
 
 @router.get("/api/domains")
@@ -145,6 +204,19 @@ async def list_domains(
 ) -> list[dict[str, Any]]:
     tls_by_domain = await _sync_tls_into_db(db, agent)
     rows = db.scalars(select(Domain).order_by(Domain.name)).all()
+
+    panel_raw = get_setting(db, "panel_hostname")
+    panel_hostname = panel_raw if isinstance(panel_raw, str) and panel_raw else None
+
+    project_by_domain: dict[str, list[tuple[ProjectHostname, Project]]] = defaultdict(list)
+    hostname_rows = db.execute(
+        select(ProjectHostname, Project).join(
+            Project, ProjectHostname.project_slug == Project.slug
+        )
+    ).all()
+    for ph, project in hostname_rows:
+        project_by_domain[ph.domain].append((ph, project))
+
     items: list[dict[str, Any]] = []
     for row in rows:
         tls = tls_by_domain.get(row.name, {})
@@ -156,7 +228,7 @@ async def list_domains(
                 row.cert_expires_at,
             )
         )
-        ssl_mode = await _ssl_mode_for_zone(agent, row.zone_id)
+        ssl_mode, ssl_mode_error = await _ssl_mode_for_zone(agent, row.zone_id)
         warning = None
         if ssl_mode is not None and ssl_mode != "strict":
             warning = SSL_MODE_WARNING
@@ -167,7 +239,13 @@ async def list_domains(
                 "cert_status": cert_status,
                 "cert_expires_at": cert_expires_at,
                 "ssl_mode": ssl_mode,
+                "ssl_mode_error": ssl_mode_error,
                 "warning": warning,
+                "hostnames": _build_zone_hostnames(
+                    row.name,
+                    panel_hostname,
+                    project_by_domain.get(row.name, []),
+                ),
             }
         )
     return items

@@ -41,6 +41,7 @@ class DnsCredentialsResponse(BaseModel):
 
 class SslModeResponse(BaseModel):
     mode: str | None
+    error: str | None = None
 
 
 def _get_setting(db, key: str) -> str | None:
@@ -108,7 +109,8 @@ def get_dns_zones(request: Request) -> list[ZoneSummary]:
 @router.get("/v1/dns/zones/{zone_id}/ssl-mode")
 def get_dns_ssl_mode(zone_id: str, request: Request) -> SslModeResponse:
     client = _configured_client(request)
-    return SslModeResponse(mode=client.get_ssl_mode(zone_id))
+    result = client.get_ssl_mode(zone_id)
+    return SslModeResponse(mode=result.mode, error=result.error)
 
 
 @router.post("/v1/dns/records/upsert")

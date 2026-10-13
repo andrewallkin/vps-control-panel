@@ -313,4 +313,25 @@ def test_ssl_mode_endpoint(dns_client):
     transport_holder["transport"] = httpx.MockTransport(handler)
     response = client.get("/v1/dns/zones/zone-1/ssl-mode")
     assert response.status_code == 200
-    assert response.json() == {"mode": "full"}
+    assert response.json() == {"mode": "full", "error": None}
+
+
+def test_ssl_mode_endpoint_permission_denied(dns_client):
+    client, transport_holder, settings = dns_client
+    write_cloudflare_ini(settings, SECRET_TOKEN)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path.endswith("/settings/ssl"):
+            return httpx.Response(
+                403,
+                json={
+                    "success": False,
+                    "errors": [{"code": 9109, "message": "Unauthorized to access this resource"}],
+                },
+            )
+        raise AssertionError(request.url.path)
+
+    transport_holder["transport"] = httpx.MockTransport(handler)
+    response = client.get("/v1/dns/zones/zone-1/ssl-mode")
+    assert response.status_code == 200
+    assert response.json() == {"mode": None, "error": "permission"}

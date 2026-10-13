@@ -3,7 +3,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { AddDomainDialog } from '../components/domains/AddDomainDialog'
 import { CertStatusBadge } from '../components/domains/CertStatusBadge'
-import { PanelHostnameHint } from '../components/domains/PanelHostnameHint'
 import { RemoveDomainDialog } from '../components/domains/RemoveDomainDialog'
 import { SslModeBadge } from '../components/domains/SslModeBadge'
 import { LogViewer } from '../components/setup/LogViewer'
@@ -13,11 +12,26 @@ import {
   fetchCloudflareZones,
   fetchDomains,
   fetchPanelHostname,
-  panelHostnameUsesDomain,
   reissueDomain,
   registerDomain,
+  type DomainHostname,
 } from '../lib/domainsApi'
 import { useTickingNow } from '../hooks/useTickingNow'
+
+function hostnameLabel(entry: DomainHostname): string {
+  switch (entry.kind) {
+    case 'zone':
+      return 'Zone'
+    case 'panel':
+      return 'Panel'
+    case 'primary':
+      return entry.project_name ?? entry.project_slug ?? 'Project'
+    case 'alias':
+      return `${entry.project_name ?? entry.project_slug ?? 'Project'} alias`
+    case 'redirect':
+      return `${entry.project_name ?? entry.project_slug ?? 'Project'} redirect`
+  }
+}
 
 export function DomainsPage() {
   const queryClient = useQueryClient()
@@ -102,10 +116,10 @@ export function DomainsPage() {
   const panelHostname = panelHostnameQuery.data?.panel_hostname ?? null
   const panelHostnameReady = !panelHostnameQuery.isPending
   const domains = domainsQuery.data ?? []
-  const panelHostnameMatchesZone =
+  const panelHostnameListed =
     panelHostnameReady &&
     panelHostname !== null &&
-    domains.some((row) => panelHostnameUsesDomain(panelHostname, row.name))
+    domains.some((row) => row.hostnames.some((h) => h.fqdn === panelHostname))
   const tableLoading = domainsQuery.isPending || panelHostnameQuery.isPending
 
   return (
@@ -114,7 +128,8 @@ export function DomainsPage() {
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Domains</h1>
           <p className="text-sm text-muted-foreground">
-            Wildcard TLS certificates and Cloudflare SSL mode for registered zones.
+            One wildcard certificate and one Cloudflare SSL mode cover every name in each
+            registered zone.
           </p>
         </div>
         <button
@@ -160,7 +175,7 @@ export function DomainsPage() {
         </p>
       ) : null}
 
-      {panelHostnameReady && panelHostname && !panelHostnameMatchesZone ? (
+      {panelHostnameReady && panelHostname && !panelHostnameListed ? (
         <p className="text-sm text-muted-foreground">
           <span>Panel hostname </span>
           <span className="font-mono">{panelHostname}</span>
@@ -172,7 +187,7 @@ export function DomainsPage() {
           <thead className="border-b border-border bg-muted/40 text-muted-foreground">
             <tr>
               <th scope="col" className="px-3 py-2 font-medium">
-                Domain
+                Names
               </th>
               <th scope="col" className="px-3 py-2 font-medium">
                 Zone
@@ -199,13 +214,17 @@ export function DomainsPage() {
             {!tableLoading
               ? domains.map((row) => (
               <tr key={row.name}>
-                <td className="px-3 py-2 font-medium">
-                  {row.name}
-                  {panelHostnameReady &&
-                  panelHostname &&
-                  panelHostnameUsesDomain(panelHostname, row.name) ? (
-                    <PanelHostnameHint fqdn={panelHostname} />
-                  ) : null}
+                <td className="px-3 py-2">
+                  <div className="flex flex-col gap-1">
+                    {row.hostnames.map((entry) => (
+                      <div key={entry.fqdn} className="flex flex-wrap items-baseline gap-x-2">
+                        <span className="font-mono text-sm">{entry.fqdn}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {hostnameLabel(entry)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
                 </td>
                 <td className="px-3 py-2 font-mono text-xs">
                   {zoneNameById.get(row.zone_id) ?? row.zone_id}
@@ -218,7 +237,11 @@ export function DomainsPage() {
                   />
                 </td>
                 <td className="px-3 py-2">
-                  <SslModeBadge sslMode={row.ssl_mode} warning={row.warning} />
+                  <SslModeBadge
+                    sslMode={row.ssl_mode}
+                    sslModeError={row.ssl_mode_error}
+                    warning={row.warning}
+                  />
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap items-center gap-2">

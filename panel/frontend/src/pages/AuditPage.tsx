@@ -2,14 +2,7 @@ import { CheckCircle, Spinner, XCircle } from '@phosphor-icons/react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchAudit, type AuditEntry } from '../lib/auditApi'
-
-function formatAuditTime(iso: string): string {
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso
-  }
-  return date.toLocaleString()
-}
+import { formatDateTime } from '../lib/format'
 
 function AuditResultBadge({ ok }: { ok: boolean }) {
   if (ok) {
@@ -32,7 +25,7 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
   return (
     <tr>
       <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
-        {formatAuditTime(entry.time)}
+        {formatDateTime(entry.time)}
       </td>
       <td className="px-3 py-2 capitalize">{entry.source}</td>
       <td className="px-3 py-2 font-mono text-xs">{entry.operation}</td>

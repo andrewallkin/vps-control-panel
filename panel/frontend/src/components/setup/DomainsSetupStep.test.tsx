@@ -37,6 +37,7 @@ describe('DomainsSetupStep', () => {
         cert_status: 'missing',
         cert_expires_at: null,
         ssl_mode: 'strict',
+        ssl_mode_error: null,
         warning: null,
       },
     ])

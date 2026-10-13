@@ -1,5 +1,6 @@
 import type { BackupLastRun } from '../../lib/backupsApi'
 import type { DashboardSummary } from '../../lib/dashboardTypes'
+import { formatDateTime } from '../../lib/format'
 import { StatusBadge } from '../StatusBadge'
 
 export interface StatusStripProps {
@@ -12,22 +13,14 @@ export function formatBackupLastRun(
   if (!lastRun?.finished_at) {
     return 'Never'
   }
-  const date = new Date(lastRun.finished_at)
-  if (Number.isNaN(date.getTime())) {
-    return lastRun.finished_at
-  }
-  return date.toLocaleString()
+  return formatDateTime(lastRun.finished_at)
 }
 
 function formatCertExpiry(iso: string | null | undefined): string {
   if (!iso) {
     return 'None'
   }
-  const date = new Date(iso)
-  if (Number.isNaN(date.getTime())) {
-    return iso
-  }
-  return date.toLocaleString()
+  return formatDateTime(iso)
 }
 
 export function StatusStrip({ summary }: StatusStripProps) {

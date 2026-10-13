@@ -7,6 +7,7 @@ from vpscp_agent.cloudflare import (
     MANAGED_BY_COMMENT,
     CloudflareClient,
     CloudflareError,
+    SslModeResult,
 )
 from vpscp_agent.config import load_settings
 from vpscp_agent.credentials import read_cloudflare_token, write_cloudflare_ini
@@ -89,7 +90,7 @@ def test_get_ssl_mode_returns_null_on_permission_error():
         raise AssertionError(request.url.path)
 
     client = CloudflareClient("tok", transport=httpx.MockTransport(handler))
-    assert client.get_ssl_mode("zone-1") is None
+    assert client.get_ssl_mode("zone-1") == SslModeResult(mode=None, error="permission")
 
 
 def test_get_ssl_mode_returns_value():
@@ -102,7 +103,7 @@ def test_get_ssl_mode_returns_value():
         raise AssertionError(request.url.path)
 
     client = CloudflareClient("tok", transport=httpx.MockTransport(handler))
-    assert client.get_ssl_mode("zone-1") == "strict"
+    assert client.get_ssl_mode("zone-1") == SslModeResult(mode="strict", error=None)
 
 
 def test_upsert_a_record_create():

@@ -1,3 +1,4 @@
+import type { TooltipContentProps } from 'recharts'
 import {
   CartesianGrid,
   Line,
@@ -8,6 +9,7 @@ import {
   YAxis,
 } from 'recharts'
 import { chartAxisTicks, historyTimeLabel } from '../../lib/chartData'
+import { buildMetricChartTooltipLines } from './metricChartTooltip'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 
 export interface ChartPoint {
@@ -27,6 +29,39 @@ export interface MetricChartProps {
 
 function axisTickFormatter(tick: number): string {
   return historyTimeLabel(new Date(tick).toISOString())
+}
+
+const metricChartTooltipStyle = {
+  background: 'var(--color-card)',
+  border: '1px solid var(--color-border)',
+  borderRadius: 6,
+  fontSize: 12,
+} as const
+
+function MetricChartTooltip({
+  active,
+  payload,
+  valueFormatter,
+}: TooltipContentProps<number, string> & {
+  valueFormatter: (value: number) => string
+}) {
+  if (!active || !payload?.length) {
+    return null
+  }
+  const lines = buildMetricChartTooltipLines(
+    payload[0]?.payload as ChartPoint | undefined,
+    payload[0]?.value,
+    valueFormatter,
+  )
+  if (!lines) {
+    return null
+  }
+  return (
+    <div style={metricChartTooltipStyle}>
+      <div style={{ color: 'var(--color-foreground)' }}>{lines.timeLabel}</div>
+      <div>{lines.valueLabel}</div>
+    </div>
+  )
 }
 
 export function MetricChart({
@@ -84,27 +119,9 @@ export function MetricChart({
             tickFormatter={(v) => valueFormatter(Number(v))}
           />
           <Tooltip
-            contentStyle={{
-              background: 'var(--color-card)',
-              border: '1px solid var(--color-border)',
-              borderRadius: 6,
-              fontSize: 12,
-            }}
-            labelStyle={{ color: 'var(--color-foreground)' }}
-            labelFormatter={(_label, payload) => {
-              const row = payload?.[0]?.payload as ChartPoint | undefined
-              if (row?.ts) {
-                return historyTimeLabel(row.ts)
-              }
-              if (row?.time != null) {
-                return historyTimeLabel(new Date(row.time).toISOString())
-              }
-              return ''
-            }}
-            formatter={(value) => [
-              valueFormatter(typeof value === 'number' ? value : Number(value)),
-              '',
-            ]}
+            content={(props) => (
+              <MetricChartTooltip {...props} valueFormatter={valueFormatter} />
+            )}
           />
           <Line
             type="monotone"

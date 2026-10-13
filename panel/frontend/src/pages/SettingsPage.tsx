@@ -19,6 +19,7 @@ import {
 } from '../lib/domainsApi'
 import { fetchAgentHealth, fetchPanelHealth } from '../lib/healthApi'
 import { authQueryKey } from '../lib/auth'
+import { formatDateTime } from '../lib/format'
 import { fetchRegistryStatus, setRegistryCredentials } from '../lib/registryApi'
 
 type PendingAction =
@@ -412,7 +413,7 @@ export function SettingsPage() {
                     </p>
                     <p className="truncate text-muted-foreground">{row.user_agent ?? '—'}</p>
                     <p className="text-xs text-muted-foreground">
-                      Last seen {new Date(row.last_seen_at).toLocaleString()}
+                      Last seen {formatDateTime(row.last_seen_at)}
                     </p>
                   </div>
                   <button

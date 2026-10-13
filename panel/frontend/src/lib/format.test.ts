@@ -1,10 +1,22 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatBytes,
+  formatDateTime,
   formatPercent,
   formatSecondsAgo,
   formatUptime,
 } from './format'
+
+describe('formatDateTime', () => {
+  it('formats local date parts as day month year, HH:mm:ss', () => {
+    const iso = new Date(2026, 9, 13, 15, 52, 2).toISOString()
+    expect(formatDateTime(iso)).toBe('13 October 2026, 15:52:02')
+  })
+
+  it('returns the original string when not parseable', () => {
+    expect(formatDateTime('not-a-date')).toBe('not-a-date')
+  })
+})
 
 describe('formatBytes', () => {
   it('formats zero and small values', () => {
