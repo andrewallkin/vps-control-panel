@@ -1,5 +1,7 @@
 # Local development
 
+Read and follow this file at the start of every session, before editing.
+
 Each agent works on its own feature branch. Do not edit `main`, and do not commit files another agent changed.
 
 ## Workflow
