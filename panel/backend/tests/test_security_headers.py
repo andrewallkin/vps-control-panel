@@ -3,7 +3,8 @@ SECURITY_HEADERS = {
     "referrer-policy": "same-origin",
     "x-frame-options": "DENY",
     "content-security-policy": (
-        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "default-src 'self'; img-src 'self' data:; font-src 'self' data:; "
+        "style-src 'self' 'unsafe-inline'; "
         "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
     ),
     "x-robots-tag": "noindex",

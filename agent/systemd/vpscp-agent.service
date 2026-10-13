@@ -12,6 +12,9 @@ ExecStart=/opt/vpscp/agent/.venv/bin/vpscp-agent
 Environment=VPSCP_DISK_PATHS=/
 RuntimeDirectory=vpscp
 RuntimeDirectoryMode=0750
+# The panel container bind-mounts /run/vpscp; recreating the directory on
+# agent restart would leave the container pointing at a deleted, empty dir.
+RuntimeDirectoryPreserve=yes
 StateDirectory=vpscp
 StateDirectoryMode=0700
 UMask=0077
