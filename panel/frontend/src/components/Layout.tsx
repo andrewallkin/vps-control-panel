@@ -139,7 +139,7 @@ export function Layout() {
             </div>
           ) : null}
 
-          <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
             <Outlet />
           </main>
         </div>

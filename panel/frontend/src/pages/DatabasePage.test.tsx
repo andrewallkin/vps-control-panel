@@ -99,6 +99,50 @@ describe('DatabasePage', () => {
     expect(screen.getByText('Unattached')).toBeInTheDocument()
   })
 
+  it('asks to deploy after rotating a password', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/database/rotate') && init?.method === 'POST') {
+          return Promise.resolve(jsonResponse({ restart_required: true }))
+        }
+        if (url.includes('/api/database/databases')) {
+          return Promise.resolve(jsonResponse(databases))
+        }
+        if (url.includes('/api/projects') && !url.includes('/api/projects/')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        if (url.includes('/api/database/dumps/')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+    renderWithProviders(<DatabasePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('app_db')).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Rotate password' }))
+
+    expect(
+      await screen.findByRole('alertdialog', { name: 'Deploy to apply the new password' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/restart project containers/i)).not.toBeInTheDocument()
+  })
+
   it('keeps drop disabled until the typed name matches', async () => {
     const user = userEvent.setup()
     renderWithProviders(<DatabasePage />)

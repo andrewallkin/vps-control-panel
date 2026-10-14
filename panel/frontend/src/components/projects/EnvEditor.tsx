@@ -6,6 +6,7 @@ import {
   envRowsToUserEnv,
   generateSecret,
   isEnvKeyLocked,
+  isMaskedEnvPlaceholder,
 } from '../../lib/envEditorUtils'
 
 export type { EnvRow }
@@ -14,9 +15,11 @@ export interface EnvEditorProps {
   rows: EnvRow[]
   routePortEnvVars: string[]
   onChange: (rows: EnvRow[], userEnv: string) => void
+  /** Load the unmasked value for a key. The list keeps the masked preview. */
+  onRevealValue?: (key: string) => Promise<string>
 }
 
-export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) {
+export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: EnvEditorProps) {
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [invalidPasteLines, setInvalidPasteLines] = useState<string[]>([])
@@ -71,7 +74,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
   }
 
   return (
-    <div className="space-y-4">
+    <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -121,17 +124,17 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
         </div>
       ) : null}
 
-      <ul className="space-y-3">
+      <ul className="min-w-0 space-y-3">
         {rows.map((row, index) => {
           return (
             <li
               key={index}
-              className="grid grid-cols-1 items-center gap-2 rounded-md border border-border bg-card p-3 sm:grid-cols-[13rem_minmax(0,1fr)_12.5rem]"
+              className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-border bg-card p-3"
             >
               <button
                 type="button"
                 aria-label={row.key ? `${row.key} key` : 'New key'}
-                className="h-10 min-w-0 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer"
+                className="h-10 w-full min-w-0 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer sm:w-52 sm:shrink-0"
                 onClick={() => setExpanded({ index, field: 'key' })}
               >
                 {row.key || <span className="text-muted-foreground">KEY</span>}
@@ -139,12 +142,12 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
               <button
                 type="button"
                 aria-label={row.key || 'Value'}
-                className="h-10 min-w-0 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer"
+                className="h-10 min-w-0 flex-1 basis-40 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer"
                 onClick={() => setExpanded({ index, field: 'value' })}
               >
                 {row.value || <span className="text-muted-foreground">Value</span>}
               </button>
-              <div className="flex h-10 items-center justify-end gap-2">
+              <div className="flex h-10 min-w-0 items-center justify-end gap-2">
                 {!row.locked ? (
                   <>
                     <button
@@ -178,6 +181,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
           field={expanded.field}
           onChangeKey={(value) => updateRow(expanded.index, { key: value.toUpperCase() })}
           onChangeValue={(value) => updateRow(expanded.index, { value })}
+          onRevealValue={onRevealValue}
           onClose={() => setExpanded(null)}
         />
       ) : null}
@@ -200,15 +204,19 @@ function EnvValueDialog({
   field,
   onChangeKey,
   onChangeValue,
+  onRevealValue,
   onClose,
 }: {
   row: EnvRow
   field: 'key' | 'value'
   onChangeKey: (value: string) => void
   onChangeValue: (value: string) => void
+  onRevealValue?: (key: string) => Promise<string>
   onClose: () => void
 }) {
   const fieldRef = useRef<HTMLTextAreaElement>(null)
+  const [draft, setDraft] = useState(field === 'key' ? row.key : row.value)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fieldRef.current?.focus()
@@ -221,8 +229,29 @@ function EnvValueDialog({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [onClose])
 
+  useEffect(() => {
+    if (field !== 'value' || !onRevealValue || row.edited || !isMaskedEnvPlaceholder(row.value)) {
+      return
+    }
+    let cancelled = false
+    setError(null)
+    onRevealValue(row.key)
+      .then((value) => {
+        if (!cancelled) {
+          setDraft(value)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError('Could not load the full value.')
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [field, onRevealValue, row.edited, row.key, row.value])
+
   const label = field === 'key' ? 'Full key' : 'Full value'
-  const value = field === 'key' ? row.key : row.value
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -248,11 +277,22 @@ function EnvValueDialog({
           readOnly={row.locked}
           rows={field === 'value' ? 8 : 3}
           className="mt-2 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 read-only:opacity-80"
-          value={value}
-          onChange={(event) =>
-            field === 'key' ? onChangeKey(event.target.value) : onChangeValue(event.target.value)
-          }
+          value={draft}
+          onChange={(event) => {
+            const next = field === 'key' ? event.target.value.toUpperCase() : event.target.value
+            setDraft(next)
+            if (field === 'key') {
+              onChangeKey(next)
+            } else {
+              onChangeValue(next)
+            }
+          }}
         />
+        {error ? (
+          <p className="mt-2 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className="mt-4 flex justify-end">
           <button
             type="button"

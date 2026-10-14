@@ -8,6 +8,8 @@ export interface ConfirmDialogProps {
   confirmLabel: string
   cancelLabel?: string
   busy?: boolean
+  tone?: 'default' | 'danger'
+  error?: string | null
   onConfirm: () => void
   onCancel: () => void
 }
@@ -19,6 +21,8 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel = 'Cancel',
   busy = false,
+  tone = 'danger',
+  error = null,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -66,6 +70,11 @@ export function ConfirmDialog({
         <p id={descId} className="mt-2 text-sm text-muted-foreground">
           {description}
         </p>
+        {error ? (
+          <p className="mt-3 text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button
             ref={cancelRef}
@@ -79,7 +88,11 @@ export function ConfirmDialog({
           <button
             type="button"
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+              tone === 'danger'
+                ? 'bg-destructive text-foreground'
+                : 'bg-accent font-semibold text-background'
+            }`}
             onClick={onConfirm}
           >
             {busy ? <Spinner weight="regular" aria-hidden className="size-4 animate-spin" /> : null}
