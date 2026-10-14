@@ -40,7 +40,16 @@ That server proxies `/api` to `127.0.0.1:8080`. Verify the change in the browser
 
 Open a pull request that contains only this branch's commits.
 
-Watch every CI job until it has finished. You may tell the user the pull request is ready to merge only after every job has passed. If any job fails or is still running, do not ask them to merge. Fix failures on this branch, push, and watch again.
+Before the user merges into `main`, merge `main` into this feature branch and make sure that merge is clean:
+
+```bash
+git fetch origin
+git merge origin/main
+```
+
+If there are conflicts, resolve them on this branch and commit the result. Do not ask the user to merge while conflicts remain.
+
+Watch every CI job until it has finished, including the jobs from that merge. You may tell the user the pull request is ready to merge only after `main` is merged in with no conflicts and every job has passed. If any job fails or is still running, do not ask them to merge. Fix failures on this branch, push, and watch again.
 
 The user merges, and only after that. Then the user updates the VPS:
 
