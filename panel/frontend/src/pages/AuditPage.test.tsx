@@ -1,4 +1,5 @@
 import { screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuditPage } from './AuditPage'
 import { renderWithProviders } from '../test/renderWithProviders'
@@ -63,5 +64,32 @@ describe('AuditPage', () => {
     const details = within(row as HTMLElement).getByText('Params').closest('details')
     expect(details).toBeInTheDocument()
     expect(details).not.toHaveAttribute('open')
+
+    const page = screen.getByRole('heading', { name: 'Audit' }).parentElement?.parentElement
+    expect(page).toHaveClass('w-full')
+    expect(page).not.toHaveClass('max-w-6xl')
+  })
+
+  it('requests failed results and clears the filters', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<AuditPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('container.restart')).toBeInTheDocument()
+    })
+
+    await user.selectOptions(screen.getByLabelText('Result'), 'failed')
+
+    await waitFor(() => {
+      const urls = vi.mocked(fetch).mock.calls.map(([input]) => String(input))
+      expect(urls.some((url) => url.includes('ok=false'))).toBe(true)
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Clear' }))
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Result')).toHaveValue('all')
+    })
+    expect(screen.queryByRole('button', { name: 'Clear' })).not.toBeInTheDocument()
   })
 })

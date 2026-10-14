@@ -90,5 +90,10 @@ describe('DomainsPage panel hostname', () => {
     expect(project.getByText('app.example.com')).toBeInTheDocument()
     expect(project.getByText('Subdomain')).toBeInTheDocument()
     expect(project.getByText('Blog')).toBeInTheDocument()
+
+    const page = screen.getByRole('heading', { name: 'Domains' }).parentElement?.parentElement
+      ?.parentElement
+    expect(page).toHaveClass('w-full')
+    expect(page).not.toHaveClass('max-w-6xl')
   })
 })

@@ -1,6 +1,6 @@
 import { CheckCircle, Spinner, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { OtpQrCode } from '../components/account/OtpQrCode'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { ApiError, isStepUpRequired } from '../lib/api'
@@ -29,6 +29,32 @@ type PendingAction =
   | { kind: 'totp-reset' }
   | null
 
+const secondaryButtonClass =
+  'inline-flex shrink-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+
+function ConfiguredRow({
+  label,
+  detail,
+  action,
+}: {
+  label: string
+  detail: ReactNode
+  action: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background/40 px-3 py-3">
+      <div className="flex min-w-0 items-center gap-3">
+        <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />
+        <div className="min-w-0">
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-sm break-all text-muted-foreground">{detail}</p>
+        </div>
+      </div>
+      {action}
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const queryClient = useQueryClient()
   const [tokenDraft, setTokenDraft] = useState('')
@@ -55,6 +81,7 @@ export function SettingsPage() {
 
   const [registryUsername, setRegistryUsername] = useState('')
   const [registryToken, setRegistryToken] = useState('')
+  const [registryFormOpen, setRegistryFormOpen] = useState(false)
   const [registryError, setRegistryError] = useState<string | null>(null)
   const [registrySuccess, setRegistrySuccess] = useState<string | null>(null)
 
@@ -123,6 +150,7 @@ export function SettingsPage() {
         setRegistrySuccess('Docker Hub credentials saved.')
         setRegistryUsername('')
         setRegistryToken('')
+        setRegistryFormOpen(false)
         await queryClient.invalidateQueries({ queryKey: ['registry', 'status'] })
       } else if (action.kind === 'totp-reset') {
         const result = await resetAccountTotp()
@@ -223,10 +251,10 @@ export function SettingsPage() {
     currentPassword.length > 0 && newPassword.length >= 12 && passwordCode.trim().length > 0
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-3xl text-sm text-muted-foreground">
           Account security, integrations, and server configuration.
         </p>
       </div>
@@ -244,7 +272,7 @@ export function SettingsPage() {
       ) : null}
 
       <section
-        className="space-y-4 rounded-lg border border-border bg-card p-4"
+        className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6"
         aria-labelledby="account-settings-heading"
       >
         <h2 id="account-settings-heading" className="text-base font-semibold">
@@ -432,31 +460,48 @@ export function SettingsPage() {
         </div>
       </section>
 
-      <section className="space-y-3 rounded-lg border border-border bg-card p-4" aria-labelledby="cf-settings-heading">
+      <section
+        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
+        aria-labelledby="cf-settings-heading"
+      >
         <h2 id="cf-settings-heading" className="text-base font-semibold">
           Cloudflare API token
         </h2>
         {cloudflareConfigured ? (
-          <p className="inline-flex items-center gap-2 text-sm text-foreground">
-            <CheckCircle weight="regular" aria-hidden className="size-4 text-accent" />
-            Configured
-            <span className="font-mono text-muted-foreground">••••••••</span>
-          </p>
+          <ConfiguredRow
+            label="Configured"
+            detail="API token stored"
+            action={
+              !replaceOpen ? (
+                <button
+                  type="button"
+                  className={secondaryButtonClass}
+                  onClick={() => {
+                    setReplaceOpen(true)
+                    setFormError(null)
+                  }}
+                >
+                  Replace token
+                </button>
+              ) : null
+            }
+          />
         ) : (
           <p className="text-sm text-muted-foreground">Not configured</p>
         )}
-        {!replaceOpen ? (
+        {!cloudflareConfigured && !replaceOpen ? (
           <button
             type="button"
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            className={secondaryButtonClass}
             onClick={() => {
               setReplaceOpen(true)
               setFormError(null)
             }}
           >
-            {cloudflareConfigured ? 'Replace token' : 'Add token'}
+            Add token
           </button>
-        ) : (
+        ) : null}
+        {replaceOpen ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
               Required permissions: Zone:Read and DNS:Edit for your zones. Zone Settings:Read is
@@ -476,7 +521,7 @@ export function SettingsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className={secondaryButtonClass}
                 onClick={() => {
                   setReplaceOpen(false)
                   setTokenDraft('')
@@ -505,22 +550,38 @@ export function SettingsPage() {
               </button>
             </div>
           </div>
-        )}
+        ) : null}
       </section>
 
       <section
-        className="space-y-3 rounded-lg border border-border bg-card p-4"
+        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
         aria-labelledby="registry-settings-heading"
       >
         <h2 id="registry-settings-heading" className="text-base font-semibold">
           Docker Hub
         </h2>
         {registryConfigured ? (
-          <p className="inline-flex items-center gap-2 text-sm">
-            <CheckCircle weight="regular" aria-hidden className="size-4 text-accent" />
-            Configured as{' '}
-            <span className="font-mono">{registryQuery.data?.username ?? '—'}</span>
-          </p>
+          <ConfiguredRow
+            label="Configured"
+            detail={
+              <span className="font-mono">{registryQuery.data?.username ?? 'Username unavailable'}</span>
+            }
+            action={
+              !registryFormOpen ? (
+                <button
+                  type="button"
+                  className={secondaryButtonClass}
+                  onClick={() => {
+                    setRegistryFormOpen(true)
+                    setRegistryError(null)
+                    setRegistrySuccess(null)
+                  }}
+                >
+                  Replace credentials
+                </button>
+              ) : null
+            }
+          />
         ) : (
           <p className="text-sm text-muted-foreground">Not configured</p>
         )}
@@ -535,81 +596,107 @@ export function SettingsPage() {
             {registrySuccess}
           </p>
         ) : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-1">
-            <label htmlFor="settings-registry-username" className="block text-sm font-medium">
-              Username
-            </label>
-            <input
-              id="settings-registry-username"
-              type="text"
-              autoComplete="username"
-              value={registryUsername}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onChange={(event) => setRegistryUsername(event.target.value)}
-            />
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="settings-registry-token" className="block text-sm font-medium">
-              Access token
-            </label>
-            <input
-              id="settings-registry-token"
-              type="password"
-              autoComplete="new-password"
-              value={registryToken}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onChange={(event) => setRegistryToken(event.target.value)}
-            />
-          </div>
-        </div>
-        <button
-          type="button"
-          disabled={!registryUsername.trim() || !registryToken.trim() || registryMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => {
-            const body = { username: registryUsername.trim(), token: registryToken.trim() }
-            setPendingAction({ kind: 'registry', body })
-            setStepUpOpen(true)
-          }}
-        >
-          {registryMutation.isPending ? (
-            <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : null}
-          Save Docker Hub credentials
-        </button>
+        {!registryConfigured || registryFormOpen ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <label htmlFor="settings-registry-username" className="block text-sm font-medium">
+                  Username
+                </label>
+                <input
+                  id="settings-registry-username"
+                  type="text"
+                  autoComplete="username"
+                  value={registryUsername}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onChange={(event) => setRegistryUsername(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="settings-registry-token" className="block text-sm font-medium">
+                  Access token
+                </label>
+                <input
+                  id="settings-registry-token"
+                  type="password"
+                  autoComplete="new-password"
+                  value={registryToken}
+                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onChange={(event) => setRegistryToken(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {registryConfigured ? (
+                <button
+                  type="button"
+                  className={secondaryButtonClass}
+                  onClick={() => {
+                    setRegistryFormOpen(false)
+                    setRegistryUsername('')
+                    setRegistryToken('')
+                  }}
+                >
+                  Cancel
+                </button>
+              ) : null}
+              <button
+                type="button"
+                disabled={
+                  !registryUsername.trim() || !registryToken.trim() || registryMutation.isPending
+                }
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => {
+                  const body = { username: registryUsername.trim(), token: registryToken.trim() }
+                  setPendingAction({ kind: 'registry', body })
+                  setStepUpOpen(true)
+                }}
+              >
+                {registryMutation.isPending ? (
+                  <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+                ) : null}
+                Save Docker Hub credentials
+              </button>
+            </div>
+          </>
+        ) : null}
       </section>
 
-      <section className="space-y-3 rounded-lg border border-border bg-card p-4" aria-labelledby="server-settings-heading">
+      <section
+        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
+        aria-labelledby="server-settings-heading"
+      >
         <h2 id="server-settings-heading" className="text-base font-semibold">
           Server settings
         </h2>
-        <div className="space-y-1">
-          <label htmlFor="settings-acme-email" className="block text-sm font-medium">
-            ACME email
-          </label>
-          <input
-            id="settings-acme-email"
-            type="email"
-            value={acmeEmail}
-            disabled={settingsQuery.isPending}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            onChange={(event) => setAcmeOverride(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <label htmlFor="settings-public-ipv4" className="block text-sm font-medium">
-            Server public IPv4
-          </label>
-          <input
-            id="settings-public-ipv4"
-            type="text"
-            inputMode="decimal"
-            value={publicIpv4}
-            disabled={settingsQuery.isPending}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            onChange={(event) => setIpv4Override(event.target.value)}
-          />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="space-y-1">
+            <label htmlFor="settings-acme-email" className="block text-sm font-medium">
+              ACME email
+            </label>
+            <input
+              id="settings-acme-email"
+              type="email"
+              value={acmeEmail}
+              disabled={settingsQuery.isPending}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              onChange={(event) => setAcmeOverride(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label htmlFor="settings-public-ipv4" className="block text-sm font-medium">
+              Server public IPv4
+            </label>
+            <input
+              id="settings-public-ipv4"
+              type="text"
+              inputMode="decimal"
+              value={publicIpv4}
+              disabled={settingsQuery.isPending}
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              onChange={(event) => setIpv4Override(event.target.value)}
+            />
+          </div>
         </div>
         <button
           type="button"
@@ -630,7 +717,7 @@ export function SettingsPage() {
       </section>
 
       <section
-        className="space-y-3 rounded-lg border border-border bg-card p-4"
+        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
         aria-labelledby="about-settings-heading"
       >
         <h2 id="about-settings-heading" className="text-base font-semibold">

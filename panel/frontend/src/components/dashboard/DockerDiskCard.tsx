@@ -15,9 +15,15 @@ export interface DockerDiskCardProps {
   df: DockerDf | undefined
   dataUpdatedAt: number
   isLoading: boolean
+  className?: string
 }
 
-export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardProps) {
+export function DockerDiskCard({
+  df,
+  dataUpdatedAt,
+  isLoading,
+  className = '',
+}: DockerDiskCardProps) {
   const [imagesConfirmOpen, setImagesConfirmOpen] = useState(false)
   const [buildCacheConfirmOpen, setBuildCacheConfirmOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
@@ -76,7 +82,9 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
 
   return (
     <>
-      <section className="flex flex-col space-y-3 rounded-lg border border-border bg-card p-4">
+      <section
+        className={`flex min-h-0 flex-col gap-3 rounded-lg border border-border bg-card p-4 ${className}`}
+      >
         <div className="flex flex-wrap items-start justify-between gap-2">
           <h2 className="text-sm font-semibold text-muted-foreground">Docker disk</h2>
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -87,13 +95,17 @@ export function DockerDiskCard({ df, dataUpdatedAt, isLoading }: DockerDiskCardP
         {isLoading && !df ? (
           <p className="text-sm text-muted-foreground">Loading…</p>
         ) : (
-          <ul className="space-y-2 text-sm">
+          <ul className="space-y-3 text-sm">
             {rows.map(({ label, data }) => (
-              <li key={label} className="flex flex-wrap justify-between gap-2">
+              <li key={label} className="flex items-baseline justify-between gap-3">
                 <span className="text-muted-foreground">{label}</span>
-                <span className="font-mono text-xs">
-                  {formatBytes(data.size_bytes)} ({data.count}) · reclaimable{' '}
-                  {formatBytes(data.reclaimable_bytes)}
+                <span className="text-right">
+                  <span className="font-mono whitespace-nowrap">
+                    {formatBytes(data.size_bytes)} ({data.count})
+                  </span>
+                  <span className="mt-0.5 block font-mono text-xs whitespace-nowrap text-muted-foreground">
+                    {formatBytes(data.reclaimable_bytes)} reclaimable
+                  </span>
                 </span>
               </li>
             ))}

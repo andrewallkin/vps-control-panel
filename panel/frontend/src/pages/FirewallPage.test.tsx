@@ -104,6 +104,11 @@ describe('FirewallPage', () => {
       expect(screen.getByText('443')).toBeInTheDocument()
     })
 
+    const page = screen.getByRole('heading', { name: 'Firewall' }).parentElement?.parentElement
+      ?.parentElement
+    expect(page).toHaveClass('w-full')
+    expect(page).not.toHaveClass('max-w-6xl')
+
     const deleteButtons = screen.getAllByRole('button', { name: /delete rule/i })
     const httpsDelete = deleteButtons.find((button) => button.closest('tr')?.textContent?.includes('443'))
     expect(httpsDelete).toBeDefined()

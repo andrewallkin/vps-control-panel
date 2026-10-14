@@ -1,4 +1,5 @@
 import { CheckCircle, Clock, Warning, XCircle } from '@phosphor-icons/react'
+import type { ReactNode } from 'react'
 import { StatusBadge } from '../StatusBadge'
 import { formatBytes, formatDateTime } from '../../lib/format'
 import type { BackupStatus } from '../../lib/backupsApi'
@@ -62,9 +63,10 @@ function ArchiveStatus({
 export interface BackupStatusCardProps {
   status: BackupStatus | undefined
   loading?: boolean
+  actions?: ReactNode
 }
 
-export function BackupStatusCard({ status, loading }: BackupStatusCardProps) {
+export function BackupStatusCard({ status, loading, actions }: BackupStatusCardProps) {
   const lastRun = status?.last_run ?? null
   const failed = lastRun?.success === false || Boolean(lastRun?.error)
 
@@ -73,18 +75,21 @@ export function BackupStatusCard({ status, loading }: BackupStatusCardProps) {
       className="space-y-3 rounded-lg border border-border bg-card p-4"
       aria-labelledby="backup-status-heading"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 id="backup-status-heading" className="text-base font-semibold">
-          Backup status
-        </h2>
-        {status?.overdue ? <StatusBadge variant="warning" label="Overdue" /> : null}
-        {failed ? <StatusBadge variant="critical" label="Last run failed" /> : null}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <h2 id="backup-status-heading" className="text-base font-semibold">
+            Backup status
+          </h2>
+          {status?.overdue ? <StatusBadge variant="warning" label="Overdue" /> : null}
+          {failed ? <StatusBadge variant="critical" label="Last run failed" /> : null}
+        </div>
+        {actions}
       </div>
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading status…</p>
       ) : (
-        <dl className="grid gap-3 text-sm sm:grid-cols-2">
+        <dl className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
           <div>
             <dt className="text-muted-foreground">Last run</dt>
             <dd className="mt-0.5 font-medium">

@@ -26,11 +26,11 @@ export function ProjectsListPage() {
   const projects = projectsQuery.data ?? []
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-3xl text-sm text-muted-foreground">
             Deploy and manage application stacks on this server.
           </p>
         </div>
@@ -67,7 +67,7 @@ export function ProjectsListPage() {
       ) : null}
 
       {projects.length > 0 ? (
-        <ul className="divide-y divide-border rounded-md border border-border bg-card">
+        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
           {projects.map((project) => {
             const status = project.creation_state.status
             const href =
@@ -78,16 +78,18 @@ export function ProjectsListPage() {
               <li key={project.slug}>
                 <Link
                   to={href}
-                  className="flex flex-col gap-2 px-4 py-4 transition-colors duration-200 hover:bg-muted sm:flex-row sm:items-center sm:justify-between cursor-pointer"
+                  className="flex cursor-pointer flex-col gap-2 px-4 py-4 transition-colors duration-200 hover:bg-muted sm:flex-row sm:items-center sm:justify-between lg:gap-4 lg:px-6"
                 >
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1 lg:flex lg:items-baseline lg:gap-6 xl:gap-10">
                     <p className="font-medium text-foreground">{project.display_name}</p>
                     <p className="font-mono text-sm text-muted-foreground">{project.slug}</p>
                   </div>
-                  <StatusBadge
-                    variant={statusVariant(status)}
-                    label={projectCreationStatusLabel(status)}
-                  />
+                  <div className="shrink-0">
+                    <StatusBadge
+                      variant={statusVariant(status)}
+                      label={projectCreationStatusLabel(status)}
+                    />
+                  </div>
                 </Link>
               </li>
             )

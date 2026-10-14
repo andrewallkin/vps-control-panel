@@ -74,46 +74,53 @@ export function BackupsPage() {
     },
   })
 
+  const runAction = (
+    <div className="flex flex-col items-start gap-2 sm:items-end">
+      <button
+        type="button"
+        disabled={runMutation.isPending}
+        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        onClick={() => runMutation.mutate()}
+      >
+        {runMutation.isPending ? (
+          <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+        ) : null}
+        Run backup now
+      </button>
+      {runMessage ? (
+        runMessage.error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {runMessage.text}
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">{runMessage.text}</p>
+        )
+      ) : null}
+    </div>
+  )
+
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Backups</h1>
-        <p className="text-sm text-muted-foreground">
-          Schedule PostgreSQL dumps to Google Cloud Storage and optional encrypted config archives.
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Schedule PostgreSQL dumps to Google Cloud Storage. A passphrase encrypts each dump and
+          adds a second encrypted config file.
         </p>
       </div>
 
-      <BackupStatusCard status={statusQuery.data} loading={statusQuery.isPending} />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          disabled={runMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => runMutation.mutate()}
-        >
-          {runMutation.isPending ? (
-            <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : null}
-          Run backup now
-        </button>
-        {runMessage ? (
-          runMessage.error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {runMessage.text}
-            </p>
-          ) : (
-            <p className="text-sm text-muted-foreground">{runMessage.text}</p>
-          )
-        ) : null}
-      </div>
+      <BackupStatusCard
+        status={statusQuery.data}
+        loading={statusQuery.isPending}
+        actions={runAction}
+      />
 
       {settingsQuery.isError ? (
         <p className="text-sm text-destructive" role="alert">
           Could not load backup settings.
         </p>
       ) : settingsQuery.data ? (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-lg border border-border bg-card p-4 sm:p-6">
           <BackupSettingsForm
             key={settingsQuery.dataUpdatedAt}
             settings={settingsQuery.data}

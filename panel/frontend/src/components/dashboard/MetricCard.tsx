@@ -54,7 +54,7 @@ export function MetricCard({
       : isCurrentStale
 
   return (
-    <section className="flex flex-col space-y-3 rounded-lg border border-border bg-card p-4">
+    <section className="flex h-full flex-col gap-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -80,8 +80,8 @@ export function MetricCard({
           </button>
         </div>
       </div>
-      <div className="font-mono text-lg">{children}</div>
-      <div>
+      <div>{children}</div>
+      <div className="relative h-40 w-full shrink-0">
         <MetricChart
           data={chartData}
           paused={chartPaused}

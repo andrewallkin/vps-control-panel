@@ -92,7 +92,7 @@ export function MetricChart({
   }
 
   return (
-    <div className="h-40 w-full" aria-hidden>
+    <div className="absolute inset-0" aria-hidden>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid

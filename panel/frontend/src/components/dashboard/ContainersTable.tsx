@@ -87,12 +87,22 @@ export function ContainersTable({
         <p className="text-sm text-muted-foreground">No containers yet.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[480px] text-left text-xs">
+          <table className="w-full min-w-[40rem] text-left text-sm">
             <thead className="border-b border-border bg-muted/40 text-muted-foreground">
               <tr>
-                <th scope="col" className="px-3 py-2 font-medium">Project</th>
-                <th scope="col" className="px-3 py-2 font-medium">Name</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
+                <th
+                  scope="col"
+                  className="w-[1%] whitespace-nowrap px-3 py-2 font-medium"
+                >
+                  Project
+                </th>
+                <th scope="col" className="px-3 py-2 font-medium">
+                  Name
+                </th>
+                <th
+                  scope="col"
+                  className="w-28 whitespace-nowrap px-4 py-2 text-right font-medium"
+                >
                   <SortHeaderButton
                     label="CPU"
                     active={sortKey === 'cpu_percent'}
@@ -100,7 +110,10 @@ export function ContainersTable({
                     onClick={() => toggleSort('cpu_percent')}
                   />
                 </th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
+                <th
+                  scope="col"
+                  className="w-72 whitespace-nowrap px-4 py-2 text-right font-medium"
+                >
                   <SortHeaderButton
                     label="Memory"
                     active={sortKey === 'mem_percent'}
@@ -114,14 +127,16 @@ export function ContainersTable({
               {grouped.map((group) =>
                 group.containers.map((row, index) => (
                   <tr key={`${group.project}-${row.name}`}>
-                    <td className="px-3 py-2 text-muted-foreground">
+                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
                       {index === 0 ? group.project : ''}
                     </td>
-                    <td className="px-3 py-2 font-mono">{row.name}</td>
-                    <td className="px-3 py-2 text-right font-mono">
+                    <td className="break-all px-3 py-2 font-mono sm:break-normal">
+                      {row.name}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-2 text-right font-mono tabular-nums">
                       {formatPercent(row.cpu_percent)}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">
+                    <td className="whitespace-nowrap px-4 py-2 text-right font-mono tabular-nums">
                       {formatBytes(row.mem_used)} / {formatBytes(row.mem_limit)} (
                       {formatPercent(row.mem_percent)})
                     </td>

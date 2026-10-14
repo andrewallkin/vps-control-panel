@@ -516,7 +516,7 @@ export function ProjectPage() {
   const publicUrls = projectPublicUrls(project)
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">{project.display_name}</h1>
         <p className="font-mono text-sm text-muted-foreground">{project.slug}</p>
@@ -579,7 +579,7 @@ export function ProjectPage() {
                         <td className="px-3 py-2">
                           <StatusBadge variant={variant} label={svc.state || variant} />
                         </td>
-                        <td className="max-w-xs truncate px-3 py-2 font-mono text-xs">{svc.image}</td>
+                        <td className="min-w-0 px-3 py-2 font-mono text-xs break-all">{svc.image}</td>
                         <td className="px-3 py-2 text-muted-foreground">{svc.started_at || '—'}</td>
                         <td className="px-3 py-2 text-right font-mono">
                           {metrics ? `${metrics.cpu_percent.toFixed(1)}%` : '—'}
@@ -653,21 +653,23 @@ export function ProjectPage() {
 
           {project.deploy_mode === 'image' && imageServicesConfigured ? (
             <div className="space-y-4">
-              {(tagsQuery.data?.services ?? []).map((svc) => {
-                const options = normalizeRegistryTags(svc.tags)
-                return (
-                  <div key={svc.image_env_var} className="rounded-md border border-border p-4">
-                    <p className="mb-2 text-sm font-semibold">{svc.service}</p>
-                    <TagPicker
-                      tags={options}
-                      selectedName={selectedTags[svc.image_env_var] ?? options[0]?.name ?? ''}
-                      onSelectedNameChange={(name) =>
-                        setSelectedTags((prev) => ({ ...prev, [svc.image_env_var]: name }))
-                      }
-                    />
-                  </div>
-                )
-              })}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(tagsQuery.data?.services ?? []).map((svc) => {
+                  const options = normalizeRegistryTags(svc.tags)
+                  return (
+                    <div key={svc.image_env_var} className="rounded-md border border-border p-4">
+                      <p className="mb-2 text-sm font-semibold">{svc.service}</p>
+                      <TagPicker
+                        tags={options}
+                        selectedName={selectedTags[svc.image_env_var] ?? options[0]?.name ?? ''}
+                        onSelectedNameChange={(name) =>
+                          setSelectedTags((prev) => ({ ...prev, [svc.image_env_var]: name }))
+                        }
+                      />
+                    </div>
+                  )
+                })}
+              </div>
               <button
                 type="button"
                 disabled={deployMutation.isPending || Object.keys(selectedTags).length === 0}
@@ -707,7 +709,8 @@ export function ProjectPage() {
 
           <section className="space-y-3">
             <h2 className="text-base font-semibold">Deploy history</h2>
-            <ul className="divide-y divide-border rounded-md border border-border">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <ul className="w-full divide-y divide-border">
               {!deploysQuery.isPending && deploys.length === 0 ? (
                 <li className="px-3 py-3 text-sm text-muted-foreground">No deploys yet.</li>
               ) : null}
@@ -731,7 +734,8 @@ export function ProjectPage() {
                   ) : null}
                 </li>
               ))}
-            </ul>
+              </ul>
+            </div>
           </section>
         </div>
       ) : null}
@@ -891,7 +895,8 @@ export function ProjectPage() {
           ) : null}
           <section className="space-y-3">
             <h2 className="text-base font-semibold">Dumps</h2>
-            <ul className="divide-y divide-border rounded-md border border-border">
+            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+              <ul className="w-full divide-y divide-border">
               {!dumpsQuery.isPending && (dumpsQuery.data ?? []).length === 0 ? (
                 <li className="px-3 py-3 text-sm text-muted-foreground">No dumps yet.</li>
               ) : null}
@@ -906,7 +911,8 @@ export function ProjectPage() {
                   </a>
                 </li>
               ))}
-            </ul>
+              </ul>
+            </div>
           </section>
         </div>
       ) : null}
