@@ -58,6 +58,22 @@ describe('EnvEditor', () => {
     expect(valueInput).toHaveValue('SplitEasy API')
   })
 
+  it('shows the revealed value in the popup and keeps the list masked', async () => {
+    const user = userEvent.setup()
+    render(
+      <EnvEditor
+        rows={[{ key: 'ENVIRONMENT', value: '••••on', locked: false }]}
+        routePortEnvVars={[]}
+        onChange={() => undefined}
+        onRevealValue={async () => 'production'}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /^ENVIRONMENT$/i }))
+    expect(await screen.findByRole('textbox', { name: 'Full value' })).toHaveValue('production')
+    expect(screen.getByRole('button', { name: /^ENVIRONMENT$/i })).toHaveTextContent('••••on')
+  })
+
   it('blocks renaming a row to a managed key', async () => {
     const user = userEvent.setup()
     render(

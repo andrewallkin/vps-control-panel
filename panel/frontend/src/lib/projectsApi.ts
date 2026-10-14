@@ -180,6 +180,20 @@ export async function fetchProjectDeploys(slug: string): Promise<DeployRow[]> {
   return apiJson(`/api/projects/${encodeURIComponent(slug)}/deploys`)
 }
 
+export async function deployToApplyEnv(slug: string): Promise<{ id: number; status: string }> {
+  const project = await fetchProject(slug)
+  if (project.deploy_mode === 'build') {
+    return startProjectDeploy(slug, { build: true, run_migrations: true })
+  }
+  const tags: Record<string, string> = {}
+  for (const service of project.services) {
+    if (service.current_tag) {
+      tags[service.image_env_var] = service.current_tag
+    }
+  }
+  return startProjectDeploy(slug, { tags, run_migrations: true })
+}
+
 export async function startProjectDeploy(
   slug: string,
   body: { tags?: Record<string, string>; build?: boolean; run_migrations?: boolean },
@@ -205,8 +219,12 @@ export async function redeployDeploy(deployId: number): Promise<{ id: number; st
   })
 }
 
-export async function fetchProjectEnv(slug: string): Promise<ProjectEnvResponse> {
-  return apiJson(`/api/projects/${encodeURIComponent(slug)}/env`)
+export async function fetchProjectEnv(
+  slug: string,
+  options?: { reveal?: boolean },
+): Promise<ProjectEnvResponse> {
+  const query = options?.reveal ? '?reveal=true' : ''
+  return apiJson(`/api/projects/${encodeURIComponent(slug)}/env${query}`)
 }
 
 export async function putProjectEnv(slug: string, content: string): Promise<unknown> {

@@ -707,19 +707,16 @@ async def test_access(
 @router.get("/{slug}/env")
 async def get_project_env(
     slug: str,
-    request: Request,
     db: Annotated[DbSession, Depends(get_db)],
     agent: Annotated[AgentClient, Depends(_agent)],
-    session: Annotated[Session, Depends(current_session)],
+    _session: Annotated[Session, Depends(current_session)],
     reveal: bool = Query(default=False),
 ) -> Any:
     project = db.get(Project, slug)
     if project is None:
         raise HTTPException(status_code=404, detail="project not found")
-    if reveal:
-        await require_step_up(request, session)
-        return await agent.get(f"/v1/projects/{slug}/env", params={"reveal": "true"})
-    return await agent.get(f"/v1/projects/{slug}/env")
+    params = {"reveal": "true"} if reveal else None
+    return await agent.get(f"/v1/projects/{slug}/env", params=params)
 
 
 def _managed_env_keys(db: DbSession, slug: str) -> frozenset[str]:

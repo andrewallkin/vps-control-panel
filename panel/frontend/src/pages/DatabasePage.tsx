@@ -10,7 +10,8 @@ import {
   type ChangeEvent,
   type DragEvent,
 } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { StatusBadge } from '../components/StatusBadge'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { LogViewer } from '../components/setup/LogViewer'
@@ -37,7 +38,7 @@ import {
   type DropDatabasePayload,
 } from '../lib/databaseApi'
 import { formatBytes } from '../lib/format'
-import { fetchProjects, type ProjectSummary } from '../lib/projectsApi'
+import { deployToApplyEnv, fetchProjects, type ProjectSummary } from '../lib/projectsApi'
 import {
   startSetupRestore,
   type JobEndPayload,
@@ -111,6 +112,7 @@ function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
 }
 
 export function DatabasePage() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const dropConfirmInputId = useId()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -155,6 +157,8 @@ export function DatabasePage() {
 
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
+  const [deployPromptSlug, setDeployPromptSlug] = useState<string | null>(null)
+  const [deployError, setDeployError] = useState<string | null>(null)
   const [stepUpOpen, setStepUpOpen] = useState(false)
   const [pendingStepUp, setPendingStepUp] = useState<PendingStepUp>(null)
 
@@ -309,7 +313,9 @@ export function DatabasePage() {
       runWithStepUp({ kind: 'rotate', slug }, async () => {
         const result = await rotateDatabasePassword(slug)
         if (result.restart_required) {
-          setActionMessage('Password rotated. Restart project containers to apply the new password.')
+          setActionMessage(null)
+          setDeployError(null)
+          setDeployPromptSlug(slug)
         }
       }),
   })
@@ -341,6 +347,18 @@ export function DatabasePage() {
         setConfirmDialogKey((value) => value + 1)
         setConfirmOpen(true)
       }
+    },
+  })
+
+  const applyDeployMutation = useMutation({
+    mutationFn: (slug: string) => deployToApplyEnv(slug),
+    onSuccess: (_data, slug) => {
+      setDeployPromptSlug(null)
+      setDeployError(null)
+      navigate(`/projects/${slug}#deploy`)
+    },
+    onError: (error) => {
+      setDeployError(apiErrorDetail(error) || 'Deploy failed.')
     },
   })
 
@@ -891,6 +909,29 @@ export function DatabasePage() {
           }
           setPendingStepUp({ kind: 'restore', overwrite })
           setStepUpOpen(true)
+        }}
+      />
+
+      <ConfirmDialog
+        open={deployPromptSlug !== null}
+        title="Deploy to apply the new password"
+        description="The database password is already changed. Deploy so the running containers use it."
+        confirmLabel="Deploy"
+        cancelLabel="Not now"
+        tone="default"
+        busy={applyDeployMutation.isPending}
+        error={deployError}
+        onConfirm={() => {
+          if (deployPromptSlug) {
+            applyDeployMutation.mutate(deployPromptSlug)
+          }
+        }}
+        onCancel={() => {
+          setActionMessage(
+            'Password rotated. The running containers keep the old password until you deploy.',
+          )
+          setDeployPromptSlug(null)
+          setDeployError(null)
         }}
       />
 

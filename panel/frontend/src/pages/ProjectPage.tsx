@@ -1,6 +1,6 @@
 import { Spinner } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ComposeLogsViewer } from '../components/projects/ComposeLogsViewer'
 import { EnvEditor } from '../components/projects/EnvEditor'
@@ -11,6 +11,8 @@ import { ServiceMappingEditor } from '../components/projects/ServiceMappingEdito
 import { TagPicker } from '../components/projects/TagPicker'
 import { StatusBadge } from '../components/StatusBadge'
 import { ApiError, isStepUpRequired } from '../lib/api'
+import { authQueryKey } from '../lib/auth'
+import { rotateDatabasePassword } from '../lib/databaseApi'
 import { composeServiceStatusVariant } from '../lib/composeServiceStatus'
 import { fetchContainerMetrics } from '../lib/dashboardApi'
 import { fetchDomains } from '../lib/domainsApi'
@@ -19,6 +21,7 @@ import { formatBytes } from '../lib/format'
 import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
 import type { RegistryTagOption } from '../lib/projectDeployTypes'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import { StepUpDialog } from '../components/StepUpDialog'
 import { MigrationRunControls } from '../components/projects/MigrationRunControls'
 import { LogViewer } from '../components/setup/LogViewer'
 import {
@@ -35,14 +38,13 @@ import {
   fetchProjectDumps,
   fetchProjectEnv,
   fetchProjectTags,
+  deployToApplyEnv,
   patchProjectEnv,
   patchProjectSettings,
   projectDumpDownloadUrl,
   putProjectRouting,
   putProjectServices,
   redeployDeploy,
-  restartProjectCompose,
-  rotateProjectDatabase,
   migrateProject,
   startProjectDeploy,
   type ProjectDetail,
@@ -114,15 +116,19 @@ export function ProjectPage() {
   const [envRows, setEnvRows] = useState<EnvRow[]>([])
   const [loadedEnvKeys, setLoadedEnvKeys] = useState<string[]>([])
   const [envDirty, setEnvDirty] = useState(false)
-  const [restartPrompt, setRestartPrompt] = useState(false)
-  const [rotateConfirmOpen, setRotateConfirmOpen] = useState(false)
+  const [applyPrompt, setApplyPrompt] = useState<'env' | 'password' | null>(null)
+  const [applyDeployError, setApplyDeployError] = useState<string | null>(null)
+  const [rotateStepUpOpen, setRotateStepUpOpen] = useState(false)
+  const [rotateError, setRotateError] = useState<string | null>(null)
+  const [rotateMessage, setRotateMessage] = useState<string | null>(null)
+  const [envSavedMessage, setEnvSavedMessage] = useState<string | null>(null)
+  const revealedEnvRef = useRef<Map<string, string> | null>(null)
   const [hostnamesDraft, setHostnamesDraft] = useState<ProjectHostname[]>([])
   const [routesDraft, setRoutesDraft] = useState<RouteDraft[]>([])
   const [routingError, setRoutingError] = useState<string | null>(null)
   const [migrationCommand, setMigrationCommand] = useState('')
   const [migrationService, setMigrationService] = useState('')
   const [healthCheckUrl, setHealthCheckUrl] = useState('')
-  const [dbRestartPrompt, setDbRestartPrompt] = useState(false)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [servicesDraft, setServicesDraft] = useState<ServiceMappingRow[]>([])
@@ -255,9 +261,23 @@ export function ProjectPage() {
     setActiveDeployId(runningDeployId)
   }
 
+  const revealEnvValue = useCallback(
+    async (key: string) => {
+      if (!revealedEnvRef.current) {
+        const data = await fetchProjectEnv(slug, { reveal: true })
+        revealedEnvRef.current = new Map(data.entries.map((entry) => [entry.key, entry.value]))
+      }
+      return revealedEnvRef.current.get(key) ?? ''
+    },
+    [slug],
+  )
+
   const envQuery = useQuery({
     queryKey: ['project', slug, 'env'],
-    queryFn: () => fetchProjectEnv(slug),
+    queryFn: () => {
+      revealedEnvRef.current = null
+      return fetchProjectEnv(slug)
+    },
     enabled: Boolean(slug) && activeTab === 'environment',
     refetchIntervalInBackground: false,
   })
@@ -344,7 +364,9 @@ export function ProjectPage() {
     },
     onSuccess: () => {
       setEnvDirty(false)
-      setRestartPrompt(true)
+      setEnvSavedMessage(null)
+      setApplyDeployError(null)
+      setApplyPrompt('env')
       void queryClient.invalidateQueries({ queryKey: ['project', slug, 'env'] })
     },
   })
@@ -445,18 +467,40 @@ export function ProjectPage() {
   const imageServicesConfigured = (project?.services.length ?? 0) > 0
 
   const rotateMutation = useMutation({
-    mutationFn: () => rotateProjectDatabase(slug),
-    onSuccess: () => {
-      setDbRestartPrompt(true)
-      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'dumps'] })
+    mutationFn: async () => {
+      setRotateError(null)
+      try {
+        const result = await rotateDatabasePassword(slug)
+        if (result.restart_required) {
+          setRotateMessage(null)
+          setApplyDeployError(null)
+          setApplyPrompt('password')
+        }
+        await queryClient.invalidateQueries({ queryKey: ['project', slug, 'dumps'] })
+        await queryClient.invalidateQueries({ queryKey: ['database'] })
+        await queryClient.invalidateQueries({ queryKey: authQueryKey })
+      } catch (error) {
+        if (isStepUpRequired(error)) {
+          setRotateStepUpOpen(true)
+          return
+        }
+        setRotateMessage(null)
+        setRotateError(apiErrorDetail(error) || 'Request failed.')
+      }
     },
   })
 
-  const restartMutation = useMutation({
-    mutationFn: () => restartProjectCompose(slug),
-    onSuccess: () => {
-      setRestartPrompt(false)
-      setDbRestartPrompt(false)
+  const applyDeployMutation = useMutation({
+    mutationFn: () => deployToApplyEnv(slug),
+    onSuccess: (data) => {
+      setApplyPrompt(null)
+      setApplyDeployError(null)
+      setActiveDeployId(data.id)
+      selectTab('deploy')
+      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
+    },
+    onError: (error) => {
+      setApplyDeployError(apiErrorDetail(error) || 'Deploy failed.')
     },
   })
 
@@ -516,7 +560,7 @@ export function ProjectPage() {
   const publicUrls = projectPublicUrls(project)
 
   return (
-    <div className="flex w-full flex-col gap-6">
+    <div className="flex w-full min-w-0 max-w-full flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">{project.display_name}</h1>
         <p className="font-mono text-sm text-muted-foreground">{project.slug}</p>
@@ -763,7 +807,7 @@ export function ProjectPage() {
       ) : null}
 
       {activeTab === 'environment' ? (
-        <div role="tabpanel" className="space-y-4">
+        <div role="tabpanel" className="min-w-0 space-y-4">
           {envQuery.isPending ? (
             <p className="text-sm text-muted-foreground">Loading environment…</p>
           ) : (
@@ -771,6 +815,7 @@ export function ProjectPage() {
               <EnvEditor
                 rows={envRows}
                 routePortEnvVars={routePortEnvVars}
+                onRevealValue={revealEnvValue}
                 onChange={(rows) => {
                   setEnvRows(rows)
                   setEnvDirty(true)
@@ -786,26 +831,10 @@ export function ProjectPage() {
               >
                 {envSaveMutation.isPending ? 'Saving…' : 'Save'}
               </button>
-              {restartPrompt ? (
-                <div className="rounded-lg border border-border bg-card p-4 text-sm">
-                  <p>Restart services?</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={() => restartMutation.mutate()}
-                    >
-                      Restart
-                    </button>
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={() => setRestartPrompt(false)}
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                </div>
+              {envSavedMessage ? (
+                <p className="text-sm text-muted-foreground" role="status">
+                  {envSavedMessage}
+                </p>
               ) : null}
             </>
           )}
@@ -855,44 +884,30 @@ export function ProjectPage() {
               type="button"
               disabled={rotateMutation.isPending}
               className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => setRotateConfirmOpen(true)}
+              onClick={() => rotateMutation.mutate()}
             >
               Rotate password
             </button>
           ) : null}
-          <ConfirmDialog
-            open={rotateConfirmOpen}
-            title="Rotate database password"
-            description="This changes the live database role password immediately. Running containers keep the old password until you restart them. A TOTP code is required."
-            confirmLabel="Rotate password"
+          {rotateError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {rotateError}
+            </p>
+          ) : null}
+          {rotateMessage ? (
+            <p className="text-sm text-muted-foreground" role="status">
+              {rotateMessage}
+            </p>
+          ) : null}
+          <StepUpDialog
+            open={rotateStepUpOpen}
             busy={rotateMutation.isPending}
-            onConfirm={() => {
-              setRotateConfirmOpen(false)
+            onVerified={() => {
+              setRotateStepUpOpen(false)
               rotateMutation.mutate()
             }}
-            onCancel={() => setRotateConfirmOpen(false)}
+            onCancel={() => setRotateStepUpOpen(false)}
           />
-          {dbRestartPrompt ? (
-            <div className="rounded-lg border border-border bg-card p-4 text-sm">
-              <p>Restart services?</p>
-              <div className="mt-2 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => restartMutation.mutate()}
-                >
-                  Restart
-                </button>
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => setDbRestartPrompt(false)}
-                >
-                  Dismiss
-                </button>
-              </div>
-            </div>
-          ) : null}
           <section className="space-y-3">
             <h2 className="text-base font-semibold">Dumps</h2>
             <div className="overflow-x-auto rounded-lg border border-border bg-card">
@@ -1015,6 +1030,38 @@ export function ProjectPage() {
           />
         </div>
       ) : null}
+      <ConfirmDialog
+        open={applyPrompt !== null}
+        title={
+          applyPrompt === 'password'
+            ? 'Deploy to apply the new password'
+            : 'Deploy to apply environment changes'
+        }
+        description={
+          applyPrompt === 'password'
+            ? 'The database password is already changed. Deploy so the running containers use it.'
+            : 'The new values are saved. Deploy so the running containers pick them up.'
+        }
+        confirmLabel="Deploy"
+        cancelLabel="Not now"
+        tone="default"
+        busy={applyDeployMutation.isPending}
+        error={applyDeployError}
+        onConfirm={() => applyDeployMutation.mutate()}
+        onCancel={() => {
+          if (applyPrompt === 'password') {
+            setRotateMessage(
+              'Password rotated. The running containers keep the old password until you deploy.',
+            )
+          } else if (applyPrompt === 'env') {
+            setEnvSavedMessage(
+              'Environment saved. The running containers keep the old values until you deploy.',
+            )
+          }
+          setApplyPrompt(null)
+          setApplyDeployError(null)
+        }}
+      />
     </div>
   )
 }
