@@ -37,6 +37,7 @@ export interface JobEndPayload {
     roles?: string[]
     error_count?: number
     errors?: string[]
+    safety_dump?: string | null
   } | null
   error: string | null
 }

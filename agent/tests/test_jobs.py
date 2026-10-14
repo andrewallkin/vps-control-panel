@@ -38,6 +38,25 @@ def test_job_failure_recorded(settings):
     assert event.error is not None and "boom" in event.error
 
 
+def test_job_failure_keeps_attached_result(settings):
+    """A failed body can leave a partial result, such as a restore safety-dump path."""
+    from vpscp_agent.state import StateDB
+
+    db = StateDB(settings.state_db_path)
+    db.migrate()
+    mgr = JobManager(db)
+
+    def boom(_ctx):
+        exc = RuntimeError("boom")
+        exc.job_result = {"safety_dump": "/var/lib/vpscp/restore/safety-x.sql.gz"}  # type: ignore[attr-defined]
+        raise exc
+
+    job = mgr.start("demo.fail", {}, boom)
+    done = mgr.wait(job.id, timeout=5)
+    assert done.status == "failed"
+    assert done.result == {"safety_dump": "/var/lib/vpscp/restore/safety-x.sql.gz"}
+
+
 def test_lock_key_conflict(settings):
     from vpscp_agent.state import StateDB
 

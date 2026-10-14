@@ -55,6 +55,34 @@ describe('RestoreConfirmDialog', () => {
     expect(onConfirm).toHaveBeenCalledWith(true)
   })
 
+  it('warns that attached projects keep the panel password until rotate and deploy', () => {
+    render(
+      <RestoreConfirmDialog
+        open
+        attachedProjects={['budget-hq', 'spliteasy']}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    )
+
+    expect(
+      screen.getByText(/attached projects keep the passwords stored by this panel/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/rotate its database password and deploy/i)).toBeInTheDocument()
+    expect(screen.getByText('budget-hq')).toBeInTheDocument()
+    expect(screen.getByText('spliteasy')).toBeInTheDocument()
+  })
+
+  it('hides the attached-project warning when nothing is attached', () => {
+    render(
+      <RestoreConfirmDialog open onConfirm={() => undefined} onCancel={() => undefined} />,
+    )
+
+    expect(
+      screen.queryByText(/attached projects keep the passwords stored by this panel/i),
+    ).not.toBeInTheDocument()
+  })
+
   it('confirms without overwrite when the cluster has no conflict', async () => {
     const user = userEvent.setup()
     const onConfirm = vi.fn()

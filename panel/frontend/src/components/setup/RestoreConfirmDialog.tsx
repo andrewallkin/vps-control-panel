@@ -9,6 +9,7 @@ export interface RestoreConfirmDialogProps {
   open: boolean
   busy?: boolean
   conflict?: RestoreConflict | null
+  attachedProjects?: string[]
   onConfirm: (overwrite: boolean) => void
   onCancel: () => void
 }
@@ -17,6 +18,7 @@ export function RestoreConfirmDialog({
   open,
   busy = false,
   conflict = null,
+  attachedProjects = [],
   onConfirm,
   onCancel,
 }: RestoreConfirmDialogProps) {
@@ -93,6 +95,24 @@ export function RestoreConfirmDialog({
               />
               Overwrite existing data
             </label>
+          </div>
+        ) : null}
+        {attachedProjects.length > 0 ? (
+          <div className="mt-4 space-y-2 rounded-lg border border-warning/50 bg-warning/10 px-4 py-3">
+            <p className="text-sm font-medium text-foreground">
+              Attached projects keep the passwords stored by this panel
+            </p>
+            <p className="text-sm text-muted-foreground">
+              The dump puts the old database role passwords back. Each app below will fail to
+              connect until you rotate its database password and deploy.
+            </p>
+            <ul className="list-inside list-disc text-sm text-foreground">
+              {attachedProjects.map((slug) => (
+                <li key={slug} className="font-mono">
+                  {slug}
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
         <label htmlFor={inputId} className="mt-4 block text-sm font-medium">

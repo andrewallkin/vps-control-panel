@@ -42,6 +42,10 @@ export function RestoreResultSummary({ end, onContinue, onRetry }: RestoreResult
   const roles = result?.roles ?? []
   const errorCount = result?.error_count
   const errors = result?.errors ?? []
+  const safetyDump =
+    typeof result?.safety_dump === 'string' && result.safety_dump.length > 0
+      ? result.safety_dump
+      : null
 
   const dbNames = databases.map((entry) =>
     typeof entry === 'string'
@@ -112,6 +116,13 @@ export function RestoreResultSummary({ end, onContinue, onRetry }: RestoreResult
         >
           Continue
         </button>
+      ) : null}
+      {end.status === 'failed' && safetyDump ? (
+        <p className="text-sm text-muted-foreground">
+          The previous cluster was saved on this server before the load started. Copy that file
+          off the server and upload it here if you need the previous data back.
+          <span className="mt-1 block break-all font-mono text-xs text-foreground">{safetyDump}</span>
+        </p>
       ) : null}
       {end.status === 'failed' && onRetry ? (
         <button

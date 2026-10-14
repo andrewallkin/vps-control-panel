@@ -70,7 +70,7 @@ const RESTORE_STEPS = [
   'The file is checked as a gzip-compressed pg_dumpall archive.',
   'The dump is loaded. Any errors are written to the restore log.',
   'The admin password is reset from the stack environment.',
-  'Project .env files stay unchanged. Role passwords stay as they are in the dump until you rotate them.',
+  'Project .env files stay unchanged. Role passwords come back from the dump. Rotate the database password for each attached project and deploy so the app can connect.',
 ]
 
 function databaseSummary(rows: DatabaseRow[]): string {
@@ -871,6 +871,7 @@ export function DatabasePage() {
         open={confirmOpen}
         busy={restoreMutation.isPending}
         conflict={restoreConflict}
+        attachedProjects={attachedSlugs}
         onCancel={() => setConfirmOpen(false)}
         onConfirm={(overwrite) => {
           if (!uploadId) {

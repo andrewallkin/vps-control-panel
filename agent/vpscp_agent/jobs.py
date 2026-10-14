@@ -165,6 +165,9 @@ class JobManager:
                 ok = True
             except Exception as exc:  # noqa: BLE001
                 error = f"{type(exc).__name__}: {scrub_error_message(str(exc))}"
+                partial = getattr(exc, "job_result", None)
+                if isinstance(partial, dict):
+                    result = partial
             finally:
                 job.finished_at = datetime.now(UTC).isoformat(timespec="seconds")
                 duration_ms = int((time.monotonic() - start) * 1000)
