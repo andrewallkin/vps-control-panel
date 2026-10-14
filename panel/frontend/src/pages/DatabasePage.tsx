@@ -95,6 +95,21 @@ function apiErrorDetail(error: unknown): string {
   return ''
 }
 
+function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
+  if (!(error instanceof ApiError) || !error.body || typeof error.body !== 'object') {
+    return null
+  }
+  const detail = (error.body as { detail?: unknown }).detail
+  if (
+    !detail ||
+    typeof detail !== 'object' ||
+    (detail as { code?: string }).code !== 'cluster_not_empty'
+  ) {
+    return null
+  }
+  return detail as unknown as RestoreConflict
+}
+
 export function DatabasePage() {
   const queryClient = useQueryClient()
   const dropConfirmInputId = useId()
@@ -196,6 +211,9 @@ export function DatabasePage() {
           setPendingStepUp(action)
           setStepUpOpen(true)
           return
+        }
+        if (clusterNotEmptyDetail(error)) {
+          throw error
         }
         setActionError(apiErrorDetail(error) || 'Request failed.')
       }
@@ -316,16 +334,10 @@ export function DatabasePage() {
         setRestoreConflict(null)
       }),
     onError: (err) => {
-      const detail =
-        err instanceof ApiError && err.body && typeof err.body === 'object'
-          ? (err.body as { detail?: unknown }).detail
-          : null
-      if (
-        detail &&
-        typeof detail === 'object' &&
-        (detail as { code?: string }).code === 'cluster_not_empty'
-      ) {
-        setRestoreConflict(detail as unknown as RestoreConflict)
+      const conflict = clusterNotEmptyDetail(err)
+      if (conflict) {
+        setActionError(null)
+        setRestoreConflict(conflict)
         setConfirmDialogKey((value) => value + 1)
         setConfirmOpen(true)
       }
