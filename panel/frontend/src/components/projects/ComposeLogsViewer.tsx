@@ -52,10 +52,6 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
   }, [paused])
 
   useEffect(() => {
-    setLines([])
-  }, [slug, service])
-
-  useEffect(() => {
     if (paused) {
       sourceRef.current?.close()
       sourceRef.current = null

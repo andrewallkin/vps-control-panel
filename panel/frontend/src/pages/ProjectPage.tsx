@@ -857,7 +857,7 @@ export function ProjectPage() {
               })}
             </optgroup>
           </select>
-          <ComposeLogsViewer slug={slug} service={logService} />
+          <ComposeLogsViewer key={`${slug}:${logService}`} slug={slug} service={logService} />
         </div>
       ) : null}
 
