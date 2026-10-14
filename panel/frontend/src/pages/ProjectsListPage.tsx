@@ -71,7 +71,7 @@ export function ProjectsListPage() {
           {projects.map((project) => {
             const status = project.creation_state.status
             const href =
-              status === 'failed'
+              status === 'failed' || status === 'awaiting_deploy_key' || status === 'running'
                 ? `/projects/new?slug=${encodeURIComponent(project.slug)}`
                 : `/projects/${encodeURIComponent(project.slug)}`
             return (

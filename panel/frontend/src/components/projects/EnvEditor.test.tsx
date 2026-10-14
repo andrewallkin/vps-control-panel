@@ -29,36 +29,49 @@ describe('EnvEditor', () => {
     await user.type(textarea, 'FOO=barbaz12\n# c\nPOSTGRES_PASSWORD=stolen\n')
     await user.click(screen.getByRole('button', { name: /apply paste/i }))
 
-    expect(screen.getByLabelText(/^FOO$/i)).toHaveValue('••••12')
-    expect(screen.getByLabelText(/^POSTGRES_PASSWORD$/i)).toHaveValue('original-secret')
+    expect(screen.getByRole('button', { name: /^FOO$/i })).toHaveTextContent('barbaz12')
+    expect(screen.getByRole('button', { name: /^POSTGRES_PASSWORD$/i })).toHaveTextContent(
+      'original-secret',
+    )
   })
 
-  it('masks unlocked env values when not focused', () => {
+  it('opens the full field when a key or value is clicked', async () => {
+    const user = userEvent.setup()
+
     render(
-      <EnvEditor
-        rows={[{ key: 'SECRET', value: 'abcdefgh', locked: false }]}
-        routePortEnvVars={[]}
-        onChange={() => undefined}
-      />,
+      <EnvEditorHarness initialRows={[{ key: '', value: '', locked: false }]} />,
     )
 
-    expect(screen.getByLabelText(/^SECRET$/i)).toHaveValue('••••gh')
+    await user.click(screen.getByRole('button', { name: 'New key' }))
+    const keyInput = screen.getByRole('textbox', { name: 'Full key' })
+    await user.type(keyInput, 'app_name')
+
+    expect(keyInput).toHaveFocus()
+    expect(keyInput).toHaveValue('APP_NAME')
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+
+    await user.click(screen.getByRole('button', { name: /^APP_NAME$/i }))
+    const valueInput = screen.getByRole('textbox', { name: 'Full value' })
+    await user.type(valueInput, 'SplitEasy API')
+
+    expect(valueInput).toHaveFocus()
+    expect(valueInput).toHaveValue('SplitEasy API')
   })
 
   it('blocks renaming a row to a managed key', async () => {
+    const user = userEvent.setup()
     render(
       <EnvEditorHarness
         initialRows={[{ key: 'FOO', value: 'bar', locked: false }]}
       />,
     )
 
-    const keyInput = screen.getByDisplayValue('FOO')
-    // one-shot change (as after a paste) rather than keystrokes: the row's
-    // React key includes the env key, so per-keystroke typing remounts the input
-    fireEvent.change(keyInput, { target: { value: 'POSTGRES_PASSWORD' } })
+    await user.click(screen.getByRole('button', { name: 'FOO key' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Full key' }), {
+      target: { value: 'POSTGRES_PASSWORD' },
+    })
 
-    // the rename must not take effect: the managed key never becomes a row
-    expect(screen.queryByDisplayValue('POSTGRES_PASSWORD')).not.toBeInTheDocument()
-    expect(screen.getByDisplayValue('FOO')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'POSTGRES_PASSWORD key' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'FOO key' })).toBeInTheDocument()
   })
 })

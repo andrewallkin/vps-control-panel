@@ -1,8 +1,9 @@
-import { Plus, Spinner } from '@phosphor-icons/react'
+import { Plus, Spinner, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CreationChecklist } from '../components/projects/CreationChecklist'
+import { ProjectDeleteSection } from '../components/projects/ProjectDeleteSection'
 import { EnvEditor, syncLockedEnvRows } from '../components/projects/EnvEditor'
 import { ProjectWizardStepper, type WizardStepId } from '../components/projects/ProjectWizardStepper'
 import { RouteEditor } from '../components/projects/RouteEditor'
@@ -18,6 +19,7 @@ import {
 } from '../lib/projectWizardValidation'
 import {
   createProject,
+  deleteProject,
   fetchAdoptableDatabases,
   fetchDeployKeyPublic,
   fetchProject,
@@ -32,7 +34,7 @@ import {
   type ServiceMappingRow,
 } from '../lib/serviceMappingUtils'
 import { buildFqdn, validateSubdomain } from '../lib/subdomainValidation'
-import { ApiError } from '../lib/api'
+import { ApiError, isStepUpRequired } from '../lib/api'
 
 const STEP_ORDER: WizardStepId[] = [
   'basics',
@@ -89,7 +91,9 @@ export function NewProjectWizardPage() {
   const [envRows, setEnvRows] = useState<EnvRow[]>([])
   const [userEnv, setUserEnv] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
+  const [continueError, setContinueError] = useState<string | null>(null)
   const [activeCreationSlug, setActiveCreationSlug] = useState<string | null>(retrySlug)
+  const watchingCreation = useRef(false)
   const [testAccessMessage, setTestAccessMessage] = useState<string | null>(null)
   const [serviceRows, setServiceRows] = useState<ServiceMappingRow[]>([])
 
@@ -119,7 +123,13 @@ export function NewProjectWizardPage() {
     enabled: step === 'progress' && activeCreationSlug !== null,
     refetchInterval: (query) => {
       const status = query.state.data?.creation_state.status
-      return status === 'running' ? 2000 : false
+      if (status === 'ready' || status === 'failed') {
+        watchingCreation.current = false
+      }
+      if (status === 'running' || watchingCreation.current) {
+        return 2000
+      }
+      return false
     },
     refetchIntervalInBackground: false,
   })
@@ -158,7 +168,7 @@ export function NewProjectWizardPage() {
     setWriteDatabaseUrl(existingProject.write_database_url)
     setActiveCreationSlug(existingProject.slug)
     const status = existingProject.creation_state.status
-    if (status === 'running' || status === 'failed') {
+    if (status === 'running' || status === 'failed' || status === 'awaiting_deploy_key') {
       setStep('progress')
     }
   }
@@ -291,11 +301,52 @@ export function NewProjectWizardPage() {
     },
   })
 
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
+  const handleDelete = useCallback(
+    async (payload: Parameters<typeof deleteProject>[1]) => {
+      const target = activeCreationSlug
+      if (!target) {
+        return
+      }
+      setDeleteBusy(true)
+      setDeleteError(null)
+      try {
+        await deleteProject(target, payload)
+        await queryClient.invalidateQueries({ queryKey: ['projects'] })
+        navigate('/projects')
+      } catch (error) {
+        if (isStepUpRequired(error)) {
+          throw error
+        }
+        setDeleteError(error instanceof ApiError ? 'Delete failed.' : 'Delete failed.')
+      } finally {
+        setDeleteBusy(false)
+      }
+    },
+    [activeCreationSlug, navigate, queryClient],
+  )
+
   const retryMutation = useMutation({
     mutationFn: retryProjectCreate,
     onSuccess: () => {
+      setContinueError(null)
+      watchingCreation.current = true
       void queryClient.invalidateQueries({ queryKey: ['projects'] })
       void creationPollQuery.refetch()
+    },
+    onError: (error: unknown) => {
+      watchingCreation.current = false
+      const detail =
+        error instanceof ApiError &&
+        error.body &&
+        typeof error.body === 'object' &&
+        'detail' in error.body &&
+        typeof error.body.detail === 'string'
+          ? error.body.detail
+          : null
+      setContinueError(detail ?? 'Repository access failed. Add the deploy key, then continue.')
     },
   })
 
@@ -425,7 +476,9 @@ export function NewProjectWizardPage() {
   const canTestAccess = registeredProject !== undefined
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+    <div
+      className={`mx-auto flex w-full flex-col gap-6 ${step === 'environment' ? 'max-w-6xl' : 'max-w-3xl'}`}
+    >
       <div className="space-y-1">
         <Link
           to="/projects"
@@ -483,10 +536,17 @@ export function NewProjectWizardPage() {
             </label>
             <input
               id="repo-url"
+              placeholder="git@github.com:owner/name.git"
               className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
             />
+            <p className="text-sm text-muted-foreground">
+              A private repository must use an SSH URL, such as{' '}
+              <span className="font-mono text-foreground">git@github.com:owner/name.git</span>.
+              An https URL cannot use the deploy key. Creation stops after the key is created so
+              you can add it under Settings → Deploy keys before the repository is cloned.
+            </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1">
@@ -567,7 +627,9 @@ export function NewProjectWizardPage() {
                   {publicKey}
                 </pre>
               ) : (
-                <p className="mt-2 text-xs">The public key appears after create, not before.</p>
+                <p className="mt-2 text-xs">
+                  The key is created when you start the project. Creation waits until you add it.
+                </p>
               )}
             </div>
           ) : null}
@@ -593,14 +655,14 @@ export function NewProjectWizardPage() {
 
       {step === 'domain' ? (
         <section className="space-y-4 rounded-lg border border-border bg-card p-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(12rem,1fr)]">
             <div className="space-y-1">
               <label className="block text-sm font-medium" htmlFor="primary-domain">
                 Primary domain
               </label>
               <select
                 id="primary-domain"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                 value={primaryDomain}
                 onChange={(e) => setPrimaryDomain(e.target.value)}
               >
@@ -619,7 +681,7 @@ export function NewProjectWizardPage() {
               <input
                 id="primary-subdomain"
                 placeholder="empty for root"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                 value={primarySubdomain}
                 aria-invalid={primarySubdomainResult.ok ? undefined : true}
                 aria-describedby={primarySubdomainResult.ok ? undefined : 'primary-subdomain-error'}
@@ -647,11 +709,16 @@ export function NewProjectWizardPage() {
           />
           <div className="space-y-3 border-t border-border pt-4">
             <p className="text-sm font-medium">Extra hostnames</p>
+            <p className="text-sm text-muted-foreground">
+              Optional names for this same site. An alias serves it there, such as{' '}
+              <span className="font-mono text-foreground">www.example.com</span>. A redirect sends
+              visitors to the primary hostname.
+            </p>
             {extraHostnames.map((row, index) => (
-              <div key={index} className="grid gap-2 sm:grid-cols-4">
+              <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(8rem,0.8fr)_auto_auto] sm:items-center">
                 <select
                   aria-label={`Extra domain ${index + 1}`}
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 sm:col-span-2"
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                   value={row.domain}
                   onChange={(e) =>
                     setExtraHostnames((list) =>
@@ -670,7 +737,7 @@ export function NewProjectWizardPage() {
                 </select>
                 <input
                   aria-label={`Extra subdomain ${index + 1}`}
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                   placeholder="subdomain"
                   value={row.subdomain}
                   onChange={(e) =>
@@ -683,7 +750,7 @@ export function NewProjectWizardPage() {
                 />
                 <select
                   aria-label={`Extra kind ${index + 1}`}
-                  className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                  className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                   value={row.kind}
                   onChange={(e) =>
                     setExtraHostnames((list) =>
@@ -698,6 +765,16 @@ export function NewProjectWizardPage() {
                   <option value="alias">Alias</option>
                   <option value="redirect">Redirect</option>
                 </select>
+                <button
+                  type="button"
+                  className="inline-flex h-10 items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer"
+                  onClick={() =>
+                    setExtraHostnames((list) => list.filter((_, i) => i !== index))
+                  }
+                >
+                  <Trash weight="regular" aria-hidden className="size-4" />
+                  Remove
+                </button>
               </div>
             ))}
             <button
@@ -780,14 +857,38 @@ export function NewProjectWizardPage() {
             </div>
           ) : null}
           {databaseMode !== 'none' ? (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={writeDatabaseUrl}
-                onChange={(e) => setWriteDatabaseUrl(e.target.checked)}
-              />
-              Write DATABASE_URL to .env
-            </label>
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  The panel always writes these connection variables. Check the box only if the
+                  app reads <span className="font-mono text-foreground">DATABASE_URL</span>.
+                </p>
+                <ul className="flex flex-wrap gap-2">
+                  {[
+                    'POSTGRES_HOST',
+                    'POSTGRES_PORT',
+                    'POSTGRES_DB',
+                    'POSTGRES_USER',
+                    'POSTGRES_PASSWORD',
+                  ].map((name) => (
+                    <li
+                      key={name}
+                      className="rounded-md bg-muted px-2 py-1 font-mono text-xs text-foreground"
+                    >
+                      {name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={writeDatabaseUrl}
+                  onChange={(e) => setWriteDatabaseUrl(e.target.checked)}
+                />
+                Write DATABASE_URL to .env
+              </label>
+            </div>
           ) : null}
           <div className="space-y-2">
             <label htmlFor="migration-service" className="block text-sm font-medium">
@@ -897,6 +998,46 @@ export function NewProjectWizardPage() {
                 }
                 retryPending={retryMutation.isPending}
               />
+              {creationState.status === 'failed' && activeCreationSlug ? (
+                <ProjectDeleteSection
+                  slug={activeCreationSlug}
+                  onDelete={handleDelete}
+                  busy={deleteBusy}
+                  error={deleteError}
+                />
+              ) : null}
+              {creationState.status === 'awaiting_deploy_key' ? (
+                <div className="space-y-2 text-sm">
+                  <p className="text-muted-foreground">
+                    Add this read-only key to the GitHub repo under Settings → Deploy keys, then
+                    continue.
+                  </p>
+                  {publicKey ? (
+                    <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+                      {publicKey}
+                    </pre>
+                  ) : (
+                    <p className="text-muted-foreground">Loading the deploy key…</p>
+                  )}
+                  {continueError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {continueError}
+                    </p>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={retryMutation.isPending || !publicKey}
+                    className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      if (activeCreationSlug) {
+                        retryMutation.mutate(activeCreationSlug)
+                      }
+                    }}
+                  >
+                    {retryMutation.isPending ? 'Checking access…' : 'Continue'}
+                  </button>
+                </div>
+              ) : null}
               {creationState.status === 'ready' ? (
                 <button
                   type="button"
@@ -908,7 +1049,7 @@ export function NewProjectWizardPage() {
               ) : null}
             </>
           ) : null}
-          {isSshRepoUrl(repoUrl) && publicKey ? (
+          {isSshRepoUrl(repoUrl) && publicKey && creationState?.status !== 'awaiting_deploy_key' ? (
             <div className="text-sm text-muted-foreground">
               <p>Deploy key (read-only):</p>
               <pre className="mt-1 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">

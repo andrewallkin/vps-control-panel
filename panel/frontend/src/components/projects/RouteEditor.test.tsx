@@ -4,6 +4,18 @@ import { describe, expect, it, vi } from 'vitest'
 import { RouteEditor } from './RouteEditor'
 
 describe('RouteEditor', () => {
+  it('explains that a route forwards a path prefix to a compose port', () => {
+    render(
+      <RouteEditor
+        routes={[{ path_prefix: '/', port_env_var: '' }]}
+        onChange={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText(/path is not rewritten/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/port env var/i)).toHaveAttribute('placeholder', 'WEB_PORT')
+  })
+
   it('validates path prefix and port env var for Continue', async () => {
     const user = userEvent.setup()
     const onValidationChange = vi.fn()

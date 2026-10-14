@@ -77,6 +77,14 @@ def _step_by_name(state: dict[str, Any], name: str) -> dict[str, Any]:
     raise KeyError(name)
 
 
+def _needs_deploy_key_confirmation(project: Project, state: dict[str, Any]) -> bool:
+    if not project.repo_url.startswith("git@github.com:"):
+        return False
+    if state.get("deploy_key_confirmed"):
+        return False
+    return _step_by_name(state, "deploy_key")["status"] == "done"
+
+
 def hostname_fqdn(domain: str, subdomain: str) -> str:
     if subdomain == "":
         return domain
@@ -225,6 +233,12 @@ async def run_creation(db: Session, agent: AgentClient, slug: str) -> None:
         step = _step_by_name(state, step_name)
         if step["status"] == "done":
             continue
+        if step_name == "clone" and _needs_deploy_key_confirmation(project, state):
+            step["status"] = "pending"
+            step["error"] = None
+            state["status"] = "awaiting_deploy_key"
+            _save_state(db, project, state)
+            return
         try:
             await handler(db, agent, project, state, ctx)
             step["status"] = "done"

@@ -1,13 +1,14 @@
 import { Plus, Trash } from '@phosphor-icons/react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   applyEnvPaste,
   type EnvRow,
   envRowsToUserEnv,
   generateSecret,
   isEnvKeyLocked,
-  maskEnvValue,
 } from '../../lib/envEditorUtils'
+
+export type { EnvRow }
 
 export interface EnvEditorProps {
   rows: EnvRow[]
@@ -19,7 +20,9 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
   const [pasteOpen, setPasteOpen] = useState(false)
   const [pasteText, setPasteText] = useState('')
   const [invalidPasteLines, setInvalidPasteLines] = useState<string[]>([])
-  const [focusedKey, setFocusedKey] = useState<string | null>(null)
+  const [expanded, setExpanded] = useState<{ index: number; field: 'key' | 'value' } | null>(
+    null,
+  )
 
   function emit(nextRows: EnvRow[]) {
     onChange(nextRows, envRowsToUserEnv(nextRows))
@@ -120,58 +123,64 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
 
       <ul className="space-y-3">
         {rows.map((row, index) => {
-          const focused = focusedKey === row.key
-          const displayValue = row.locked ? row.value : maskEnvValue(row.value, focused)
           return (
             <li
-              key={`${row.key}-${index}`}
-              className="flex flex-col gap-2 rounded-md border border-border bg-card p-3 sm:flex-row sm:items-center"
+              key={index}
+              className="grid grid-cols-1 items-center gap-2 rounded-md border border-border bg-card p-3 sm:grid-cols-[13rem_minmax(0,1fr)_12.5rem]"
             >
-              <input
+              <button
+                type="button"
                 aria-label={row.key ? `${row.key} key` : 'New key'}
-                type="text"
-                readOnly={row.locked}
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 read-only:opacity-80"
-                value={row.key}
-                placeholder="KEY"
-                onChange={(event) => updateRow(index, { key: event.target.value.toUpperCase() })}
-              />
-              <input
+                className="h-10 min-w-0 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer"
+                onClick={() => setExpanded({ index, field: 'key' })}
+              >
+                {row.key || <span className="text-muted-foreground">KEY</span>}
+              </button>
+              <button
+                type="button"
                 aria-label={row.key || 'Value'}
-                type="text"
-                readOnly={row.locked}
-                autoComplete="off"
-                className="min-w-0 flex-[2] rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 read-only:opacity-80"
-                value={displayValue}
-                onFocus={() => setFocusedKey(row.key)}
-                onBlur={() => setFocusedKey(null)}
-                onChange={(event) => updateRow(index, { value: event.target.value })}
-              />
-              {!row.locked ? (
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => updateRow(index, { value: generateSecret() })}
-                  >
-                    Generate secret
-                  </button>
-                  <button
-                    type="button"
-                    className="rounded-md p-2 transition-colors duration-200 hover:bg-muted cursor-pointer"
-                    onClick={() => removeRow(index)}
-                  >
-                    <Trash weight="regular" aria-hidden className="size-4" />
-                    <span className="sr-only">Remove {row.key}</span>
-                  </button>
-                </div>
-              ) : (
-                <span className="text-xs text-muted-foreground">Managed</span>
-              )}
+                className="h-10 min-w-0 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer"
+                onClick={() => setExpanded({ index, field: 'value' })}
+              >
+                {row.value || <span className="text-muted-foreground">Value</span>}
+              </button>
+              <div className="flex h-10 items-center justify-end gap-2">
+                {!row.locked ? (
+                  <>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => updateRow(index, { value: generateSecret() })}
+                    >
+                      Generate secret
+                    </button>
+                    <button
+                      type="button"
+                      className="rounded-md p-2 transition-colors duration-200 hover:bg-muted cursor-pointer"
+                      onClick={() => removeRow(index)}
+                    >
+                      <Trash weight="regular" aria-hidden className="size-4" />
+                      <span className="sr-only">Remove {row.key}</span>
+                    </button>
+                  </>
+                ) : (
+                  <span className="text-xs text-muted-foreground">Managed</span>
+                )}
+              </div>
             </li>
           )
         })}
       </ul>
+
+      {expanded !== null && rows[expanded.index] ? (
+        <EnvValueDialog
+          row={rows[expanded.index]!}
+          field={expanded.field}
+          onChangeKey={(value) => updateRow(expanded.index, { key: value.toUpperCase() })}
+          onChangeValue={(value) => updateRow(expanded.index, { value })}
+          onClose={() => setExpanded(null)}
+        />
+      ) : null}
 
       {rows.length === 0 ? (
         <button
@@ -182,6 +191,78 @@ export function EnvEditor({ rows, routePortEnvVars, onChange }: EnvEditorProps) 
           Add your first variable
         </button>
       ) : null}
+    </div>
+  )
+}
+
+function EnvValueDialog({
+  row,
+  field,
+  onChangeKey,
+  onChangeValue,
+  onClose,
+}: {
+  row: EnvRow
+  field: 'key' | 'value'
+  onChangeKey: (value: string) => void
+  onChangeValue: (value: string) => void
+  onClose: () => void
+}) {
+  const fieldRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    fieldRef.current?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose])
+
+  const label = field === 'key' ? 'Full key' : 'Full value'
+  const value = field === 'key' ? row.key : row.value
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button
+        type="button"
+        className="absolute inset-0 bg-background/80 cursor-pointer"
+        aria-label="Dismiss dialog"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={label}
+        className="relative z-10 w-full max-w-3xl rounded-lg border border-border bg-card p-4 shadow-lg"
+      >
+        <label className="block text-sm font-medium" htmlFor="env-full-field">
+          {row.key || 'New variable'}
+        </label>
+        <textarea
+          id="env-full-field"
+          ref={fieldRef}
+          aria-label={label}
+          readOnly={row.locked}
+          rows={field === 'value' ? 8 : 3}
+          className="mt-2 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 read-only:opacity-80"
+          value={value}
+          onChange={(event) =>
+            field === 'key' ? onChangeKey(event.target.value) : onChangeValue(event.target.value)
+          }
+        />
+        <div className="mt-4 flex justify-end">
+          <button
+            type="button"
+            className="inline-flex items-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
+            onClick={onClose}
+          >
+            Done
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
