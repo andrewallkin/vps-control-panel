@@ -1,4 +1,4 @@
-import { CheckCircle, Spinner, XCircle } from '@phosphor-icons/react'
+import { CaretDown, CheckCircle, MagnifyingGlass, Spinner, XCircle } from '@phosphor-icons/react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { fetchAudit, type AuditEntry } from '../lib/auditApi'
@@ -47,14 +47,35 @@ function AuditRow({ entry }: { entry: AuditEntry }) {
   )
 }
 
+const fieldClass =
+  'h-10 w-full min-w-0 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200 [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-50'
+
 export function AuditPage() {
+  const [operationInput, setOperationInput] = useState('')
   const [operationFilter, setOperationFilter] = useState('')
   const [okFilter, setOkFilter] = useState<'all' | 'ok' | 'failed'>('all')
   const [sinceFilter, setSinceFilter] = useState('')
   const [untilFilter, setUntilFilter] = useState('')
   const loadMoreRef = useRef<HTMLDivElement | null>(null)
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setOperationFilter(operationInput.trim()), 300)
+    return () => window.clearTimeout(timer)
+  }, [operationInput])
+
   const okParam = okFilter === 'all' ? undefined : okFilter === 'ok'
+  const rangeInvalid =
+    sinceFilter !== '' && untilFilter !== '' && new Date(sinceFilter) > new Date(untilFilter)
+  const filtersActive =
+    operationInput !== '' || okFilter !== 'all' || sinceFilter !== '' || untilFilter !== ''
+
+  const clearFilters = () => {
+    setOperationInput('')
+    setOperationFilter('')
+    setOkFilter('all')
+    setSinceFilter('')
+    setUntilFilter('')
+  }
 
   const auditQuery = useInfiniteQuery({
     queryKey: ['audit', operationFilter, okFilter, sinceFilter, untilFilter],
@@ -70,6 +91,7 @@ export function AuditPage() {
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.next_cursor ?? undefined,
     refetchIntervalInBackground: false,
+    enabled: !rangeInvalid,
   })
 
   const entries = useMemo(
@@ -95,49 +117,75 @@ export function AuditPage() {
   }, [auditQuery])
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-6">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Audit</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-3xl text-sm text-muted-foreground">
           Merged panel and agent operation history.
         </p>
       </div>
 
       <section className="space-y-3" aria-labelledby="audit-filters-heading">
-        <h2 id="audit-filters-heading" className="text-base font-semibold">
-          Filters
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          <div className="space-y-1">
+        <div className="flex items-center justify-between gap-3">
+          <h2 id="audit-filters-heading" className="text-base font-semibold">
+            Filters
+          </h2>
+          {filtersActive ? (
+            <button
+              type="button"
+              className="cursor-pointer text-sm font-medium text-muted-foreground transition-colors duration-200 hover:text-foreground"
+              onClick={clearFilters}
+            >
+              Clear
+            </button>
+          ) : null}
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(9rem,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-end">
+          <div className="min-w-0 space-y-1 sm:col-span-2 xl:col-span-1">
             <label htmlFor="audit-filter-operation" className="block text-sm font-medium">
               Operation
             </label>
-            <input
-              id="audit-filter-operation"
-              type="text"
-              value={operationFilter}
-              className="w-full min-w-[12rem] rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onChange={(event) => setOperationFilter(event.target.value)}
-            />
+            <div className="relative">
+              <MagnifyingGlass
+                weight="regular"
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                id="audit-filter-operation"
+                type="search"
+                value={operationInput}
+                placeholder="Exact operation name"
+                className={`${fieldClass} pl-9 font-mono`}
+                onChange={(event) => setOperationInput(event.target.value)}
+              />
+            </div>
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label htmlFor="audit-filter-ok" className="block text-sm font-medium">
               Result
             </label>
-            <select
-              id="audit-filter-ok"
-              value={okFilter}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onChange={(event) =>
-                setOkFilter(event.target.value as 'all' | 'ok' | 'failed')
-              }
-            >
-              <option value="all">All</option>
-              <option value="ok">Ok</option>
-              <option value="failed">Failed</option>
-            </select>
+            <div className="relative">
+              <select
+                id="audit-filter-ok"
+                value={okFilter}
+                className={`${fieldClass} appearance-none pr-8`}
+                onChange={(event) =>
+                  setOkFilter(event.target.value as 'all' | 'ok' | 'failed')
+                }
+              >
+                <option value="all">All</option>
+                <option value="ok">Ok</option>
+                <option value="failed">Failed</option>
+              </select>
+              <CaretDown
+                weight="regular"
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+            </div>
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label htmlFor="audit-filter-since" className="block text-sm font-medium">
               Since
             </label>
@@ -145,11 +193,11 @@ export function AuditPage() {
               id="audit-filter-since"
               type="datetime-local"
               value={sinceFilter}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={fieldClass}
               onChange={(event) => setSinceFilter(event.target.value)}
             />
           </div>
-          <div className="space-y-1">
+          <div className="min-w-0 space-y-1">
             <label htmlFor="audit-filter-until" className="block text-sm font-medium">
               Until
             </label>
@@ -157,11 +205,17 @@ export function AuditPage() {
               id="audit-filter-until"
               type="datetime-local"
               value={untilFilter}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-invalid={rangeInvalid}
+              className={fieldClass}
               onChange={(event) => setUntilFilter(event.target.value)}
             />
           </div>
         </div>
+        {rangeInvalid ? (
+          <p className="text-sm text-destructive" role="alert">
+            Since must be earlier than until.
+          </p>
+        ) : null}
       </section>
 
       {auditQuery.isError ? (
