@@ -5,4 +5,4 @@ alwaysApply: true
 
 # Local development
 
-Before any edit, read and follow `AGENTS.md` at the repo root. That file is the workflow: pull `main`, use your own feature branch, confirm the user's two terminals, open a pull request, and wait until every CI job passes.
+Before any edit, read and follow `AGENTS.md` at the repo root. Pull `main` in the primary clone, then create your own git worktree and do all file changes there. Before the user merges, merge `main` into the feature branch and clear any conflicts. Watch every CI job until it has finished. Tell the user they can merge only after that merge is clean and every job has passed.

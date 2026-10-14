@@ -1,6 +1,9 @@
 # Specs and implementation plans (never committed)
 docs/superpowers/
 
+# Per-agent git worktrees
+.worktrees/
+
 # Environment
 .env
 .env.*
