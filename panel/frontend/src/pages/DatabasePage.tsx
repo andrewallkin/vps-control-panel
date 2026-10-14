@@ -1,7 +1,8 @@
-import { FileArrowUp, Trash } from '@phosphor-icons/react'
+import { FileArrowUp, Trash, Warning } from '@phosphor-icons/react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -53,6 +54,37 @@ type PendingStepUp =
   | { kind: 'drop'; payload: DropDatabasePayload }
   | null
 
+const secondaryButtonClass =
+  'inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+
+const dangerButtonClass =
+  'inline-flex min-h-11 items-center gap-2 rounded-md border border-destructive/50 px-3 text-sm font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+
+const primaryButtonClass =
+  'inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
+
+const fieldClass =
+  'mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
+
+const RESTORE_STEPS = [
+  'The file is checked as a gzip-compressed pg_dumpall archive.',
+  'The dump is loaded. Any errors are written to the restore log.',
+  'The admin password is reset from the stack environment.',
+  'Project .env files stay unchanged. Role passwords stay as they are in the dump until you rotate them.',
+]
+
+function databaseSummary(rows: DatabaseRow[]): string {
+  const unattached = rows.filter((row) => !row.attached_slug).length
+  const noun = rows.length === 1 ? 'database' : 'databases'
+  if (unattached === 0) {
+    return `${rows.length} ${noun}, all attached to a project`
+  }
+  if (unattached === rows.length) {
+    return `${rows.length} ${noun}, none attached to a project`
+  }
+  return `${rows.length} ${noun}, ${unattached} not attached to a project`
+}
+
 function apiErrorDetail(error: unknown): string {
   if (error instanceof ApiError && error.body && typeof error.body === 'object') {
     const detail = (error.body as { detail?: unknown }).detail
@@ -68,6 +100,8 @@ export function DatabasePage() {
   const dropConfirmInputId = useId()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadAbortRef = useRef<AbortController | null>(null)
+  const adoptPanelRef = useRef<HTMLElement>(null)
+  const dropPanelRef = useRef<HTMLElement>(null)
 
   const databasesQuery = useQuery({
     queryKey: ['database', 'databases'],
@@ -130,6 +164,20 @@ export function DatabasePage() {
   const [restoreJobId, setRestoreJobId] = useState<string | null>(null)
   const [jobEnd, setJobEnd] = useState<JobEndPayload | null>(null)
   const [dragOver, setDragOver] = useState(false)
+
+  useEffect(() => {
+    const node = adoptPanelRef.current
+    if (adoptTarget && typeof node?.scrollIntoView === 'function') {
+      node.scrollIntoView({ block: 'nearest' })
+    }
+  }, [adoptTarget])
+
+  useEffect(() => {
+    const node = dropPanelRef.current
+    if (dropTarget && typeof node?.scrollIntoView === 'function') {
+      node.scrollIntoView({ block: 'nearest' })
+    }
+  }, [dropTarget])
 
   const invalidateDatabaseData = useCallback(async () => {
     await queryClient.invalidateQueries({ queryKey: ['database'] })
@@ -333,11 +381,11 @@ export function DatabasePage() {
   const rows = databasesQuery.data ?? []
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+    <div className="flex w-full flex-col gap-8">
       <div className="space-y-1">
         <h1 className="text-xl font-semibold tracking-tight">Database</h1>
-        <p className="text-sm text-muted-foreground">
-          PostgreSQL databases on the central cluster and per-project dumps.
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          PostgreSQL databases on the central cluster, and dumps for each attached project.
         </p>
       </div>
 
@@ -346,161 +394,69 @@ export function DatabasePage() {
           {actionError}
         </p>
       ) : null}
-      {actionMessage ? <p className="text-sm text-muted-foreground">{actionMessage}</p> : null}
-
-      {databasesQuery.isError ? (
-        <p className="text-sm text-destructive" role="alert">
-          Could not load databases.
+      {actionMessage ? (
+        <p className="text-sm text-muted-foreground" role="status">
+          {actionMessage}
         </p>
-      ) : (
-        <section className="space-y-3" aria-labelledby="databases-heading">
-          <h2 id="databases-heading" className="text-base font-semibold">
-            Databases
-          </h2>
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Name
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Owner
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Size
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Project
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-6 text-sm text-muted-foreground">
-                      {databasesQuery.isPending ? 'Loading…' : 'No databases yet.'}
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((row) => (
-                    <tr key={row.name}>
-                      <td className="px-3 py-2 font-mono">{row.name}</td>
-                      <td className="px-3 py-2 font-mono">{row.owner}</td>
-                      <td className="px-3 py-2">{formatBytes(row.size_bytes)}</td>
-                      <td className="px-3 py-2">
-                        {row.attached_slug ? (
-                          <Link
-                            to={`/projects/${encodeURIComponent(row.attached_slug)}`}
-                            className="font-medium text-accent hover:underline"
-                          >
-                            {row.attached_slug}
-                          </Link>
-                        ) : (
-                          <StatusBadge variant="warning" label="Unattached" />
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          {!row.attached_slug ? (
-                            <button
-                              type="button"
-                              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={() => {
-                                setAdoptTarget(row)
-                                setAdoptSlug('')
-                                setPasswordMode('rotate')
-                                setKeepPassword('')
-                                setWriteDatabaseUrl(true)
-                              }}
-                            >
-                              Adopt
-                            </button>
-                          ) : null}
-                          {row.attached_slug ? (
-                            <button
-                              type="button"
-                              disabled={rotateMutation.isPending}
-                              className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              onClick={() => rotateMutation.mutate(row.attached_slug!)}
-                            >
-                              Rotate password
-                            </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            onClick={() => {
-                              setDropTarget(row)
-                              setDropConfirmText('')
-                              setDropRole(false)
-                            }}
-                          >
-                            Drop
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
+      ) : null}
 
       {adoptTarget ? (
         <section
-          className="space-y-3 rounded-lg border border-border bg-card p-4"
+          ref={adoptPanelRef}
+          className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6"
           aria-labelledby="adopt-heading"
         >
-          <h2 id="adopt-heading" className="text-sm font-semibold">
-            Adopt {adoptTarget.name}
-          </h2>
-          <div>
-            <label htmlFor="adopt-project" className="block text-sm font-medium">
-              Project (no database)
-            </label>
-            <select
-              id="adopt-project"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              value={adoptSlug}
-              onChange={(event) => setAdoptSlug(event.target.value)}
-            >
-              <option value="">Select project</option>
-              {adoptableProjects.map((project: ProjectSummary) => (
-                <option key={project.slug} value={project.slug}>
-                  {project.display_name} ({project.slug})
-                </option>
-              ))}
-            </select>
+          <div className="space-y-1">
+            <h2 id="adopt-heading" className="text-base font-semibold">
+              Adopt <span className="font-mono">{adoptTarget.name}</span>
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Attach this database to a project that does not have one yet.
+            </p>
           </div>
-          <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Password</legend>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="adopt-password-mode"
-                checked={passwordMode === 'rotate'}
-                onChange={() => setPasswordMode('rotate')}
-              />
-              Rotate password (recommended)
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="adopt-password-mode"
-                checked={passwordMode === 'keep'}
-                onChange={() => setPasswordMode('keep')}
-              />
-              Keep existing password
-            </label>
-          </fieldset>
-          {passwordMode === 'keep' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
             <div>
+              <label htmlFor="adopt-project" className="block text-sm font-medium">
+                Project
+              </label>
+              <select
+                id="adopt-project"
+                className={fieldClass}
+                value={adoptSlug}
+                onChange={(event) => setAdoptSlug(event.target.value)}
+              >
+                <option value="">Select a project</option>
+                {adoptableProjects.map((project: ProjectSummary) => (
+                  <option key={project.slug} value={project.slug}>
+                    {project.display_name} ({project.slug})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <fieldset className="space-y-2">
+              <legend className="text-sm font-medium">Password</legend>
+              <label className="flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="adopt-password-mode"
+                  checked={passwordMode === 'rotate'}
+                  onChange={() => setPasswordMode('rotate')}
+                />
+                Rotate password (recommended)
+              </label>
+              <label className="flex min-h-11 items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="adopt-password-mode"
+                  checked={passwordMode === 'keep'}
+                  onChange={() => setPasswordMode('keep')}
+                />
+                Keep the current password
+              </label>
+            </fieldset>
+          </div>
+          {passwordMode === 'keep' ? (
+            <div className="max-w-md">
               <label htmlFor="adopt-keep-password" className="block text-sm font-medium">
                 Current database password
               </label>
@@ -510,17 +466,17 @@ export function DatabasePage() {
                 autoComplete="off"
                 value={keepPassword}
                 onChange={(event) => setKeepPassword(event.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={fieldClass}
               />
             </div>
           ) : null}
-          <label className="flex items-center gap-2 text-sm">
+          <label className="flex min-h-11 items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={writeDatabaseUrl}
               onChange={(event) => setWriteDatabaseUrl(event.target.checked)}
             />
-            Write DATABASE_URL to project .env
+            Write DATABASE_URL into the project .env
           </label>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -530,16 +486,12 @@ export function DatabasePage() {
                 adoptMutation.isPending ||
                 (passwordMode === 'keep' && keepPassword.trim() === '')
               }
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className={primaryButtonClass}
               onClick={submitAdopt}
             >
               Adopt database
             </button>
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => setAdoptTarget(null)}
-            >
+            <button type="button" className={secondaryButtonClass} onClick={() => setAdoptTarget(null)}>
               Cancel
             </button>
           </div>
@@ -548,44 +500,48 @@ export function DatabasePage() {
 
       {dropTarget ? (
         <section
-          className="space-y-3 rounded-lg border border-destructive/40 bg-card p-4"
+          ref={dropPanelRef}
+          className="space-y-4 rounded-lg border border-destructive/40 bg-card p-4 sm:p-6"
           aria-labelledby="drop-heading"
         >
-          <h2 id="drop-heading" className="text-sm font-semibold text-destructive">
-            Drop {dropTarget.name}
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Type{' '}
-            <span className="font-mono text-foreground">{dropTarget.name}</span> to confirm. This
-            cannot be undone.
-          </p>
-          <label className="block text-sm font-medium" htmlFor={dropConfirmInputId}>
-            Type database name to confirm
-          </label>
-          <input
-            id={dropConfirmInputId}
-            type="text"
-            autoComplete="off"
-            spellCheck={false}
-            disabled={dropMutation.isPending}
-            value={dropConfirmText}
-            onChange={(event) => setDropConfirmText(event.target.value)}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-mono text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <label className="flex items-center gap-2 text-sm">
+          <div className="space-y-1">
+            <h2 id="drop-heading" className="text-base font-semibold text-destructive">
+              Drop <span className="font-mono">{dropTarget.name}</span>
+            </h2>
+            <p className="max-w-2xl text-sm text-muted-foreground">
+              This deletes the database and cannot be undone. Type{' '}
+              <span className="font-mono text-foreground">{dropTarget.name}</span> to confirm.
+            </p>
+          </div>
+          <div className="max-w-md">
+            <label className="block text-sm font-medium" htmlFor={dropConfirmInputId}>
+              Type database name to confirm
+            </label>
+            <input
+              id={dropConfirmInputId}
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={dropMutation.isPending}
+              value={dropConfirmText}
+              onChange={(event) => setDropConfirmText(event.target.value)}
+              className={`${fieldClass} font-mono`}
+            />
+          </div>
+          <label className="flex min-h-11 items-center gap-2 text-sm">
             <input
               type="checkbox"
               checked={dropRole}
               disabled={dropMutation.isPending}
               onChange={(event) => setDropRole(event.target.checked)}
             />
-            Drop role
+            Also drop the database role
           </label>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={!canDrop}
-              className="inline-flex items-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-destructive px-3 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
                 if (!dropTarget) {
                   return
@@ -605,7 +561,7 @@ export function DatabasePage() {
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className={secondaryButtonClass}
               onClick={() => {
                 setDropTarget(null)
                 setDropConfirmText('')
@@ -618,17 +574,129 @@ export function DatabasePage() {
         </section>
       ) : null}
 
+      {databasesQuery.isError ? (
+        <p className="text-sm text-destructive" role="alert">
+          Could not load databases.
+        </p>
+      ) : (
+        <section className="space-y-3" aria-labelledby="databases-heading">
+          <div className="flex flex-wrap items-end justify-between gap-2">
+            <h2 id="databases-heading" className="text-base font-semibold">
+              Databases
+            </h2>
+            {rows.length > 0 ? (
+              <p className="text-sm text-muted-foreground">{databaseSummary(rows)}</p>
+            ) : null}
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-border bg-card">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    Name
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    Owner
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    Size
+                  </th>
+                  <th scope="col" className="px-4 py-3 font-medium">
+                    Project
+                  </th>
+                  <th scope="col" className="px-4 py-3 text-right font-medium">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-sm text-muted-foreground">
+                      {databasesQuery.isPending ? 'Loading…' : 'No databases yet.'}
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((row) => (
+                    <tr key={row.name} className="hover:bg-muted/30">
+                      <td className="px-4 py-3 font-mono font-medium">{row.name}</td>
+                      <td className="px-4 py-3 font-mono text-muted-foreground">{row.owner}</td>
+                      <td className="px-4 py-3 tabular-nums">{formatBytes(row.size_bytes)}</td>
+                      <td className="px-4 py-3">
+                        {row.attached_slug ? (
+                          <Link
+                            to={`/projects/${encodeURIComponent(row.attached_slug)}`}
+                            className="font-medium text-accent hover:underline"
+                          >
+                            {row.attached_slug}
+                          </Link>
+                        ) : (
+                          <StatusBadge variant="warning" label="Unattached" />
+                        )}
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {!row.attached_slug ? (
+                            <button
+                              type="button"
+                              className={secondaryButtonClass}
+                              onClick={() => {
+                                setAdoptTarget(row)
+                                setAdoptSlug('')
+                                setPasswordMode('rotate')
+                                setKeepPassword('')
+                                setWriteDatabaseUrl(true)
+                              }}
+                            >
+                              Adopt
+                            </button>
+                          ) : null}
+                          {row.attached_slug ? (
+                            <button
+                              type="button"
+                              disabled={rotateMutation.isPending}
+                              className={secondaryButtonClass}
+                              onClick={() => rotateMutation.mutate(row.attached_slug!)}
+                            >
+                              Rotate password
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            className={dangerButtonClass}
+                            onClick={() => {
+                              setDropTarget(row)
+                              setDropConfirmText('')
+                              setDropRole(false)
+                            }}
+                          >
+                            Drop
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
       {attachedSlugs.length > 0 ? (
         <section className="space-y-3" aria-labelledby="dumps-heading">
-          <h2 id="dumps-heading" className="text-base font-semibold">
-            Dumps
-          </h2>
+          <div className="space-y-1">
+            <h2 id="dumps-heading" className="text-base font-semibold">
+              Dumps
+            </h2>
+            <p className="text-sm text-muted-foreground">Saved dumps for attached projects.</p>
+          </div>
           {attachedSlugs.map((slug, index) => {
             const dumpQuery = dumpQueries[index]
             const dumps = dumpQuery?.data ?? []
             return (
-              <div key={slug} className="space-y-2">
-                <h3 className="text-sm font-semibold">
+              <div key={slug} className="overflow-hidden rounded-lg border border-border bg-card">
+                <h3 className="border-b border-border px-4 py-3 text-sm font-semibold">
                   <Link
                     to={`/projects/${encodeURIComponent(slug)}`}
                     className="text-accent hover:underline"
@@ -636,22 +704,22 @@ export function DatabasePage() {
                     {slug}
                   </Link>
                 </h3>
-                <ul className="divide-y divide-border rounded-md border border-border">
+                <ul className="divide-y divide-border">
                   {dumps.length === 0 ? (
-                    <li className="px-3 py-3 text-sm text-muted-foreground">No dumps yet.</li>
+                    <li className="px-4 py-4 text-sm text-muted-foreground">No dumps yet.</li>
                   ) : (
                     dumps.map((dump) => (
                       <li
                         key={dump.name}
-                        className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-sm"
+                        className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-sm"
                       >
                         <span className="font-mono">{dump.name}</span>
-                        <span className="text-muted-foreground">
+                        <span className="text-muted-foreground tabular-nums">
                           {formatBytes(dump.size_bytes)} · {dump.created_at}
                         </span>
                         <a
                           href={databaseDumpDownloadUrl(slug, dump.name)}
-                          className="text-accent hover:underline"
+                          className="font-medium text-accent hover:underline"
                         >
                           Download
                         </a>
@@ -665,109 +733,123 @@ export function DatabasePage() {
         </section>
       ) : null}
 
-      <section className="space-y-3" aria-labelledby="restore-heading">
-        <h2 id="restore-heading" className="text-base font-semibold">
-          Cluster restore
-        </h2>
-        <div className="rounded-lg border border-destructive/40 bg-card p-4 text-sm">
-          <p className="font-semibold text-destructive">Before you restore</p>
-          <ul className="mt-2 list-inside list-disc space-y-1 text-muted-foreground">
-            <li>The file is validated as a gzip-compressed pg_dumpall archive.</li>
-            <li>
-              If the cluster is not empty, project containers that use it are stopped and a safety
-              dump is taken first.
-            </li>
-            <li>The dump is loaded; errors are recorded in the restore log.</li>
-            <li>The admin password is reset from the stack environment.</li>
-            <li>Project .env files are not changed automatically.</li>
-            <li>Restored role passwords stay as in the dump until you rotate them.</li>
-          </ul>
+      <section
+        className="overflow-hidden rounded-lg border border-border bg-card"
+        aria-labelledby="restore-heading"
+      >
+        <div className="border-b border-border px-4 py-4 sm:px-6">
+          <h2 id="restore-heading" className="text-base font-semibold">
+            Cluster restore
+          </h2>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            Replace every database on this cluster from one dump. Project files are left as they
+            are.
+          </p>
         </div>
 
         {!restoreJobId ? (
-          <>
-            <div
-              className={`rounded-lg border border-dashed p-4 transition-colors duration-200 ${
-                dragOver ? 'border-accent bg-muted/50' : 'border-border bg-card'
-              }`}
-              onDragOver={(event) => {
-                event.preventDefault()
-                setDragOver(true)
-              }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={onDrop}
-            >
-              <FileArrowUp weight="regular" aria-hidden className="size-6 text-foreground" />
-              <p className="mt-2 text-sm font-semibold">Upload cluster dump</p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Drag and drop a .sql or .sql.gz file, or choose a file. Step-up is required before
-                upload.
-              </p>
-              <button
-                type="button"
-                disabled={uploading}
-                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                Choose file
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={ACCEPT}
-                className="sr-only"
-                onChange={onFileInput}
-              />
+          <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+            <div>
+              <div className="flex gap-3 rounded-md border border-warning/50 bg-warning/10 px-4 py-3">
+                <Warning weight="regular" aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+                <div className="space-y-1 text-sm">
+                  <p className="font-medium text-foreground">Before you restore</p>
+                  <p className="text-muted-foreground">
+                    If the cluster already has data, project containers that use it are stopped and
+                    a safety dump is taken first. Nothing is overwritten until you confirm.
+                  </p>
+                </div>
+              </div>
+              <h3 className="mt-5 text-sm font-semibold">What the restore does</h3>
+              <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+                {RESTORE_STEPS.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
+              </ol>
             </div>
 
-            {uploading && uploadProgress ? (
-              <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-                <ProgressBar
-                  sent={uploadProgress.sent}
-                  total={uploadProgress.total}
-                  bytesPerSec={uploadProgress.bytesPerSec}
-                  etaSec={uploadProgress.etaSec}
+            <div className="space-y-3">
+              <div
+                className={`flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed px-4 py-6 text-center transition-colors duration-200 ${
+                  dragOver ? 'border-accent bg-muted/50' : 'border-border bg-background'
+                }`}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  setDragOver(true)
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={onDrop}
+              >
+                <FileArrowUp weight="regular" aria-hidden className="size-6 text-foreground" />
+                <p className="mt-3 text-sm font-semibold">Upload a cluster dump</p>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Drag a .sql or .sql.gz file here, or choose a file. You confirm your password
+                  before the upload starts.
+                </p>
+                <button
+                  type="button"
+                  disabled={uploading}
+                  className={`${secondaryButtonClass} mt-4`}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Choose file
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPT}
+                  aria-label="Cluster dump file"
+                  className="sr-only"
+                  onChange={onFileInput}
                 />
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={cancelUpload}
-                >
-                  <Trash weight="regular" aria-hidden className="size-4" />
-                  Cancel upload
-                </button>
               </div>
-            ) : null}
 
-            {uploadError ? (
-              <p className="text-sm text-destructive" role="alert">
-                {uploadError}
-              </p>
-            ) : null}
+              {uploading && uploadProgress ? (
+                <div className="space-y-3 rounded-lg border border-border bg-background p-4">
+                  <ProgressBar
+                    sent={uploadProgress.sent}
+                    total={uploadProgress.total}
+                    bytesPerSec={uploadProgress.bytesPerSec}
+                    etaSec={uploadProgress.etaSec}
+                  />
+                  <button type="button" className={secondaryButtonClass} onClick={cancelUpload}>
+                    <Trash weight="regular" aria-hidden className="size-4" />
+                    Cancel upload
+                  </button>
+                </div>
+              ) : null}
 
-            {uploadInfo ? (
-              <div className="space-y-3">
-                <UploadInfoPanel info={uploadInfo} />
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => {
-                    setConfirmDialogKey((value) => value + 1)
-                    setConfirmOpen(true)
-                  }}
-                >
-                  Restore from dump
-                </button>
-              </div>
-            ) : null}
-          </>
+              {uploadError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {uploadError}
+                </p>
+              ) : null}
+            </div>
+          </div>
         ) : (
-          <div className="space-y-3">
+          <div className="p-4 sm:p-6">
             <LogViewer key={restoreJobId} jobId={restoreJobId} onEnd={handleJobEnd} />
           </div>
         )}
+
+        {!restoreJobId && uploadInfo ? (
+          <div className="space-y-3 border-t border-border px-4 py-4 sm:px-6">
+            <UploadInfoPanel info={uploadInfo} />
+            <button
+              type="button"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-destructive px-4 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => {
+                setConfirmDialogKey((value) => value + 1)
+                setConfirmOpen(true)
+              }}
+            >
+              Restore from dump
+            </button>
+          </div>
+        ) : null}
+
         {!restoreJobId && jobEnd ? (
-          <div className="mt-3">
+          <div className="border-t border-border px-4 py-4 sm:px-6">
             <RestoreResultSummary
               end={jobEnd}
               onContinue={() => {
