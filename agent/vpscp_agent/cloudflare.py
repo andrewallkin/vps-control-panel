@@ -226,3 +226,67 @@ class CloudflareClient:
             )
         record_id = existing["id"]
         self._request("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
+
+    def get_custom_entrypoint(self, zone_id: str) -> tuple[str | None, list[dict[str, Any]], str | None]:
+        response = self._request_raw(
+            "GET",
+            f"/zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint",
+        )
+        if response.status_code == 404:
+            return None, [], None
+        body = self._parse_body(response)
+        if response.status_code == 403 or (not body.get("success") and self._is_auth_error(body)):
+            return None, [], "permission"
+        if not body.get("success"):
+            raise CloudflareError(self._error_message(body))
+        result = body.get("result")
+        if not isinstance(result, dict) or not result.get("id"):
+            raise CloudflareError("unexpected Cloudflare ruleset response")
+        rules = result.get("rules") or []
+        if not isinstance(rules, list):
+            rules = []
+        return str(result["id"]), [row for row in rules if isinstance(row, dict)], None
+
+    def create_custom_entrypoint(self, zone_id: str, rule: dict[str, Any]) -> dict[str, Any]:
+        result = self._request(
+            "POST",
+            f"/zones/{zone_id}/rulesets",
+            json={
+                "name": "default",
+                "kind": "zone",
+                "phase": "http_request_firewall_custom",
+                "rules": [rule],
+            },
+        )
+        if not isinstance(result, dict):
+            raise CloudflareError("unexpected Cloudflare ruleset response")
+        return result
+
+    def add_ruleset_rule(self, zone_id: str, ruleset_id: str, rule: dict[str, Any]) -> dict[str, Any]:
+        result = self._request(
+            "POST",
+            f"/zones/{zone_id}/rulesets/{ruleset_id}/rules",
+            json=rule,
+        )
+        if not isinstance(result, dict):
+            raise CloudflareError("unexpected Cloudflare rule response")
+        return result
+
+    def update_ruleset_rule(
+        self,
+        zone_id: str,
+        ruleset_id: str,
+        rule_id: str,
+        rule: dict[str, Any],
+    ) -> dict[str, Any]:
+        result = self._request(
+            "PUT",
+            f"/zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule_id}",
+            json=rule,
+        )
+        if not isinstance(result, dict):
+            raise CloudflareError("unexpected Cloudflare rule response")
+        return result
+
+    def delete_ruleset_rule(self, zone_id: str, ruleset_id: str, rule_id: str) -> None:
+        self._request("DELETE", f"/zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule_id}")

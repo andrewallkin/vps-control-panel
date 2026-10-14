@@ -147,4 +147,19 @@ describe('CloudflareSetupStep', () => {
     expect(updateServerSettings).not.toHaveBeenCalled()
     expect(onContinue).toHaveBeenCalledOnce()
   })
+
+  it('tells a new user to add Zone WAF Edit', () => {
+    renderWithClient(
+      <CloudflareSetupStep
+        configured={false}
+        zones={[]}
+        acmeEmail="ops@example.com"
+        onTokenSaved={() => undefined}
+        onContinue={() => undefined}
+      />,
+    )
+
+    expect(screen.getByText(/Zone WAF Edit/)).toBeInTheDocument()
+    expect(screen.getByText(/Zone:Read, DNS:Edit, and Zone WAF Edit/)).toBeInTheDocument()
+  })
 })
