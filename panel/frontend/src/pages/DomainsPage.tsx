@@ -141,11 +141,11 @@ export function DomainsPage() {
   const tableLoading = domainsQuery.isPending || panelHostnameQuery.isPending
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="flex w-full flex-col gap-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Domains</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-3xl text-sm text-muted-foreground">
             One wildcard certificate and one Cloudflare SSL mode cover every name in each
             registered zone.
           </p>
@@ -153,7 +153,7 @@ export function DomainsPage() {
         <button
           type="button"
           disabled={!canAdd}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          className="inline-flex shrink-0 items-center gap-2 self-start rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed lg:self-auto"
           onClick={() => setAddOpen(true)}
         >
           <Plus weight="regular" aria-hidden className="size-4" />
@@ -194,7 +194,7 @@ export function DomainsPage() {
       ) : null}
 
       {panelHostnameReady && panelHostname && !panelHostnameListed ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="max-w-3xl text-sm text-muted-foreground">
           <span>Panel hostname </span>
           <span className="font-mono">{panelHostname}</span>
         </p>
@@ -216,32 +216,16 @@ export function DomainsPage() {
             const zoneName = zoneNameById.get(row.zone_id) ?? row.zone_id
             return (
               <section key={row.name} className="overflow-hidden rounded-lg border border-border bg-card">
-                <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b border-border px-3 py-3">
+                <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 space-y-1">
                     <p className="text-xs font-medium text-muted-foreground">Zone</p>
-                    <p className="truncate font-mono text-sm font-medium">{zoneName}</p>
+                    <h2 className="truncate font-mono text-base font-semibold">{zoneName}</h2>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Certificate</p>
-                    <CertStatusBadge
-                      certStatus={row.cert_status}
-                      certExpiresAt={row.cert_expires_at}
-                      nowMs={nowMs}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">SSL mode</p>
-                    <SslModeBadge
-                      sslMode={row.ssl_mode}
-                      sslModeError={row.ssl_mode_error ?? null}
-                      warning={row.warning}
-                    />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2 self-center">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <button
                       type="button"
                       disabled={reissueMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors duration-200 hover:bg-muted cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors duration-200 hover:bg-muted cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => reissueMutation.mutate(row.name)}
                     >
                       <ArrowsClockwise weight="regular" aria-hidden className="size-4" />
@@ -250,7 +234,7 @@ export function DomainsPage() {
                     <button
                       type="button"
                       disabled={removeMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium whitespace-nowrap text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-3 py-2 text-sm font-medium whitespace-nowrap text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                       onClick={() => setRemoveTarget(row.name)}
                     >
                       <Trash weight="regular" aria-hidden className="size-4" />
@@ -258,22 +242,39 @@ export function DomainsPage() {
                     </button>
                   </div>
                 </div>
+                <dl className="grid divide-y divide-border border-b border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                  <div className="flex items-start justify-between gap-4 px-4 py-3">
+                    <dt className="text-sm text-muted-foreground">Certificate</dt>
+                    <dd className="text-right">
+                      <CertStatusBadge
+                        certStatus={row.cert_status}
+                        certExpiresAt={row.cert_expires_at}
+                        nowMs={nowMs}
+                      />
+                    </dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-4 px-4 py-3">
+                    <dt className="text-sm text-muted-foreground">SSL mode</dt>
+                    <dd className="min-w-0 text-right">
+                      <SslModeBadge
+                        sslMode={row.ssl_mode}
+                        sslModeError={row.ssl_mode_error ?? null}
+                        warning={row.warning}
+                      />
+                    </dd>
+                  </div>
+                </dl>
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[32rem] table-fixed text-left text-sm">
-                    <colgroup>
-                      <col className="w-[50%]" />
-                      <col className="w-[22%]" />
-                      <col className="w-[28%]" />
-                    </colgroup>
+                  <table className="w-full min-w-[32rem] text-left text-sm">
                     <thead className="border-b border-border bg-muted/40 text-muted-foreground">
                       <tr>
-                        <th scope="col" className="px-3 py-2 font-medium">
+                        <th scope="col" className="min-w-0 px-3 py-2 font-medium">
                           Name
                         </th>
-                        <th scope="col" className="px-3 py-2 font-medium">
+                        <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                           Type
                         </th>
-                        <th scope="col" className="px-3 py-2 font-medium">
+                        <th scope="col" className="min-w-0 px-3 py-2 font-medium">
                           Use
                         </th>
                       </tr>
@@ -281,11 +282,11 @@ export function DomainsPage() {
                     <tbody className="divide-y divide-border">
                       {names.map((entry) => (
                         <tr key={entry.fqdn}>
-                          <td className="px-3 py-2 font-mono text-sm break-all">{entry.fqdn}</td>
-                          <td className="px-3 py-2 whitespace-nowrap">
+                          <td className="min-w-0 px-3 py-2 font-mono text-sm break-all">{entry.fqdn}</td>
+                          <td className="whitespace-nowrap px-3 py-2">
                             {hostnameType(row.name, entry.fqdn)}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">{hostnameUse(entry)}</td>
+                          <td className="min-w-0 px-3 py-2 text-muted-foreground">{hostnameUse(entry)}</td>
                         </tr>
                       ))}
                     </tbody>
