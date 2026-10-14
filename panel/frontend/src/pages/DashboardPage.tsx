@@ -50,13 +50,18 @@ export function DashboardPage() {
   )
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+    <div className="flex w-full flex-col gap-6">
+      <div className="space-y-1">
+        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          Live host metrics, Docker disk usage, and container resource consumption.
+        </p>
+      </div>
 
       <StatusStrip summary={summaryQuery.data} />
       <WarningsList warnings={summaryQuery.data?.warnings ?? []} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid items-stretch gap-4 lg:grid-cols-2">
         <MetricCard
           title="CPU"
           dataUpdatedAt={currentQuery.dataUpdatedAt}
@@ -69,15 +74,28 @@ export function DashboardPage() {
           tableRows={chartTableRows(cpuChart, percentChartFormatter)}
         >
           {current ? (
-            <div className="space-y-1 text-base">
-              <p>{formatPercent(current.cpu_percent)}</p>
-              <p className="text-sm text-muted-foreground">
-                <span className="text-foreground">
-                  1 min {current.load1.toFixed(2)} · 5 min{' '}
-                  {current.load5.toFixed(2)} · 15 min{' '}
-                  {current.load15.toFixed(2)} · {current.cpu_count} cores
-                </span>
+            <div className="space-y-3">
+              <p className="font-mono text-2xl tracking-tight">
+                {formatPercent(current.cpu_percent)}
               </p>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+                <div>
+                  <dt className="text-xs text-muted-foreground">1 min</dt>
+                  <dd className="font-mono">{current.load1.toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">5 min</dt>
+                  <dd className="font-mono">{current.load5.toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">15 min</dt>
+                  <dd className="font-mono">{current.load15.toFixed(2)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Cores</dt>
+                  <dd className="font-mono">{current.cpu_count}</dd>
+                </div>
+              </dl>
             </div>
           ) : (
             '—'
@@ -96,14 +114,26 @@ export function DashboardPage() {
           tableRows={chartTableRows(memChart, percentChartFormatter)}
         >
           {current ? (
-            <div className="space-y-1 text-base">
-              <p>
-                {formatBytes(current.mem_used)} / {formatBytes(current.mem_total)}
+            <div className="space-y-3">
+              <p className="font-mono text-2xl tracking-tight">
+                {formatBytes(current.mem_used)}
+                <span className="text-base text-muted-foreground">
+                  {' '}
+                  / {formatBytes(current.mem_total)}
+                </span>
               </p>
-              <p className="text-sm text-muted-foreground">
-                available {formatBytes(current.mem_available)} · swap{' '}
-                {formatBytes(current.swap_used)} / {formatBytes(current.swap_total)}
-              </p>
+              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                <div>
+                  <dt className="text-xs text-muted-foreground">Available</dt>
+                  <dd className="font-mono">{formatBytes(current.mem_available)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted-foreground">Swap</dt>
+                  <dd className="font-mono">
+                    {formatBytes(current.swap_used)} / {formatBytes(current.swap_total)}
+                  </dd>
+                </div>
+              </dl>
             </div>
           ) : (
             '—'
@@ -122,17 +152,26 @@ export function DashboardPage() {
           tableRows={chartTableRows(diskChart, percentChartFormatter)}
         >
           {current?.disks.length ? (
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-3">
               {current.disks.map((disk) => (
-                <li key={disk.path} className="flex flex-wrap justify-between gap-2">
-                  <span className="font-mono">
+                <li key={disk.path} className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
                     {diskMountLabel(disk.path)}
                     <span className="sr-only"> ({disk.path})</span>
-                  </span>
-                  <span>
-                    {formatBytes(disk.used)} used · {formatBytes(disk.free)} free (
-                    {formatPercent(disk.percent)})
-                  </span>
+                  </p>
+                  <p className="font-mono text-2xl tracking-tight">
+                    {formatPercent(disk.percent)}
+                  </p>
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Used</dt>
+                      <dd className="font-mono">{formatBytes(disk.used)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-xs text-muted-foreground">Free</dt>
+                      <dd className="font-mono">{formatBytes(disk.free)}</dd>
+                    </div>
+                  </dl>
                 </li>
               ))}
             </ul>
@@ -141,16 +180,18 @@ export function DashboardPage() {
           )}
         </MetricCard>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex h-full flex-col gap-4">
           <DockerDiskCard
             df={dockerDfQuery.data}
             dataUpdatedAt={dockerDfQuery.dataUpdatedAt}
             isLoading={dockerDfQuery.isLoading}
           />
-          <UptimeCard
-            uptimeSeconds={current?.uptime_seconds}
-            dataUpdatedAt={currentQuery.dataUpdatedAt}
-          />
+          <div className="mt-auto">
+            <UptimeCard
+              uptimeSeconds={current?.uptime_seconds}
+              dataUpdatedAt={currentQuery.dataUpdatedAt}
+            />
+          </div>
         </div>
       </div>
 

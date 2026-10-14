@@ -13,7 +13,7 @@ export function UptimeCard({ uptimeSeconds, dataUpdatedAt }: UptimeCardProps) {
   const isStale = useQueryStale(dataUpdatedAt)
 
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-4">
+    <section className="shrink-0 space-y-3 rounded-lg border border-border bg-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <h2 className="text-sm font-semibold text-muted-foreground">Uptime</h2>
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
