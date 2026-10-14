@@ -350,6 +350,62 @@ async def test_run_creation_skips_discovery_when_user_services_exist(db_session)
     assert compose_calls == []
 
 
+@pytest.mark.asyncio
+async def test_run_creation_pauses_for_ssh_deploy_key_before_clone(db_session):
+    calls: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request.url.path)
+        path = request.url.path
+        if path == "/v1/projects" and request.method == "POST":
+            return httpx.Response(200, json={"slug": "myapp"})
+        if path == "/v1/projects/myapp/deploy-key" and request.method == "POST":
+            return httpx.Response(200, json={"public_key": "ssh-ed25519 AAAA vpscp-myapp"})
+        if path == "/v1/projects/myapp/clone" and request.method == "POST":
+            return httpx.Response(200, json={"job_id": "job-1"})
+        if path == "/v1/jobs/job-1" and request.method == "GET":
+            return httpx.Response(200, json={"status": "succeeded"})
+        if path == "/v1/ports/allocate" and request.method == "POST":
+            return httpx.Response(200, json={"port": 10001})
+        if path == "/v1/db/create" and request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"db_name": "myapp", "db_user": "myapp_user", "password": "secret"},
+            )
+        if path == "/v1/projects/myapp/env" and request.method == "PUT":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/nginx/sites" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/dns/records/upsert" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404, json={"detail": f"unexpected {request.method} {path}"})
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(db_session, repo_url="git@github.com:acme/myapp.git")
+
+    await run_creation(db_session, agent, "myapp")
+
+    project = db_session.get(Project, "myapp")
+    assert project is not None
+    state = json.loads(project.creation_state)
+    assert state["status"] == "awaiting_deploy_key"
+    assert state["public_key"] == "ssh-ed25519 AAAA vpscp-myapp"
+    assert "/v1/projects/myapp/clone" not in calls
+    clone = next(step for step in state["steps"] if step["name"] == "clone")
+    assert clone["status"] == "pending"
+
+    state["deploy_key_confirmed"] = True
+    project.creation_state = json.dumps(state)
+    db_session.commit()
+
+    await run_creation(db_session, agent, "myapp")
+
+    db_session.refresh(project)
+    state = json.loads(project.creation_state)
+    assert state["status"] == "ready"
+    assert "/v1/projects/myapp/clone" in calls
+
+
 def test_delete_project_requires_csrf(client, admin_user, frozen_time, db_session):
     login(client, admin_user, frozen_time)
     _make_project(db_session, slug="delme")

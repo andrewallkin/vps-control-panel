@@ -83,6 +83,64 @@ def test_retry_create_unblocks_stranded_running(
     assert resp.status_code == 202, resp.text
 
 
+def test_retry_create_rejects_unconfirmed_deploy_key(
+    client_factory, admin_user, frozen_time, db_session
+):
+    from vpscp_panel.project_creation import initial_creation_state
+
+    state = initial_creation_state()
+    state["status"] = "awaiting_deploy_key"
+    state["public_key"] = "ssh-ed25519 AAAA vpscp-myapp"
+    for step in state["steps"]:
+        if step["name"] in ("register", "deploy_key"):
+            step["status"] = "done"
+    db_session.add(
+        Project(
+            slug="myapp",
+            display_name="My App",
+            repo_url="git@github.com:me/myapp.git",
+            branch="main",
+            compose_file="docker-compose.yml",
+            deploy_mode="build",
+            docker_hub_repo=None,
+            database_mode="none",
+            db_name=None,
+            db_user=None,
+            write_database_url=False,
+            migration_command=None,
+            migration_service=None,
+            health_check_url=None,
+            user_env="",
+            creation_state=json.dumps(state),
+            created_at=frozen_time,
+        )
+    )
+    db_session.commit()
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/projects/myapp/test-access":
+            return httpx.Response(
+                200,
+                json={"ok": False, "message": "Permission denied (publickey)."},
+            )
+        return httpx.Response(404, json={"detail": "unexpected"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.post(
+            "/api/projects/myapp/retry-create",
+            headers=_csrf(auth),
+        )
+
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"] == "Permission denied (publickey)."
+    project = db_session.get(Project, "myapp")
+    assert project is not None
+    saved = json.loads(project.creation_state)
+    assert saved["status"] == "awaiting_deploy_key"
+    assert saved.get("deploy_key_confirmed") is not True
+
+
 def test_create_project_persists_docker_hub_repo(
     client_factory, admin_user, frozen_time, db_session
 ):

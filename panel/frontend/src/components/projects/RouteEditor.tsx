@@ -45,44 +45,54 @@ export function RouteEditor({ routes, onChange, onValidationChange }: RouteEdito
 
   return (
     <div className="space-y-4">
+      <p className="text-sm text-muted-foreground">
+        Each route forwards one URL prefix to a compose port. The path is not rewritten, so{' '}
+        <span className="font-mono text-foreground">/</span> matches every path. Port env var is
+        that port&apos;s variable in the compose file, such as{' '}
+        <span className="font-mono text-foreground">WEB_PORT</span>. Add another route only when a
+        different prefix must use a different port, such as{' '}
+        <span className="font-mono text-foreground">/api</span> and{' '}
+        <span className="font-mono text-foreground">API_PORT</span>.
+      </p>
       {routes.map((route, index) => (
-        <div
-          key={index}
-          className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 sm:flex-row sm:items-end"
-        >
-          <div className="min-w-0 flex-1 space-y-1">
-            <label className="block text-sm font-medium" htmlFor={`route-path-${index}`}>
-              Path prefix
-            </label>
-            <input
-              id={`route-path-${index}`}
-              type="text"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
-              value={route.path_prefix}
-              onChange={(event) => updateRoute(index, { path_prefix: event.target.value })}
-            />
+        <div key={index} className="space-y-3 rounded-md border border-border bg-card p-4">
+          <div className="grid gap-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(12rem,1fr)_auto] sm:items-end">
+            <div className="min-w-0 space-y-1">
+              <label className="block text-sm font-medium" htmlFor={`route-path-${index}`}>
+                Path prefix
+              </label>
+              <input
+                id={`route-path-${index}`}
+                type="text"
+                placeholder="/"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                value={route.path_prefix}
+                onChange={(event) => updateRoute(index, { path_prefix: event.target.value })}
+              />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <label className="block text-sm font-medium" htmlFor={`route-port-${index}`}>
+                Port env var
+              </label>
+              <input
+                id={`route-port-${index}`}
+                type="text"
+                placeholder="WEB_PORT"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                value={route.port_env_var}
+                onChange={(event) => updateRoute(index, { port_env_var: event.target.value })}
+              />
+            </div>
+            <button
+              type="button"
+              disabled={routes.length <= 1}
+              className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={() => removeRoute(index)}
+            >
+              <Trash weight="regular" aria-hidden className="size-4" />
+              Remove
+            </button>
           </div>
-          <div className="min-w-0 flex-1 space-y-1">
-            <label className="block text-sm font-medium" htmlFor={`route-port-${index}`}>
-              Port env var
-            </label>
-            <input
-              id={`route-port-${index}`}
-              type="text"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
-              value={route.port_env_var}
-              onChange={(event) => updateRoute(index, { port_env_var: event.target.value })}
-            />
-          </div>
-          <button
-            type="button"
-            disabled={routes.length <= 1}
-            className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => removeRoute(index)}
-          >
-            <Trash weight="regular" aria-hidden className="size-4" />
-            Remove
-          </button>
 
           <div className="flex flex-wrap items-center gap-4 border-t border-border pt-3">
             <label className="flex items-center gap-2 text-sm">

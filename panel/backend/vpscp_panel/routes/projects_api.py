@@ -647,6 +647,19 @@ async def retry_create(
     if slug in _creation_tasks:
         raise HTTPException(status_code=409, detail="creation not retryable")
 
+    if state.get("status") == "awaiting_deploy_key":
+        result = await agent.post(f"/v1/projects/{slug}/test-access")
+        message = "repository access failed"
+        if isinstance(result, dict) and isinstance(result.get("message"), str):
+            message = result["message"]
+        if not isinstance(result, dict) or not result.get("ok"):
+            raise HTTPException(status_code=409, detail=message)
+        state["deploy_key_confirmed"] = True
+        state["status"] = "running"
+        project.creation_state = json.dumps(state)
+        db.add(project)
+        db.commit()
+
     async def _background_retry() -> None:
         if db_module.SessionLocal is None:
             return

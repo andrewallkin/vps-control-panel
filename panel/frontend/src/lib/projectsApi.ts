@@ -307,5 +307,8 @@ export function projectCreationStatusLabel(status: string): string {
   if (status === 'running') {
     return 'Running'
   }
+  if (status === 'awaiting_deploy_key') {
+    return 'Add deploy key'
+  }
   return status
 }
