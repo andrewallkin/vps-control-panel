@@ -84,8 +84,8 @@ export function CloudflareSetupStep({
         Cloudflare
       </h2>
       <p className="text-sm text-muted-foreground">
-        Paste an API token with Zone:Read and DNS:Edit for the zones you will use. Zone
-        Settings:Read is optional and enables SSL mode warnings on the Domains page.
+        Paste an API token with Zone:Read, DNS:Edit, and Zone WAF Edit for the zones you will
+        use. Zone Settings:Read is optional and enables SSL mode warnings on the Domains page.
       </p>
 
       <div className="space-y-2">
