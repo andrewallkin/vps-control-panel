@@ -178,11 +178,11 @@ export function FirewallPage() {
   })
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
+    <div className="flex w-full flex-col gap-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Firewall</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="max-w-3xl text-sm text-muted-foreground">
             Who can reach this server, and which programs are listening.
           </p>
         </div>
@@ -200,28 +200,41 @@ export function FirewallPage() {
         className="space-y-3 rounded-lg border border-border bg-card p-4"
         aria-labelledby="cf-only-heading"
       >
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="space-y-1">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
+          <div className="min-w-0 flex-1 space-y-1">
             <h2 id="cf-only-heading" className="text-base font-semibold">
               Cloudflare-only mode
             </h2>
-            <p className="text-sm text-muted-foreground">{CF_ONLY_SUMMARY}</p>
+            <p className="max-w-3xl text-sm text-muted-foreground">{CF_ONLY_SUMMARY}</p>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
-            <input
-              type="checkbox"
-              className="size-4 rounded border-border accent-accent"
-              checked={cfOnly}
-              disabled={cfMutation.isPending || rulesQuery.isPending}
-              onChange={(event) => {
-                if (event.target.checked) {
-                  setCfConfirmOn(true)
-                  return
-                }
-                cfMutation.mutate(false)
-              }}
-            />
-            Cloudflare-only
+          <label className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-3 self-start rounded-md">
+            <span className="text-sm font-medium">{cfOnly ? 'On' : 'Off'}</span>
+            <span className="relative inline-flex h-6 w-11 items-center">
+              <input
+                type="checkbox"
+                role="switch"
+                aria-checked={cfOnly}
+                aria-labelledby="cf-only-heading"
+                className="peer sr-only"
+                checked={cfOnly}
+                disabled={cfMutation.isPending || rulesQuery.isPending}
+                onChange={(event) => {
+                  if (event.target.checked) {
+                    setCfConfirmOn(true)
+                    return
+                  }
+                  cfMutation.mutate(false)
+                }}
+              />
+              <span
+                aria-hidden
+                className="absolute inset-0 rounded-full border border-border bg-muted transition-colors duration-200 peer-checked:border-accent peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-disabled:opacity-50"
+              />
+              <span
+                aria-hidden
+                className="pointer-events-none absolute left-0.5 size-5 rounded-full bg-background shadow-sm transition-transform duration-200 peer-checked:translate-x-5 peer-disabled:opacity-50"
+              />
+            </span>
           </label>
         </div>
       </section>
@@ -236,8 +249,10 @@ export function FirewallPage() {
         <h2 id="fw-rules-heading" className="text-base font-semibold">
           Rules
         </h2>
-        <p className="text-sm text-muted-foreground">{SSH_DELETE_HELPER}</p>
-        <p className="text-sm text-muted-foreground">{cfOnly ? CF_LOCK_REASON : WEB_LOCK_REASON}</p>
+        <p className="max-w-3xl text-sm text-muted-foreground">{SSH_DELETE_HELPER}</p>
+        <p className="max-w-3xl text-sm text-muted-foreground">
+          {cfOnly ? CF_LOCK_REASON : WEB_LOCK_REASON}
+        </p>
         {rulesQuery.isError ? (
           <p className="text-sm text-destructive" role="alert">
             Could not load rules.
@@ -245,28 +260,28 @@ export function FirewallPage() {
         ) : null}
 
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full text-left text-sm">
+          <table className="w-full min-w-[800px] text-left text-sm">
             <thead className="border-b border-border bg-muted/40 text-muted-foreground">
               <tr>
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                   Port / range
                 </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                   Family
                 </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                   Proto
                 </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                   Action
                 </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
                   Source
                 </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
                   Comment
                 </th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">
+                <th scope="col" className="whitespace-nowrap px-3 py-2 text-right font-medium">
                   <span className="sr-only">Actions</span>
                 </th>
               </tr>
@@ -286,15 +301,23 @@ export function FirewallPage() {
                 const sourceLabel = formatSource(rule.from)
                 return (
                   <tr key={rule.number}>
-                    <td className="px-3 py-2 font-mono text-xs">{portLabel}</td>
-                    <td className="px-3 py-2">{formatFamily(rule.v6)}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{rule.proto}</td>
-                    <td className="px-3 py-2">{formatAction(rule.action)}</td>
-                    <td className={sourceLabel === rule.from ? 'px-3 py-2 font-mono text-xs' : 'px-3 py-2'}>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{portLabel}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatFamily(rule.v6)}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{rule.proto}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatAction(rule.action)}</td>
+                    <td
+                      className={
+                        sourceLabel === rule.from
+                          ? 'min-w-[8rem] break-all px-3 py-2 font-mono text-xs'
+                          : 'min-w-[8rem] px-3 py-2'
+                      }
+                    >
                       {sourceLabel}
                     </td>
-                    <td className="px-3 py-2 text-muted-foreground">{rule.comment || '—'}</td>
-                    <td className="px-3 py-2">
+                    <td className="min-w-[8rem] break-words px-3 py-2 text-muted-foreground">
+                      {rule.comment || '—'}
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2">
                       <div className="flex items-center justify-end gap-2">
                         <span className="inline-flex w-[7.5rem] shrink-0 items-center justify-end">
                           {locked ? (
@@ -340,7 +363,7 @@ export function FirewallPage() {
         <h2 id="fw-exposure-heading" className="text-base font-semibold">
           Exposure report
         </h2>
-        <p className="text-sm text-muted-foreground">{EXPOSURE_GUIDANCE}</p>
+        <p className="max-w-3xl text-sm text-muted-foreground">{EXPOSURE_GUIDANCE}</p>
         {exposureQuery.isError ? (
           <p className="text-sm text-destructive" role="alert">
             Could not load exposure report.
@@ -350,25 +373,25 @@ export function FirewallPage() {
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Reachable from the internet</h3>
           <div className="overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="w-full text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-border bg-muted/40 text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                     Port
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                     Protocol
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="min-w-[6rem] px-3 py-2 font-medium">
                     Service
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
                     Process
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="min-w-[6rem] px-3 py-2 font-medium">
                     Reach
                   </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                     Status
                   </th>
                 </tr>
@@ -385,14 +408,14 @@ export function FirewallPage() {
                   const names = serviceAndProcess(row.process)
                   return (
                   <tr key={row.key}>
-                    <td className="px-3 py-2 font-mono text-xs">{row.port}</td>
-                    <td className="px-3 py-2 font-mono text-xs">{row.proto}</td>
-                    <td className="px-3 py-2">{names.service}</td>
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.port}</td>
+                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.proto}</td>
+                    <td className="min-w-[6rem] px-3 py-2">{names.service}</td>
+                    <td className="min-w-[8rem] break-all px-3 py-2 font-mono text-xs text-muted-foreground">
                       {names.program}
                     </td>
-                    <td className="px-3 py-2">{row.reach}</td>
-                    <td className="px-3 py-2">
+                    <td className="min-w-[6rem] px-3 py-2">{row.reach}</td>
+                    <td className="whitespace-nowrap px-3 py-2">
                       <PublicStatus expected={row.expected} port={row.port} />
                     </td>
                   </tr>
@@ -417,29 +440,29 @@ export function FirewallPage() {
             <summary className="cursor-pointer text-sm font-medium">
               Only on this machine ({exposure.localListeners.length})
             </summary>
-            <p className="text-sm text-muted-foreground">
+            <p className="max-w-3xl text-sm text-muted-foreground">
               These programs are not reachable from the internet.
             </p>
             <div className="overflow-x-auto rounded-lg border border-border bg-card">
-              <table className="w-full text-left text-sm">
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="border-b border-border bg-muted/40 text-muted-foreground">
                   <tr>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
                       Address
                     </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                       Port
                     </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
                       Protocol
                     </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    <th scope="col" className="min-w-[6rem] px-3 py-2 font-medium">
                       Service
                     </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
                       Process
                     </th>
-                    <th scope="col" className="px-3 py-2 font-medium">
+                    <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
                       Status
                     </th>
                   </tr>
@@ -449,19 +472,19 @@ export function FirewallPage() {
                     const names = serviceAndProcess(row.process)
                     return (
                     <tr key={row.key}>
-                      <td className="px-3 py-2">
+                      <td className="min-w-[8rem] break-all px-3 py-2">
                         <span className="font-mono text-xs">{row.address}</span>
                         {row.scopeLabel ? (
                           <span className="ml-1.5 text-xs text-muted-foreground">{row.scopeLabel}</span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs">{row.port}</td>
-                      <td className="px-3 py-2 font-mono text-xs">{row.proto}</td>
-                      <td className="px-3 py-2">{names.service}</td>
-                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.port}</td>
+                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.proto}</td>
+                      <td className="min-w-[6rem] px-3 py-2">{names.service}</td>
+                      <td className="min-w-[8rem] break-all px-3 py-2 font-mono text-xs text-muted-foreground">
                         {names.program}
                       </td>
-                      <td className="px-3 py-2 text-sm text-muted-foreground">
+                      <td className="min-w-[8rem] px-3 py-2 text-sm text-muted-foreground">
                         {row.blockedByFirewall ? 'Blocked by the firewall' : 'Local only'}
                       </td>
                     </tr>
