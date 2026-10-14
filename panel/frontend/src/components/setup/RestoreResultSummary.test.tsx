@@ -37,4 +37,17 @@ describe('RestoreResultSummary', () => {
     await user.click(screen.getByRole('button', { name: /try again/i }))
     expect(onRetry).toHaveBeenCalledOnce()
   })
+
+  it('names the safety dump when a failed restore saved one', () => {
+    const end = endPayload('failed', 'restore failed')
+    end.result = {
+      safety_dump: '/var/lib/vpscp/restore/safety-20261014T120000Z.sql.gz',
+    }
+    render(<RestoreResultSummary end={end} onRetry={() => undefined} />)
+
+    expect(screen.getByText(/previous cluster was saved on this server/i)).toBeInTheDocument()
+    expect(
+      screen.getByText('/var/lib/vpscp/restore/safety-20261014T120000Z.sql.gz'),
+    ).toBeInTheDocument()
+  })
 })

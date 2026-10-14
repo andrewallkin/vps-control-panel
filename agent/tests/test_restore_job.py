@@ -457,7 +457,7 @@ def test_restore_failure_still_restarts_projects_and_resets_admin(restore_job_en
 
     runner.pipe_through = explode  # type: ignore[method-assign]
 
-    with pytest.raises(RuntimeError, match="psql died"):
+    with pytest.raises(RuntimeError, match="psql died") as raised:
         restore_cluster(
             _ctx(db),
             settings=settings,
@@ -467,6 +467,8 @@ def test_restore_failure_still_restarts_projects_and_resets_admin(restore_job_en
             upload_id=upload_id,
             overwrite=True,
         )
+    safety_dump = getattr(raised.value, "job_result", {}).get("safety_dump")
+    assert isinstance(safety_dump, str) and safety_dump.endswith(".sql.gz")
 
     args_seen = [c["args"] for c in runner.calls]
     assert any(a[:5] == ["docker", "compose", "-p", "budgethq", "stop"] for a in args_seen)

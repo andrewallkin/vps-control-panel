@@ -489,6 +489,12 @@ def _dump_byte_chunks(path: Path, *, passphrase: str | None = None) -> Iterator[
             yield chunk
 
 
+def _attach_safety_dump(exc: Exception, safety_dump: Path | None) -> None:
+    """Keep the pre-restore snapshot path on a failed job so the panel can show it."""
+    if safety_dump is not None:
+        exc.job_result = {"safety_dump": str(safety_dump)}  # type: ignore[attr-defined]
+
+
 def _safety_dump_path(restore_dir: Path) -> Path:
     ts = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     return restore_dir / f"safety-{ts}.sql.gz"
@@ -590,9 +596,13 @@ def restore_cluster(
 
     returncode = 0
     try:
-        returncode = runner.pipe_through(
-            load_args, _dump_byte_chunks(dump_path, passphrase=passphrase), on_line, 120
-        )
+        try:
+            returncode = runner.pipe_through(
+                load_args, _dump_byte_chunks(dump_path, passphrase=passphrase), on_line, 120
+            )
+        except Exception as exc:
+            _attach_safety_dump(exc, safety_dump)
+            raise
     finally:
         # A failed or interrupted load must not strand stopped project
         # containers or leave the admin password as the dump set it. The
@@ -608,13 +618,17 @@ def restore_cluster(
 
     fatal, benign = _classify_load_errors(error_lines, admin)
     if returncode != 0:
-        raise ValueError(f"restore failed: psql exited with code {returncode}")
+        exc = ValueError(f"restore failed: psql exited with code {returncode}")
+        _attach_safety_dump(exc, safety_dump)
+        raise exc
     if fatal or fatal_estimate:
         # fatal_estimate counts ERROR lines beyond the 200-line capture cap so
         # 200 benign lines cannot mask later fatal ones.
         total = len(fatal) + fatal_estimate
         preview = "; ".join(fatal[:5]) or "(errors beyond capture cap)"
-        raise ValueError(f"restore failed: {total} error(s) during load: {preview}")
+        exc = ValueError(f"restore failed: {total} error(s) during load: {preview}")
+        _attach_safety_dump(exc, safety_dump)
+        raise exc
 
     databases_out = list_databases(psql, db)
     roles_out = list_roles(psql)
