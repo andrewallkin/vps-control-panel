@@ -76,9 +76,9 @@ export function Layout() {
   )
 
   return (
-    <div className="h-dvh overflow-hidden bg-background text-foreground">
-      <div className="flex h-full min-h-0">
-        <aside className="hidden h-full w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-card lg:flex">
+    <div className="fixed inset-0 flex overflow-hidden overscroll-none bg-background text-foreground">
+      <div className="flex min-h-0 w-full flex-1">
+        <aside className="hidden min-h-0 w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-card lg:flex">
           <div className="border-b border-border px-4 py-4">
             <Link to="/" className="text-sm font-semibold tracking-tight cursor-pointer">
               VPS Control Panel
@@ -89,7 +89,7 @@ export function Layout() {
           </nav>
         </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
             <button
               type="button"
@@ -139,7 +139,7 @@ export function Layout() {
             </div>
           ) : null}
 
-          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8">
             <Outlet />
           </main>
         </div>
