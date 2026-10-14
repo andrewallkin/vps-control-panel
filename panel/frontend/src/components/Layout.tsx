@@ -2,6 +2,7 @@ import {
   CloudArrowUp,
   Database,
   Gauge,
+  Funnel,
   Globe,
   Gear,
   List,
@@ -51,6 +52,10 @@ export function Layout() {
       <NavLink to="/domains" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <Globe weight="regular" aria-hidden className="size-5 shrink-0" />
         Domains
+      </NavLink>
+      <NavLink to="/rules" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+        <Funnel weight="regular" aria-hidden className="size-5 shrink-0" />
+        Rules
       </NavLink>
       <NavLink to="/firewall" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
         <Shield weight="regular" aria-hidden className="size-5 shrink-0" />

@@ -504,8 +504,8 @@ export function SettingsPage() {
         {replaceOpen ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Required permissions: Zone:Read and DNS:Edit for your zones. Zone Settings:Read is
-              optional (SSL mode warnings).
+              Required permissions: Zone:Read, DNS:Edit, and Zone WAF Edit for your zones. Zone
+              Settings:Read is optional (SSL mode warnings).
             </p>
             <label htmlFor="settings-cf-token" className="block text-sm font-medium">
               API token

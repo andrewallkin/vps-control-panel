@@ -20,6 +20,7 @@ from vpscp_agent.nginx_apply import NginxTestError
 from vpscp_agent.pg import Psql
 from vpscp_agent.registry import DockerHubLoginError
 from vpscp_agent.routes import backup as backup_routes
+from vpscp_agent.routes import cloudflare_rules as cloudflare_rules_routes
 from vpscp_agent.routes import compose as compose_routes
 from vpscp_agent.routes import database as database_routes
 from vpscp_agent.routes import deploy as deploy_routes
@@ -119,6 +120,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
                 "/v1/registry",
                 "/v1/firewall",
                 "/v1/github",
+                "/v1/cloudflare",
             )
         ):
             return JSONResponse(status_code=400, content={"detail": str(exc)})
@@ -142,6 +144,7 @@ def create_app(settings: Settings, runner=run_command) -> FastAPI:
     app.include_router(docker_routes.router)
     app.include_router(server_routes.router)
     app.include_router(dns_routes.router)
+    app.include_router(cloudflare_rules_routes.router)
     app.include_router(tls_routes.router)
     app.include_router(nginx_routes.router)
     app.include_router(projects_routes.router)

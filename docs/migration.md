@@ -38,7 +38,7 @@ Fill in your new apex domain wherever you see `<new-domain>` (do not commit real
 ## 3. Panel setup wizard (global)
 
 - [ ] **Database:** you may **Start empty** and continue, or upload a dump directly in the wizard (restore-in-wizard is supported). Either way the final cutover dump is best loaded from **Database → Cluster restore** after setup, as late as possible before go-live. Cluster restore now **refuses a non-empty cluster** unless you tick **Overwrite existing data** — the dialog lists exactly what would be dropped first. A restore that hits errors **fails loudly** instead of reporting success; the wizard shows **Try again** if it does.
-- [ ] **Cloudflare:** Create an API token with **Zone:Read** and **DNS:Edit** on the zones you will use (**Zone Settings:Read** is optional). Paste it in the wizard; confirm zones list loads.
+- [ ] **Cloudflare:** Create an API token with **Zone:Read**, **DNS:Edit**, and **Zone WAF Edit** on the zones you will use (**Zone Settings:Read** is optional). Paste it in the wizard; confirm zones list loads.
 - [ ] **ACME email:** the wizard's Cloudflare step collects the Let's Encrypt contact email. Set it **before** registering any domain — certificate issuance fails without it. The same field lives in **Settings → Server** after setup.
 - [ ] **Domains:** Register **`andrewallkin.cloud`** and **`<new-domain>`** (apex). Wait until at least one certificate shows **valid** before continuing.
 - [ ] **Panel hostname:** Choose the FQDN where the control panel itself will live (e.g. `panel.<new-domain>` or a subdomain on `andrewallkin.cloud`). Complete TLS issuance for that hostname.

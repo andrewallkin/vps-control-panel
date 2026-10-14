@@ -20,6 +20,7 @@ from vpscp_panel.models import Session
 from vpscp_panel.routes.account_api import router as account_api_router
 from vpscp_panel.routes.audit import router as audit_router
 from vpscp_panel.routes.backups_api import router as backups_api_router
+from vpscp_panel.routes.cloudflare_rules import router as cloudflare_rules_router
 from vpscp_panel.routes.dashboard import router as dashboard_router
 from vpscp_panel.routes.database_api import router as database_api_router
 from vpscp_panel.routes.deploys_api import router as deploys_api_router
@@ -128,6 +129,7 @@ def create_app(settings: PanelSettings | None = None, agent: AgentClient | None 
     app.include_router(settings_api_router)
     app.include_router(setup_router)
     app.include_router(domains_api_router)
+    app.include_router(cloudflare_rules_router)
     app.include_router(projects_api_router)
     app.include_router(projects_utility_router)
     app.include_router(deploys_api_router)

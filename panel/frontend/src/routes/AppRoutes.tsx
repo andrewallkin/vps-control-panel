@@ -8,6 +8,7 @@ import { BackupsPage } from '../pages/BackupsPage'
 import { AuditPage } from '../pages/AuditPage'
 import { DatabasePage } from '../pages/DatabasePage'
 import { FirewallPage } from '../pages/FirewallPage'
+import { RulesPage } from '../pages/RulesPage'
 import { LoginPage } from '../pages/LoginPage'
 import { NewProjectWizardPage } from '../pages/NewProjectWizardPage'
 import { ProjectPage } from '../pages/ProjectPage'
@@ -92,6 +93,14 @@ function ProjectSlugEntry() {
   )
 }
 
+function RulesEntry() {
+  return (
+    <RequireSetupComplete>
+      <RulesPage />
+    </RequireSetupComplete>
+  )
+}
+
 function FirewallEntry() {
   return (
     <RequireSetupComplete>
@@ -159,6 +168,7 @@ export function AppRoutes() {
           <Route path="projects/new" element={<NewProjectEntry />} />
           <Route path="projects/:slug" element={<ProjectSlugEntry />} />
           <Route path="domains" element={<DomainsEntry />} />
+          <Route path="rules" element={<RulesEntry />} />
           <Route path="firewall" element={<FirewallEntry />} />
           <Route path="backups" element={<BackupsEntry />} />
           <Route path="database" element={<DatabaseEntry />} />
