@@ -234,7 +234,6 @@ function EnvValueDialog({
       return
     }
     let cancelled = false
-    setError(null)
     onRevealValue(row.key)
       .then((value) => {
         if (!cancelled) {
