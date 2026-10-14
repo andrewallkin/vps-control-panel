@@ -1,5 +1,6 @@
 import { DownloadSimple, MagnifyingGlass, Pause, Play } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { isHealthCheckLog } from '../../lib/healthCheckLog'
 
 export interface ComposeLogsViewerProps {
   slug: string
@@ -41,6 +42,7 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
   const [lines, setLines] = useState<string[]>([])
   const [paused, setPaused] = useState(false)
   const [search, setSearch] = useState('')
+  const [showHealthChecks, setShowHealthChecks] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pausedRef = useRef(paused)
   const sourceRef = useRef<EventSource | null>(null)
@@ -86,6 +88,11 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
     }
   }, [slug, service, paused])
 
+  const displayLines = useMemo(
+    () => (showHealthChecks ? lines : lines.filter((line) => !isHealthCheckLog(line))),
+    [lines, showHealthChecks],
+  )
+
   useEffect(() => {
     if (pausedRef.current) {
       return
@@ -94,12 +101,10 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
     if (node) {
       node.scrollTop = node.scrollHeight
     }
-  }, [lines])
-
-  const displayLines = useMemo(() => lines, [lines])
+  }, [displayLines])
 
   const downloadLog = () => {
-    const text = lines.join('\n')
+    const text = displayLines.join('\n')
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -147,6 +152,29 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
           <DownloadSimple weight="regular" aria-hidden className="size-4" />
           Download
         </button>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <span id="show-health-checks-label">Health checks</span>
+          <span className="text-muted-foreground">{showHealthChecks ? 'On' : 'Off'}</span>
+          <span className="relative inline-flex h-6 w-11 items-center">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-checked={showHealthChecks}
+              aria-labelledby="show-health-checks-label"
+              className="peer sr-only"
+              checked={showHealthChecks}
+              onChange={(event) => setShowHealthChecks(event.target.checked)}
+            />
+            <span
+              aria-hidden
+              className="absolute inset-0 rounded-full border border-border bg-muted transition-colors duration-200 peer-checked:border-accent peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent"
+            />
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-0.5 size-5 rounded-full bg-background shadow-sm transition-transform duration-200 peer-checked:translate-x-5"
+            />
+          </span>
+        </label>
       </div>
       <div
         ref={scrollRef}
@@ -156,7 +184,11 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
       >
         {displayLines.length === 0 ? (
           <p className="text-muted-foreground">
-            {paused ? 'Log stream paused.' : 'Waiting for log…'}
+            {paused
+              ? 'Log stream paused.'
+              : lines.length > 0
+                ? 'Health checks hidden.'
+                : 'Waiting for log…'}
           </p>
         ) : (
           displayLines.map((line, index) => (

@@ -19,7 +19,7 @@ import { fetchDomains } from '../lib/domainsApi'
 import type { EnvRow } from '../lib/envEditorUtils'
 import { formatBytes } from '../lib/format'
 import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
-import type { RegistryTagOption } from '../lib/projectDeployTypes'
+import type { ComposePsService, RegistryTagOption } from '../lib/projectDeployTypes'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { MigrationRunControls } from '../components/projects/MigrationRunControls'
@@ -78,6 +78,35 @@ function normalizeRegistryTags(tags: RegistryTagOption[] | string[]): RegistryTa
   return tags.map((tag) =>
     typeof tag === 'string' ? { name: tag, sha: '', pushed_at: null } : tag,
   )
+}
+
+export const MIGRATION_LOG_HOLD_MS = 20_000
+
+function composeServiceLabel(svc: ComposePsService): string {
+  return svc.name || svc.service || ''
+}
+
+function metricsForService(
+  rows: { name: string; cpu_percent: number; mem_used: number }[],
+  slug: string,
+  serviceName: string,
+  container?: string,
+): { cpu_percent: number; mem_used: number } | undefined {
+  if (container) {
+    const named = rows.find((row) => row.name === container)
+    if (named) {
+      return { cpu_percent: named.cpu_percent, mem_used: named.mem_used }
+    }
+  }
+  if (!serviceName) {
+    return undefined
+  }
+  const exact = `${slug}-${serviceName}`
+  const prefixed = rows.find((row) => row.name === exact || row.name.startsWith(`${exact}-`))
+  if (!prefixed) {
+    return undefined
+  }
+  return { cpu_percent: prefixed.cpu_percent, mem_used: prefixed.mem_used }
 }
 
 function projectPublicUrls(project: ProjectDetail): string[] {
@@ -311,24 +340,32 @@ export function ProjectPage() {
     refetchIntervalInBackground: false,
   })
 
-  const metricsByContainer = useMemo(() => {
-    const map = new Map<string, { cpu_percent: number; mem_used: number }>()
-    for (const row of metricsQuery.data ?? []) {
-      if (row.name.startsWith(`${slug}-`)) {
-        map.set(row.name, { cpu_percent: row.cpu_percent, mem_used: row.mem_used })
-      }
+  const [migrateJobId, setMigrateJobId] = useState<string | null>(null)
+  const migrateDismissTimer = useRef<number | null>(null)
+  const clearMigrateDismiss = useCallback(() => {
+    if (migrateDismissTimer.current !== null) {
+      window.clearTimeout(migrateDismissTimer.current)
+      migrateDismissTimer.current = null
     }
-    return map
-  }, [metricsQuery.data, slug])
+  }, [])
+  const holdMigrationLog = useCallback(() => {
+    clearMigrateDismiss()
+    migrateDismissTimer.current = window.setTimeout(() => {
+      migrateDismissTimer.current = null
+      setMigrateJobId(null)
+    }, MIGRATION_LOG_HOLD_MS)
+  }, [clearMigrateDismiss])
+
+  useEffect(() => clearMigrateDismiss, [clearMigrateDismiss])
 
   const migrateMutation = useMutation({
     mutationFn: () => migrateProject(slug),
     onSuccess: (data) => {
+      clearMigrateDismiss()
       setActiveDeployId(null)
       setMigrateJobId(data.job_id)
     },
   })
-  const [migrateJobId, setMigrateJobId] = useState<string | null>(null)
 
   const deployMutation = useMutation({
     mutationFn: (body: {
@@ -613,13 +650,18 @@ export function ProjectPage() {
                       </td>
                     </tr>
                   ) : null}
-                  {(psQuery.data?.services ?? []).map((svc) => {
-                    const containerName = `${slug}-${svc.name}`
-                    const metrics = metricsByContainer.get(containerName)
+                  {(psQuery.data?.services ?? []).map((svc, index) => {
+                    const serviceName = composeServiceLabel(svc)
+                    const metrics = metricsForService(
+                      metricsQuery.data ?? [],
+                      slug,
+                      serviceName,
+                      svc.container,
+                    )
                     const variant = composeServiceStatusVariant(svc.state, svc.health)
                     return (
-                      <tr key={svc.name}>
-                        <td className="px-3 py-2 font-mono">{svc.name}</td>
+                      <tr key={svc.container || serviceName || index}>
+                        <td className="px-3 py-2 font-mono">{serviceName}</td>
                         <td className="px-3 py-2">
                           <StatusBadge variant={variant} label={svc.state || variant} />
                         </td>
@@ -644,7 +686,12 @@ export function ProjectPage() {
               <ul className="space-y-1 text-sm">
                 {publicUrls.map((url) => (
                   <li key={url}>
-                    <a href={url} className="font-mono text-accent hover:underline">
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-accent hover:underline"
+                    >
                       {url}
                     </a>
                   </li>
@@ -746,7 +793,7 @@ export function ProjectPage() {
               <LogViewer
                 key={migrateJobId}
                 jobId={migrateJobId}
-                onEnd={() => setMigrateJobId(null)}
+                onEnd={holdMigrationLog}
               />
             </div>
           ) : null}
@@ -795,14 +842,22 @@ export function ProjectPage() {
             value={logService}
             onChange={(event) => setLogService(event.target.value)}
           >
-            <option value="">all</option>
-            {logServices.map((svc) => (
-              <option key={svc.name} value={svc.name}>
-                {svc.name}
-              </option>
-            ))}
+            <option value="">All services</option>
+            <optgroup label="Services">
+              {logServices.map((svc) => {
+                const name = composeServiceLabel(svc)
+                if (!name) {
+                  return null
+                }
+                return (
+                  <option key={svc.container || name} value={name}>
+                    {name}
+                  </option>
+                )
+              })}
+            </optgroup>
           </select>
-          <ComposeLogsViewer slug={slug} service={logService} />
+          <ComposeLogsViewer key={`${slug}:${logService}`} slug={slug} service={logService} />
         </div>
       ) : null}
 

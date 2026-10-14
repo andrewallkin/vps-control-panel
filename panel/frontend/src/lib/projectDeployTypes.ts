@@ -22,7 +22,9 @@ export interface DeployRow {
 }
 
 export interface ComposePsService {
-  name: string
+  service?: string
+  name?: string
+  container?: string
   state: string
   health: string
   image: string

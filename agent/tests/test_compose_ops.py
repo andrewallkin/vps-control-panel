@@ -185,12 +185,49 @@ def test_parse_compose_ps_json_array():
     assert out == [
         {
             "service": "web",
+            "name": "web",
+            "container": "",
             "state": "running",
             "health": "healthy",
             "image": "nginx:alpine",
             "started_at": "2024-01-01T00:00:00Z",
         }
     ]
+
+
+def test_parse_compose_ps_maps_created_at_and_container_name():
+    raw = json.dumps(
+        [
+            {
+                "Service": "backend",
+                "Name": "spliteasy-backend-1",
+                "State": "running",
+                "Health": "",
+                "Image": "img:tag",
+                "CreatedAt": "2026-10-14 16:00:00 +0000 UTC",
+            }
+        ]
+    )
+    out = parse_compose_ps(raw)
+    assert out == [
+        {
+            "service": "backend",
+            "name": "backend",
+            "container": "spliteasy-backend-1",
+            "state": "running",
+            "health": "",
+            "image": "img:tag",
+            "started_at": "2026-10-14 16:00:00 +0000 UTC",
+        }
+    ]
+
+
+def test_parse_compose_ps_started_at_from_unix_created():
+    raw = json.dumps([{"Service": "web", "State": "running", "Created": 1700000000}])
+    out = parse_compose_ps(raw)
+    assert out[0]["started_at"] == "2023-11-14T22:13:20+00:00"
+    assert out[0]["name"] == "web"
+    assert out[0]["container"] == ""
 
 
 def test_parse_compose_ps_json_lines():

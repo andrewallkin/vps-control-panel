@@ -170,14 +170,12 @@ export function emptyDraft(): RuleDraft {
 
 export function draftFromRule(rule: CloudflareCustomRule, rules: CloudflareCustomRule[]): RuleDraft {
   const index = rules.findIndex((item) => item.id === rule.id)
-  let placement: RulePlacement = { kind: 'last' }
-  if (index <= 0) {
-    placement = { kind: 'first' }
-  } else if (index === rules.length - 1) {
-    placement = { kind: 'last' }
-  } else {
-    placement = { kind: 'custom', position: index + 1 }
-  }
+  const placement: RulePlacement =
+    index <= 0
+      ? { kind: 'first' }
+      : index === rules.length - 1
+        ? { kind: 'last' }
+        : { kind: 'custom', position: index + 1 }
   return {
     name: rule.name,
     description: rule.description.trim() || describeExpression(rule.expression),

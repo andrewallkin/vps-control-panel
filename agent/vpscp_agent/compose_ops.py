@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import shlex
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -193,13 +194,31 @@ def get_compose_services(
     return {"services": services_out, "networks": network_names, "warning": warning}
 
 
+def _started_at(obj: dict[str, Any]) -> str:
+    created_at = obj.get("CreatedAt")
+    if isinstance(created_at, str) and created_at.strip():
+        return created_at.strip()
+    created = obj.get("Created")
+    if isinstance(created, str) and created.strip():
+        return created.strip()
+    if isinstance(created, bool):
+        return ""
+    if isinstance(created, (int, float)) and created > 0:
+        return datetime.fromtimestamp(int(created), UTC).isoformat()
+    return ""
+
+
 def _map_ps_row(obj: dict[str, Any]) -> dict[str, str]:
+    service = str(obj.get("Service") or "")
+    container = obj.get("Name") or obj.get("Names") or ""
     return {
-        "service": str(obj.get("Service") or ""),
+        "service": service,
+        "name": service,
+        "container": str(container),
         "state": str(obj.get("State") or obj.get("Status") or ""),
         "health": str(obj.get("Health") or ""),
         "image": str(obj.get("Image") or ""),
-        "started_at": str(obj.get("Created") or ""),
+        "started_at": _started_at(obj),
     }
 
 

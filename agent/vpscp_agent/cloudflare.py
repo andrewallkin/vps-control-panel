@@ -227,7 +227,9 @@ class CloudflareClient:
         record_id = existing["id"]
         self._request("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
 
-    def get_custom_entrypoint(self, zone_id: str) -> tuple[str | None, list[dict[str, Any]], str | None]:
+    def get_custom_entrypoint(
+        self, zone_id: str
+    ) -> tuple[str | None, list[dict[str, Any]], str | None]:
         response = self._request_raw(
             "GET",
             f"/zones/{zone_id}/rulesets/phases/http_request_firewall_custom/entrypoint",
@@ -262,7 +264,9 @@ class CloudflareClient:
             raise CloudflareError("unexpected Cloudflare ruleset response")
         return result
 
-    def add_ruleset_rule(self, zone_id: str, ruleset_id: str, rule: dict[str, Any]) -> dict[str, Any]:
+    def add_ruleset_rule(
+        self, zone_id: str, ruleset_id: str, rule: dict[str, Any]
+    ) -> dict[str, Any]:
         result = self._request(
             "POST",
             f"/zones/{zone_id}/rulesets/{ruleset_id}/rules",

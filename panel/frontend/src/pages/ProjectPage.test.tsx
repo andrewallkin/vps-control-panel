@@ -152,3 +152,197 @@ describe('ProjectPage database rotate', () => {
     })
   })
 })
+
+class MockEventSource {
+  static instances: MockEventSource[] = []
+  url: string
+  listeners: Record<string, Array<(event: MessageEvent<string>) => void>> = {}
+  onmessage: ((event: MessageEvent<string>) => void) | null = null
+  onerror: (() => void) | null = null
+  closed = false
+
+  constructor(url: string) {
+    this.url = url
+    MockEventSource.instances.push(this)
+  }
+
+  addEventListener(type: string, handler: (event: MessageEvent<string>) => void) {
+    this.listeners[type] = this.listeners[type] ?? []
+    this.listeners[type].push(handler)
+  }
+
+  close() {
+    this.closed = true
+  }
+
+  emit(type: string, data: string) {
+    const event = { data } as MessageEvent<string>
+    if (type === 'message') {
+      this.onmessage?.(event)
+    }
+    for (const handler of this.listeners[type] ?? []) {
+      handler(event)
+    }
+  }
+}
+
+const runningProject = {
+  ...project,
+  migration_command: 'bash /app/run_migrations.sh',
+  migration_service: 'backend',
+  hostnames: [{ domain: 'andrewallkin.com', subdomain: 'spliteasy', kind: 'primary' as const }],
+  routes: [{ path_prefix: '/', port_env_var: 'PORT' }],
+}
+
+describe('ProjectPage overview, logs, and migrations', () => {
+  beforeEach(() => {
+    window.location.hash = ''
+    MockEventSource.instances = []
+    vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.endsWith('/api/projects/demo') && (!init?.method || init.method === 'GET')) {
+          return Promise.resolve(jsonResponse(runningProject))
+        }
+        if (url.includes('/compose/ps')) {
+          return Promise.resolve(
+            jsonResponse({
+              services: [
+                {
+                  service: 'backend',
+                  state: 'running',
+                  health: '',
+                  image: 'andrewallkin/spliteasy:backend',
+                  started_at: '2026-10-14 16:00:00 +0000 UTC',
+                  container: 'demo-backend-1',
+                },
+                {
+                  service: 'frontend',
+                  state: 'running',
+                  health: '',
+                  image: 'andrewallkin/spliteasy:frontend',
+                  started_at: '',
+                },
+              ],
+            }),
+          )
+        }
+        if (url.includes('/api/metrics/containers')) {
+          return Promise.resolve(
+            jsonResponse([
+              {
+                name: 'demo-backend-1',
+                project: 'demo',
+                cpu_percent: 1.5,
+                mem_used: 1048576,
+                mem_limit: 2097152,
+                mem_percent: 50,
+              },
+              {
+                name: 'demo-frontend-1',
+                project: 'demo',
+                cpu_percent: 0.4,
+                mem_used: 2097152,
+                mem_limit: 2097152,
+                mem_percent: 100,
+              },
+            ]),
+          )
+        }
+        if (url.includes('/deploys')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        if (url.includes('/tags')) {
+          return Promise.resolve(jsonResponse({ services: [] }))
+        }
+        if (url.endsWith('/migrate') && init?.method === 'POST') {
+          return Promise.resolve(jsonResponse({ job_id: 'job-migrate' }))
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  function renderProject(hash = '') {
+    window.location.hash = hash
+    return renderWithProviders(
+      <Routes>
+        <Route path="/projects/:slug" element={<ProjectPage />} />
+      </Routes>,
+      { routerProps: { initialEntries: ['/projects/demo'] } },
+    )
+  }
+
+  it('shows service name, start time, cpu, and memory from compose ps and container stats', async () => {
+    renderProject()
+
+    expect(await screen.findByRole('heading', { name: 'Demo' })).toBeInTheDocument()
+    expect(await screen.findByText('backend')).toBeInTheDocument()
+    expect(screen.getByText('frontend')).toBeInTheDocument()
+    expect(screen.getByText('2026-10-14 16:00:00 +0000 UTC')).toBeInTheDocument()
+    expect(screen.getByText('1.5%')).toBeInTheDocument()
+    expect(screen.getByText('0.4%')).toBeInTheDocument()
+    expect(screen.getByText('1 MiB')).toBeInTheDocument()
+    expect(screen.getByText('2 MiB')).toBeInTheDocument()
+  })
+
+  it('opens project URLs in a new tab', async () => {
+    renderProject()
+
+    const link = await screen.findByRole('link', { name: 'https://spliteasy.andrewallkin.com/' })
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('lists compose services in the log filter and requests that service', async () => {
+    const user = userEvent.setup()
+    renderProject('#logs')
+
+    const filter = await screen.findByLabelText('Service')
+    expect(within(filter).getByRole('option', { name: 'All services' })).toBeInTheDocument()
+    expect(within(filter).getByRole('option', { name: 'backend' })).toBeInTheDocument()
+    expect(within(filter).getByRole('option', { name: 'frontend' })).toBeInTheDocument()
+
+    const initial = MockEventSource.instances[0]
+    initial?.emit('message', 'from all services')
+    expect(await screen.findByText('from all services')).toBeInTheDocument()
+
+    await user.selectOptions(filter, 'backend')
+
+    await waitFor(() => {
+      const latest = MockEventSource.instances.at(-1)
+      expect(latest?.url).toContain('service=backend')
+    })
+    expect(screen.queryByText('from all services')).not.toBeInTheDocument()
+  })
+
+  it('keeps the migration log readable after the job ends, then dismisses it', async () => {
+    const user = userEvent.setup()
+    renderProject('#deploy')
+
+    await user.click(await screen.findByRole('button', { name: 'Run migrations' }))
+    expect(await screen.findByRole('heading', { name: 'Migration log' })).toBeInTheDocument()
+
+    const source = MockEventSource.instances[0]
+    expect(source).toBeDefined()
+    source!.emit('line', JSON.stringify({ n: 0, text: 'migration applied' }))
+    expect(await screen.findByText('migration applied')).toBeInTheDocument()
+
+    vi.useFakeTimers()
+    source!.emit('end', JSON.stringify({ status: 'succeeded' }))
+    expect(screen.getByText('migration applied')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(19_999)
+    expect(screen.getByText('migration applied')).toBeInTheDocument()
+
+    await vi.advanceTimersByTimeAsync(1)
+    expect(screen.queryByRole('heading', { name: 'Migration log' })).not.toBeInTheDocument()
+  })
+})
