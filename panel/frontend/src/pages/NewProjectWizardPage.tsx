@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CreationChecklist } from '../components/projects/CreationChecklist'
 import { ProjectDeleteSection } from '../components/projects/ProjectDeleteSection'
+import { PortsConfirmSection } from '../components/projects/PortsConfirmSection'
 import { EnvEditor, syncLockedEnvRows } from '../components/projects/EnvEditor'
 import { ProjectWizardStepper, type WizardStepId } from '../components/projects/ProjectWizardStepper'
 import { RouteEditor } from '../components/projects/RouteEditor'
@@ -168,7 +169,7 @@ export function NewProjectWizardPage() {
     setWriteDatabaseUrl(existingProject.write_database_url)
     setActiveCreationSlug(existingProject.slug)
     const status = existingProject.creation_state.status
-    if (status === 'running' || status === 'failed' || status === 'awaiting_deploy_key') {
+    if (status === 'running' || status === 'failed' || status === 'awaiting_deploy_key' || status === 'awaiting_ports') {
       setStep('progress')
     }
   }
@@ -1037,6 +1038,19 @@ export function NewProjectWizardPage() {
                     {retryMutation.isPending ? 'Checking access…' : 'Continue'}
                   </button>
                 </div>
+              ) : null}
+              {creationState.status === 'awaiting_ports' && activeCreationSlug ? (
+                <PortsConfirmSection
+                  slug={activeCreationSlug}
+                  portChoices={creationState.port_choices ?? {}}
+                  onConfirmed={() => {
+                    watchingCreation.current = true
+                    void queryClient.invalidateQueries({
+                      queryKey: ['projects', activeCreationSlug],
+                    })
+                    void creationPollQuery.refetch()
+                  }}
+                />
               ) : null}
               {creationState.status === 'ready' ? (
                 <button

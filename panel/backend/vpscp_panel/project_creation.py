@@ -18,6 +18,7 @@ from vpscp_panel.models import (
 from vpscp_panel.project_env import build_project_env_content
 from vpscp_panel.validation import (
     tag_prefix_from_docker_image_env,
+    validate_env_key,
     validate_service_name,
     validate_sql_ident,
 )
@@ -251,8 +252,68 @@ async def run_creation(db: Session, agent: AgentClient, slug: str) -> None:
             return
         _save_state(db, project, state)
 
+        if step_name == "clone":
+            paused = await _maybe_pause_for_ports(db, agent, project, state)
+            if paused:
+                return
+
     state["status"] = "ready"
     state["db_password"] = None
+    _save_state(db, project, state)
+
+
+async def _maybe_pause_for_ports(
+    db: Session,
+    agent: AgentClient,
+    project: Project,
+    state: dict[str, Any],
+) -> bool:
+    ports_step = _step_by_name(state, "ports")
+    if ports_step["status"] == "done" or state.get("ports_confirmed"):
+        return False
+    try:
+        payload = await agent.get(f"/v1/projects/{project.slug}/compose-ports")
+    except AgentError:
+        return False
+    choices: dict[str, int | None] = {}
+    if isinstance(payload, dict):
+        entries = payload.get("ports")
+        if isinstance(entries, list):
+            for entry in entries:
+                if isinstance(entry, dict) and isinstance(entry.get("env_var"), str):
+                    default = entry.get("default")
+                    choices[entry["env_var"]] = int(default) if isinstance(default, int) else None
+    if not choices:
+        return False
+    state["port_choices"] = choices
+    state["status"] = "awaiting_ports"
+    _save_state(db, project, state)
+    return True
+
+
+def confirm_creation_ports(db: Session, slug: str, ports: dict[str, int]) -> None:
+    project = db.get(Project, slug)
+    if project is None:
+        raise ValueError(f"project not found: {slug!r}")
+    state = _load_state(project)
+    if state.get("status") != "awaiting_ports":
+        raise ValueError("creation is not awaiting port confirmation")
+    choices = state.get("port_choices") or {}
+    if not choices:
+        raise ValueError("creation state has no port choices")
+    cleaned: dict[str, int] = {}
+    for env_var, port in ports.items():
+        validate_env_key(env_var)
+        if env_var not in choices:
+            raise ValueError(f"unknown port variable: {env_var!r}")
+        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+            raise ValueError(f"invalid port for {env_var}: {port!r}")
+        cleaned[env_var] = port
+    if len(set(cleaned.values())) != len(cleaned):
+        raise ValueError("duplicate port values")
+    state["ports"] = cleaned
+    state["ports_confirmed"] = True
+    state["status"] = "running"
     _save_state(db, project, state)
 
 
@@ -317,10 +378,24 @@ async def _step_ports(
     ctx: dict[str, Any],
 ) -> None:
     ports: dict[str, int] = dict(state.get("ports") or {})
+    env_vars: list[str] = []
+    try:
+        payload = await agent.get(f"/v1/projects/{project.slug}/compose-ports")
+    except AgentError:
+        payload = {}
+    if isinstance(payload, dict) and isinstance(payload.get("ports"), list):
+        for entry in payload["ports"]:
+            if (
+                isinstance(entry, dict)
+                and isinstance(entry.get("env_var"), str)
+                and entry["env_var"] not in env_vars
+            ):
+                env_vars.append(entry["env_var"])
     for route in ctx["routes"]:
-        env_var = route.port_env_var
-        if env_var in ports:
-            continue
+        if route.port_env_var not in env_vars:
+            env_vars.append(route.port_env_var)
+
+    for env_var in env_vars:
         existing = db.scalars(
             select(PortAllocation).where(
                 PortAllocation.project_slug == project.slug,
@@ -330,10 +405,11 @@ async def _step_ports(
         if existing is not None:
             ports[env_var] = existing.host_port
             continue
-        result = await agent.post(
-            "/v1/ports/allocate",
-            json={"owner": project.slug, "env_var": env_var},
-        )
+        body: dict[str, Any] = {"owner": project.slug, "env_var": env_var}
+        chosen = ports.get(env_var)
+        if chosen is not None and state.get("ports_confirmed"):
+            body["port"] = chosen
+        result = await agent.post("/v1/ports/allocate", json=body)
         host_port = int(result["port"])
         db.add(
             PortAllocation(

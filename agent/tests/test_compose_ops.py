@@ -8,6 +8,7 @@ from tests.fakes import FakeRunner
 from vpscp_agent.compose_ops import (
     compose_base_argv,
     compose_project_cwd,
+    get_compose_ports,
     get_compose_services,
     parse_compose_ps,
     run_compose_job,
@@ -154,6 +155,66 @@ def test_get_compose_services_image_var_and_warning_null(compose_setup):
     assert svc["image_var"] == "DOCKER_IMAGE_WEB"
 
 
+COMPOSE_WITH_PORTS = """\
+services:
+  backend:
+    image: img
+    ports:
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
+  frontend:
+    image: img
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:80"
+  worker:
+    image: img
+  static:
+    image: img
+    ports:
+      - "127.0.0.1:9101:9100"
+"""
+
+COMPOSE_PORT_VARIANTS = """\
+services:
+  app:
+    image: img
+    ports:
+      - "${HOST_PORT:-9000}:9000"
+      - ${NO_DEFAULT_PORT}:9091
+      - "0.0.0.0:${ALL_IFACE_PORT:-9002}:9002"
+"""
+
+
+def test_get_compose_ports_env_vars_and_defaults(compose_setup):
+    settings, db, runner, slug, project_dir = compose_setup
+    (project_dir / "docker-compose.yml").write_text(COMPOSE_WITH_PORTS)
+
+    result = get_compose_ports(settings, db, runner, slug)
+    assert result["ports"] == [
+        {"service": "backend", "env_var": "BACKEND_PORT", "default": 8000},
+        {"service": "frontend", "env_var": "FRONTEND_PORT", "default": 3000},
+    ]
+
+
+def test_get_compose_ports_variants(compose_setup):
+    settings, db, runner, slug, project_dir = compose_setup
+    (project_dir / "docker-compose.yml").write_text(COMPOSE_PORT_VARIANTS)
+
+    result = get_compose_ports(settings, db, runner, slug)
+    assert result["ports"] == [
+        {"service": "app", "env_var": "HOST_PORT", "default": 9000},
+        {"service": "app", "env_var": "NO_DEFAULT_PORT", "default": None},
+        {"service": "app", "env_var": "ALL_IFACE_PORT", "default": 9002},
+    ]
+
+
+def test_get_compose_ports_none_published(compose_setup):
+    settings, db, runner, slug, project_dir = compose_setup
+    (project_dir / "docker-compose.yml").write_text(COMPOSE_NO_POSTGRES)
+
+    result = get_compose_ports(settings, db, runner, slug)
+    assert result["ports"] == []
+
+
 def test_get_compose_services_postgres_net_warning(compose_setup):
     settings, db, runner, slug, project_dir = compose_setup
     (project_dir / "docker-compose.yml").write_text(COMPOSE_NO_POSTGRES)
@@ -167,6 +228,22 @@ def test_get_compose_services_postgres_net_warning(compose_setup):
 
     result = get_compose_services(settings, db, runner, slug)
     assert result["warning"] == "compose file does not join postgres-net"
+
+
+def test_compose_ports_route(compose_setup):
+    settings, db, runner, slug, project_dir = compose_setup
+    (project_dir / "docker-compose.yml").write_text(COMPOSE_WITH_PORTS)
+    app = create_app(settings, runner=runner)
+    app.state.db = db
+    with TestClient(app) as client:
+        resp = client.get(f"/v1/projects/{slug}/compose-ports")
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "ports": [
+            {"service": "backend", "env_var": "BACKEND_PORT", "default": 8000},
+            {"service": "frontend", "env_var": "FRONTEND_PORT", "default": 3000},
+        ]
+    }
 
 
 def test_parse_compose_ps_json_array():

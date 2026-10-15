@@ -13,6 +13,7 @@ from vpscp_agent.compose_ops import (
     compose_base_argv,
     compose_job_body,
     compose_ps,
+    get_compose_ports,
     get_compose_services,
     migrate_argv,
     run_compose_job,
@@ -36,6 +37,15 @@ def get_compose_services_route(slug: Slug, request: Request) -> dict:
     runner = request.app.state.runner
     validate_project_slug(slug)
     return get_compose_services(settings, db, runner, slug)
+
+
+@router.get("/{slug}/compose-ports")
+def get_compose_ports_route(slug: Slug, request: Request) -> dict:
+    settings = request.app.state.settings
+    db = request.app.state.db
+    runner = request.app.state.runner
+    validate_project_slug(slug)
+    return get_compose_ports(settings, db, runner, slug)
 
 
 @router.get("/{slug}/compose/ps")

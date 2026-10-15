@@ -1074,3 +1074,260 @@ def test_put_services_404_when_project_missing(client_factory, admin_user, froze
             headers=_csrf(auth),
         )
     assert response.status_code == 404
+
+
+def _add_project_with_ports(db, *, slug="portapp"):
+    from datetime import UTC, datetime
+
+    from vpscp_panel.models import PortAllocation, ProjectHostname, ProjectRoute
+
+    db.add(
+        Domain(
+            name="example.com",
+            zone_id="zone-1",
+            cert_status="missing",
+            cert_expires_at=None,
+        )
+    )
+    db.commit()
+    db.add(
+        Project(
+            slug=slug,
+            display_name="Port App",
+            repo_url="git@github.com:me/portapp.git",
+            branch="main",
+            compose_file="docker-compose.yml",
+            deploy_mode="image",
+            docker_hub_repo="me/portapp",
+            database_mode="none",
+            db_name=None,
+            db_user=None,
+            write_database_url=False,
+            migration_command=None,
+            migration_service=None,
+            health_check_url=None,
+            user_env="",
+            creation_state=json.dumps({"status": "ready", "steps": []}),
+            created_at=datetime(2025, 6, 15, 12, 0, 0, tzinfo=UTC),
+        )
+    )
+    db.flush()
+    db.add(
+        ProjectHostname(project_slug=slug, domain="example.com", subdomain="app", kind="primary")
+    )
+    db.add(
+        ProjectRoute(
+            project_slug=slug,
+            path_prefix="/",
+            port_env_var="APP_PORT",
+            max_body_mb=25,
+            read_timeout_s=60,
+            send_timeout_s=60,
+            streaming=False,
+            websocket=False,
+            pass_authorization=False,
+        )
+    )
+    db.add(PortAllocation(project_slug=slug, env_var="APP_PORT", host_port=10001))
+    db.commit()
+
+
+def test_used_ports_endpoint_proxies_agent(client_factory, admin_user, frozen_time, db_session):
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/ports/used"
+        return httpx.Response(
+            200,
+            json=[
+                {"port": 5432, "owner": None, "env_var": None},
+                {"port": 10001, "owner": "portapp", "env_var": "APP_PORT"},
+            ],
+        )
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.get("/api/ports/used", headers=_csrf(auth))
+    assert response.status_code == 200
+    assert response.json() == [
+        {"port": 5432, "owner": None, "env_var": None},
+        {"port": 10001, "owner": "portapp", "env_var": "APP_PORT"},
+    ]
+
+
+def test_get_project_ports_merges_compose_and_allocations(
+    client_factory, admin_user, frozen_time, db_session
+):
+    _add_project_with_ports(db_session)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/projects/portapp/compose-ports"
+        return httpx.Response(
+            200,
+            json={
+                "ports": [
+                    {"service": "web", "env_var": "APP_PORT", "default": 8000},
+                    {"service": "backend", "env_var": "BACKEND_PORT", "default": 8000},
+                ]
+            },
+        )
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.get("/api/projects/portapp/ports", headers=_csrf(auth))
+    assert response.status_code == 200
+    assert response.json() == {
+        "ports": [
+            {"service": "web", "env_var": "APP_PORT", "default": 8000, "host_port": 10001},
+            {"service": "backend", "env_var": "BACKEND_PORT", "default": 8000, "host_port": None},
+        ]
+    }
+
+
+def test_put_project_ports_allocates_and_patches_env(
+    client_factory, admin_user, frozen_time, db_session
+):
+    _add_project_with_ports(db_session)
+    calls: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append((request.method, request.url.path))
+        path = request.url.path
+        if path == "/v1/ports/allocate" and request.method == "POST":
+            body = json.loads(request.content.decode())
+            return httpx.Response(200, json={"port": body["port"]})
+        if path == "/v1/projects/portapp/env" and request.method == "PATCH":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/nginx/sites" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404, json={"detail": f"unexpected {request.method} {path}"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.put(
+            "/api/projects/portapp/ports",
+            json={"ports": {"APP_PORT": 10002, "BACKEND_PORT": 8001}},
+            headers=_csrf(auth),
+        )
+    assert response.status_code == 200
+
+    from vpscp_panel.models import PortAllocation
+
+    rows = {
+        row.env_var: row.host_port
+        for row in db_session.scalars(
+            select(PortAllocation).where(PortAllocation.project_slug == "portapp")
+        ).all()
+    }
+    assert rows == {"APP_PORT": 10002, "BACKEND_PORT": 8001}
+    assert ("POST", "/v1/ports/allocate") in calls
+    assert ("PATCH", "/v1/projects/portapp/env") in calls
+    assert ("POST", "/v1/nginx/sites") in calls
+
+
+def test_put_project_ports_rejects_conflict(client_factory, admin_user, frozen_time, db_session):
+    _add_project_with_ports(db_session)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/v1/ports/allocate" and request.method == "POST":
+            return httpx.Response(409, json={"detail": "port 8001 is allocated to other (X)"})
+        return httpx.Response(404, json={"detail": "unexpected"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.put(
+            "/api/projects/portapp/ports",
+            json={"ports": {"BACKEND_PORT": 8001}},
+            headers=_csrf(auth),
+        )
+    assert response.status_code == 409
+
+
+def test_creation_ports_confirm_endpoint_resumes(
+    client_factory, admin_user, frozen_time, db_session
+):
+    from vpscp_panel.models import Project
+
+    db_session.add(
+        Project(
+            slug="wizapp",
+            display_name="Wiz App",
+            repo_url="git@github.com:me/wizapp.git",
+            branch="main",
+            compose_file="docker-compose.yml",
+            deploy_mode="image",
+            docker_hub_repo=None,
+            database_mode="none",
+            db_name=None,
+            db_user=None,
+            write_database_url=False,
+            migration_command=None,
+            migration_service=None,
+            health_check_url=None,
+            user_env="",
+            creation_state=json.dumps(
+                {
+                    "status": "awaiting_ports",
+                    "steps": [],
+                    "port_choices": {"APP_PORT": 8000},
+                    "ports": {},
+                }
+            ),
+            created_at=frozen_time,
+        )
+    )
+    db_session.commit()
+
+    with client_factory() as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.post(
+            "/api/projects/wizapp/creation/ports",
+            json={"ports": {"APP_PORT": 10001}},
+            headers=_csrf(auth),
+        )
+        assert response.status_code == 202
+        body = response.json()
+        assert body["creation_state"]["ports_confirmed"] is True
+        assert body["creation_state"]["ports"] == {"APP_PORT": 10001}
+
+        project = db_session.get(Project, "wizapp")
+        db_session.refresh(project)
+        state = json.loads(project.creation_state)
+        assert state["status"] == "running"
+        assert state["port_choices"] == {"APP_PORT": 8000}
+
+
+def test_creation_ports_confirm_rejects_when_not_awaiting(
+    client_factory, admin_user, frozen_time, db_session
+):
+    from vpscp_panel.models import Project
+
+    db_session.add(
+        Project(
+            slug="doneapp",
+            display_name="Done App",
+            repo_url="git@github.com:me/doneapp.git",
+            branch="main",
+            compose_file="docker-compose.yml",
+            deploy_mode="image",
+            docker_hub_repo=None,
+            database_mode="none",
+            db_name=None,
+            db_user=None,
+            write_database_url=False,
+            migration_command=None,
+            migration_service=None,
+            health_check_url=None,
+            user_env="",
+            creation_state=json.dumps({"status": "ready", "steps": []}),
+            created_at=frozen_time,
+        )
+    )
+    db_session.commit()
+
+    with client_factory() as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.post(
+            "/api/projects/doneapp/creation/ports",
+            json={"ports": {"APP_PORT": 10001}},
+            headers=_csrf(auth),
+        )
+    assert response.status_code == 409

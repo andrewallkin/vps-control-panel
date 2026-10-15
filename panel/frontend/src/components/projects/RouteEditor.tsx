@@ -6,9 +6,15 @@ export interface RouteEditorProps {
   routes: RouteDraft[]
   onChange: (routes: RouteDraft[]) => void
   onValidationChange?: (result: RoutesValidationResult) => void
+  portEnvVarOptions?: string[]
 }
 
-export function RouteEditor({ routes, onChange, onValidationChange }: RouteEditorProps) {
+export function RouteEditor({
+  routes,
+  onChange,
+  onValidationChange,
+  portEnvVarOptions,
+}: RouteEditorProps) {
   function emit(next: RouteDraft[]) {
     onChange(next)
     onValidationChange?.(validateRoutes(next))
@@ -78,10 +84,18 @@ export function RouteEditor({ routes, onChange, onValidationChange }: RouteEdito
                 id={`route-port-${index}`}
                 type="text"
                 placeholder="WEB_PORT"
+                list={portEnvVarOptions && portEnvVarOptions.length > 0 ? 'route-port-options' : undefined}
                 className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
                 value={route.port_env_var}
                 onChange={(event) => updateRoute(index, { port_env_var: event.target.value })}
               />
+              {portEnvVarOptions && portEnvVarOptions.length > 0 ? (
+                <datalist id="route-port-options">
+                  {portEnvVarOptions.map((option) => (
+                    <option key={option} value={option} />
+                  ))}
+                </datalist>
+              ) : null}
             </div>
             <button
               type="button"

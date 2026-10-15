@@ -30,6 +30,7 @@ from vpscp_panel.models import (
 )
 from vpscp_panel.project_creation import (
     _nginx_spec,
+    confirm_creation_ports,
     default_db_name,
     default_db_user,
     hostname_fqdn,
@@ -934,6 +935,181 @@ async def put_routing(
         await agent.post("/v1/dns/records/delete", json={"fqdn": fqdn})
 
     return {"status": "ok"}
+
+
+class ProjectPortsBody(BaseModel):
+    ports: dict[EnvKey, Annotated[int, Field(ge=1, le=65535)]]
+
+
+class CreationPortsBody(BaseModel):
+    ports: dict[EnvKey, Annotated[int, Field(ge=1, le=65535)]]
+
+
+async def _project_ports_payload(
+    db: DbSession,
+    agent: AgentClient,
+    slug: str,
+) -> dict[str, Any]:
+    try:
+        payload = await agent.get(f"/v1/projects/{slug}/compose-ports")
+    except AgentError:
+        payload = {"ports": []}
+    compose_entries: list[dict[str, Any]] = []
+    if isinstance(payload, dict) and isinstance(payload.get("ports"), list):
+        for entry in payload["ports"]:
+            if isinstance(entry, dict) and isinstance(entry.get("env_var"), str):
+                compose_entries.append(entry)
+    allocations = {
+        row.env_var: row.host_port
+        for row in db.scalars(
+            select(PortAllocation).where(PortAllocation.project_slug == slug)
+        ).all()
+    }
+    ports: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for entry in compose_entries:
+        env_var = entry["env_var"]
+        seen.add(env_var)
+        ports.append(
+            {
+                "service": entry.get("service"),
+                "env_var": env_var,
+                "default": entry.get("default"),
+                "host_port": allocations.get(env_var),
+            }
+        )
+    for env_var in sorted(set(allocations) - seen):
+        ports.append(
+            {
+                "service": None,
+                "env_var": env_var,
+                "default": None,
+                "host_port": allocations[env_var],
+            }
+        )
+    return {"ports": ports}
+
+
+@router.get("/{slug}/ports")
+async def get_project_ports(
+    slug: str,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(current_session)],
+) -> dict[str, Any]:
+    if db.get(Project, slug) is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    return await _project_ports_payload(db, agent, slug)
+
+
+@router.put("/{slug}/ports")
+async def put_project_ports(
+    slug: str,
+    body: ProjectPortsBody,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(require_csrf)],
+) -> dict[str, Any]:
+    project = db.get(Project, slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    if has_running_deploy(db, slug):
+        raise HTTPException(status_code=409, detail="deploy already running")
+
+    allocations = {
+        row.env_var: row
+        for row in db.scalars(
+            select(PortAllocation).where(PortAllocation.project_slug == slug)
+        ).all()
+    }
+    routed_vars = {
+        route.port_env_var
+        for route in db.scalars(select(ProjectRoute).where(ProjectRoute.project_slug == slug)).all()
+    }
+    old_ports = {env_var: row.host_port for env_var, row in allocations.items()}
+
+    env_sets: dict[str, str] = {}
+    routed_changed = False
+    for env_var, port in body.ports.items():
+        try:
+            result = await agent.post(
+                "/v1/ports/allocate",
+                json={"owner": slug, "env_var": env_var, "port": port},
+            )
+        except AgentError as exc:
+            status = exc.status if 400 <= exc.status < 600 else 502
+            raise HTTPException(status_code=status, detail=str(exc.detail)) from exc
+        host_port = int(result["port"])
+        row = allocations.get(env_var)
+        if row is None:
+            allocations[env_var] = PortAllocation(
+                project_slug=slug,
+                env_var=env_var,
+                host_port=host_port,
+            )
+            db.add(allocations[env_var])
+        else:
+            row.host_port = host_port
+        env_sets[env_var] = str(host_port)
+        if env_var in routed_vars and old_ports.get(env_var) != host_port:
+            routed_changed = True
+
+    db.commit()
+
+    # Port vars are managed keys (blocked from the env PATCH route); the panel
+    # patches them here directly because it owns these values.
+    if env_sets:
+        await agent.patch(
+            f"/v1/projects/{slug}/env",
+            json={"set": env_sets, "unset": []},
+        )
+    if routed_changed:
+        await _build_nginx_and_apply(db, agent, project)
+
+    return await _project_ports_payload(db, agent, slug)
+
+
+@router.post("/{slug}/creation/ports", status_code=202)
+async def post_creation_ports(
+    slug: str,
+    body: CreationPortsBody,
+    db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(require_csrf)],
+) -> dict[str, Any]:
+    project = db.get(Project, slug)
+    if project is None:
+        raise HTTPException(status_code=404, detail="project not found")
+    state = json.loads(project.creation_state)
+    if state.get("status") != "awaiting_ports":
+        raise HTTPException(status_code=409, detail="creation is not awaiting port confirmation")
+    try:
+        confirm_creation_ports(db, slug, body.ports)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    async def _background_resume() -> None:
+        if db_module.SessionLocal is None:
+            return
+        try:
+            with db_module.SessionLocal() as session:
+                await run_creation(session, agent, slug)
+        finally:
+            _creation_tasks.pop(slug, None)
+
+    task = asyncio.create_task(_background_resume())
+    _creation_tasks[slug] = task
+    refreshed = db.get(Project, slug)
+    assert refreshed is not None
+    return {"slug": slug, "creation_state": json.loads(refreshed.creation_state)}
+
+
+@utility_router.get("/ports/used")
+async def get_ports_used(
+    agent: Annotated[AgentClient, Depends(_agent)],
+    _session: Annotated[Session, Depends(current_session)],
+) -> Any:
+    return await agent.get("/v1/ports/used")
 
 
 @router.post("/{slug}/database/rotate")

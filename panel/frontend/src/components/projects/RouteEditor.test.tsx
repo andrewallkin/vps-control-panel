@@ -93,3 +93,39 @@ describe('RouteEditor', () => {
     )
   })
 })
+
+describe('RouteEditor port env var options', () => {
+  it('links the port input to a datalist when options are provided', () => {
+    render(
+      <RouteEditor
+        routes={[
+          {
+            path_prefix: '/',
+            port_env_var: 'WEB_PORT',
+            streaming: false,
+            websocket: false,
+            pass_authorization: false,
+            max_body_mb: 25,
+            read_timeout_s: 60,
+            send_timeout_s: 60,
+          },
+        ]}
+        onChange={vi.fn()}
+        portEnvVarOptions={['WEB_PORT', 'API_PORT']}
+      />,
+    )
+    const input = screen.getByLabelText('Port env var')
+    expect(input).toHaveAttribute('list', 'route-port-options')
+    const datalist = document.getElementById('route-port-options')
+    expect(datalist).not.toBeNull()
+    const options = Array.from(datalist!.querySelectorAll('option')).map(
+      (node) => node.getAttribute('value') ?? '',
+    )
+    expect(options).toEqual(['WEB_PORT', 'API_PORT'])
+  })
+
+  it('omits the datalist when no options are provided', () => {
+    render(<RouteEditor routes={[]} onChange={vi.fn()} />)
+    expect(document.getElementById('route-port-options')).toBeNull()
+  })
+})

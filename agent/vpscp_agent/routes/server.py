@@ -8,7 +8,7 @@ from pydantic import BaseModel, field_validator
 
 from vpscp_agent import audit
 from vpscp_agent.domains import DomainRecord, list_domains, register_domain, unregister_domain
-from vpscp_agent.hostnames import allocate_port, list_ports, release_ports
+from vpscp_agent.hostnames import allocate_port, list_ports, list_used_ports, release_ports
 from vpscp_agent.state import StateDB
 from vpscp_agent.validation import DomainName, EnvKey, Slug
 
@@ -98,6 +98,14 @@ class RegisterDomainBody(BaseModel):
 class AllocatePortBody(BaseModel):
     owner: Slug
     env_var: EnvKey
+    port: int | None = None
+
+    @field_validator("port")
+    @classmethod
+    def _validate_port(cls, value: int | None) -> int | None:
+        if value is not None and not 1 <= value <= 65535:
+            raise ValueError("port must be between 1 and 65535")
+        return value
 
 
 class ReleasePortsBody(BaseModel):
@@ -154,6 +162,11 @@ def delete_domain(name: DomainName, request: Request) -> Response:
     return Response(status_code=204)
 
 
+@router.get("/v1/ports/used")
+def get_used_ports(request: Request) -> list[dict[str, int | str | None]]:
+    return list_used_ports(request.app.state.db, listening_ports=_listening_ports)
+
+
 @router.get("/v1/ports")
 def get_ports(request: Request, owner: Annotated[Slug, Query()]) -> list[dict[str, int | str]]:
     return list_ports(request.app.state.db, owner)
@@ -162,13 +175,14 @@ def get_ports(request: Request, owner: Annotated[Slug, Query()]) -> list[dict[st
 @router.post("/v1/ports/allocate")
 def post_allocate_port(body: AllocatePortBody, request: Request) -> dict[str, int]:
     db = request.app.state.db
-    params = {"owner": body.owner, "env_var": body.env_var}
+    params = {"owner": body.owner, "env_var": body.env_var, "port": body.port}
     with audit.audited(db, "port.allocate", params):
         port = allocate_port(
             db,
             body.owner,
             body.env_var,
             listening_ports=_listening_ports,
+            port=body.port,
         )
     return {"port": port}
 
