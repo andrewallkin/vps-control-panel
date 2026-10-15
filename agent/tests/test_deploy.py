@@ -1,3 +1,4 @@
+import json
 import threading
 from pathlib import Path
 
@@ -251,6 +252,107 @@ def test_up_failure_failed_after_switch_keeps_tags(deploy_setup):
         _run_deploy(deploy_setup, tags={"DOCKER_IMAGE_WEB": "new-tag"})
     assert "failed_after_switch" in str(exc_info.value)
     assert _env_get(project_dir, "DOCKER_IMAGE_WEB") == "new-tag"
+
+
+def _compose_ps_response(runner: FakeRunner, services: list[dict]) -> None:
+    runner.on(
+        lambda args: args[-3:] == ["ps", "--format", "json"],
+        stdout=json.dumps(services),
+        returncode=0,
+    )
+
+
+def _inspect_error(runner: FakeRunner, container: str, message: str) -> None:
+    runner.on(
+        lambda args: "inspect" in args and container in args,
+        stdout=f"{message}\n",
+        returncode=0,
+    )
+
+
+def test_created_container_after_up_fails_with_inspect_error(deploy_setup):
+    _, _, runner, _, _project_dir = deploy_setup
+    _compose_ps_response(
+        runner,
+        [
+            {
+                "Name": "budget-hq-backend-1",
+                "Service": "backend",
+                "State": "created",
+                "Status": "Created",
+                "Health": "",
+                "Image": "andrewallkin/budgethq:backend-main-x",
+                "CreatedAt": "",
+            }
+        ],
+    )
+    _inspect_error(
+        runner,
+        "budget-hq-backend-1",
+        "failed to set up container networking: Bind for 127.0.0.1:8000 failed: port is already allocated",
+    )
+    _git_ok(runner)
+    _compose_ok(runner)
+
+    with pytest.raises(DeployFailed) as exc_info:
+        _run_deploy(deploy_setup)
+    message = str(exc_info.value)
+    assert "failed_after_switch" in message
+    assert "backend" in message
+    assert "port is already allocated" in message
+
+
+def test_exited_container_after_up_fails_with_state_fallback(deploy_setup):
+    _, _, runner, _, _project_dir = deploy_setup
+    _compose_ps_response(
+        runner,
+        [
+            {
+                "Name": "budget-hq-worker-1",
+                "Service": "worker",
+                "State": "exited",
+                "Status": "Exited (1)",
+                "Health": "",
+                "Image": "img",
+                "CreatedAt": "",
+            }
+        ],
+    )
+    _inspect_error(runner, "budget-hq-worker-1", "")
+    _git_ok(runner)
+    _compose_ok(runner)
+
+    with pytest.raises(DeployFailed) as exc_info:
+        _run_deploy(deploy_setup)
+    message = str(exc_info.value)
+    assert "failed_after_switch" in message
+    assert "worker" in message
+    assert "exited" in message
+
+
+def test_running_containers_after_up_pass_check(deploy_setup):
+    _, _, runner, _, _project_dir = deploy_setup
+    _compose_ps_response(
+        runner,
+        [
+            {
+                "Name": "budget-hq-backend-1",
+                "Service": "backend",
+                "State": "running",
+                "Status": "Up",
+                "Health": "healthy",
+                "Image": "img",
+                "CreatedAt": "",
+            }
+        ],
+    )
+    _git_ok(runner)
+    _compose_ok(runner)
+
+    result = _run_deploy(deploy_setup)
+    assert result["status"] == "succeeded"
+    inspect_calls = [c for c in runner.calls if "inspect" in c["args"]]
+    assert inspect_calls == []
 
 
 def test_health_failure_failed_after_switch(deploy_setup):

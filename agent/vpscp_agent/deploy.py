@@ -8,7 +8,7 @@ from typing import Any, Literal
 import httpx
 
 from vpscp_agent import dumps
-from vpscp_agent.compose_ops import migrate_argv, run_compose_job
+from vpscp_agent.compose_ops import compose_ps, migrate_argv, run_compose_job
 from vpscp_agent.config import Settings
 from vpscp_agent.envfile import read_env
 from vpscp_agent.jobs import JobContext
@@ -109,6 +109,39 @@ def _run_health_check(
     )
 
 
+def _check_containers_started(
+    settings: Settings,
+    db: StateDB,
+    runner: Any,
+    slug: str,
+) -> None:
+    result = compose_ps(settings, db, runner, slug)
+    problems: list[str] = []
+    for service in result["services"]:
+        state = service["state"].strip().lower()
+        if state == "running":
+            continue
+        container = service["container"]
+        error = ""
+        inspect = runner(
+            ["docker", "inspect", container, "--format", "{{.State.Error}}"],
+            check=False,
+            timeout=60,
+        )
+        if inspect.returncode == 0:
+            error = inspect.stdout.strip()
+        if error:
+            problems.append(
+                f"service {service['service']} ({container}) did not start (state={state}): {error}"
+            )
+        else:
+            problems.append(
+                f"service {service['service']} ({container}) did not start (state={state})"
+            )
+    if problems:
+        raise DeployFailed("failed_after_switch", "; ".join(problems))
+
+
 def deploy_project(
     ctx: JobContext,
     settings: Settings,
@@ -191,6 +224,8 @@ def deploy_project(
             ["up", "-d", "--remove-orphans"],
             ctx=ctx,
         )
+
+        _check_containers_started(settings, db, runner, slug)
 
         if health_url is not None:
             ctx.log("==> step 7: health check")
