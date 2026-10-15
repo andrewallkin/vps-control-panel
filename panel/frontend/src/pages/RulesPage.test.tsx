@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createCloudflareRule } from '../lib/cloudflareRulesApi'
 import { placeRule, type CloudflareCustomRule, type RuleDraft } from '../lib/cloudflareRules'
 import { RulesPage } from './RulesPage'
 import { renderWithProviders } from '../test/renderWithProviders'
@@ -137,6 +138,24 @@ describe('RulesPage', () => {
     const adminIndex = names.findIndex((text) => text.includes('Block admin'))
     const webhookIndex = names.findIndex((text) => text.includes('Allow webhooks'))
     expect(adminIndex).toBeGreaterThan(webhookIndex)
+  })
+
+  it('sends no skip components when the action is not skip', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<RulesPage />)
+    await screen.findByText('Allow webhooks')
+
+    await user.click(screen.getByRole('button', { name: 'Add rule' }))
+    const dialog = screen.getByRole('dialog', { name: 'Add rule' })
+    await user.type(within(dialog).getByLabelText('Rule name'), 'Challenge bots')
+    await user.type(within(dialog).getByLabelText('Expression'), 'http.request.uri.path eq "/admin"')
+    await user.selectOptions(within(dialog).getByLabelText('Action'), 'managed_challenge')
+    await user.click(within(dialog).getByRole('button', { name: 'Save rule' }))
+
+    await waitFor(() => {
+      const draft = vi.mocked(createCloudflareRule).mock.calls.at(-1)?.[1]
+      expect(draft).toMatchObject({ action: 'managed_challenge', skip: [] })
+    })
   })
 
   it('requires a skip component and confirms delete', async () => {

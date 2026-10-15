@@ -182,6 +182,35 @@ def test_upsert_a_record_update_existing():
     ]
 
 
+def test_update_ruleset_rule_uses_patch_and_extracts_rule():
+    calls: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        method, path = request.method, request.url.path
+        calls.append((method, path))
+        if method == "PATCH" and "/rulesets/rs-1/rules/rule-1" in path:
+            body = json.loads(request.content.decode())
+            updated = {"id": "rule-1", **body}
+            return httpx.Response(
+                200,
+                json={"success": True, "result": {"id": "rs-1", "rules": [updated]}},
+            )
+        raise AssertionError(f"unexpected request: {method} {path}")
+
+    client = CloudflareClient("tok", transport=httpx.MockTransport(handler))
+    updated = client.update_ruleset_rule(
+        "zone-1",
+        "rs-1",
+        "rule-1",
+        {"description": "test", "expression": "true", "action": "block", "enabled": False},
+    )
+    assert updated["id"] == "rule-1"
+    assert updated["action"] == "block"
+    assert calls == [
+        ("PATCH", "/client/v4/zones/zone-1/rulesets/rs-1/rules/rule-1"),
+    ]
+
+
 def test_find_a_record_pagination():
     def handler(request: httpx.Request) -> httpx.Response:
         if not request.url.path.endswith("/dns_records"):

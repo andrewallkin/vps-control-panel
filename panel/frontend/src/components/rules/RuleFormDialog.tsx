@@ -256,7 +256,10 @@ export function RuleFormDialog({
               id={actionId}
               value={form.action}
               className={fieldClass}
-              onChange={(event) => update({ action: event.target.value as RuleAction })}
+              onChange={(event) => {
+                const action = event.target.value as RuleAction
+                update(action === 'skip' ? { action } : { action, skip: [] })
+              }}
             >
               {ACTION_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>
