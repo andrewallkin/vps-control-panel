@@ -211,9 +211,14 @@ def update_rule(
     ruleset_id, rows, error = client.get_custom_entrypoint(zone_id)
     if error == "permission":
         raise CloudflareError("Zone WAF Edit is required")
-    if ruleset_id is None or not any(str(row.get("id")) == rule_id for row in rows):
+    if ruleset_id is None:
+        raise NotFoundError(f"cloudflare rule not found: {rule_id!r}")
+    current_index = next((i for i, row in enumerate(rows) if str(row.get("id")) == rule_id), None)
+    if current_index is None:
         raise NotFoundError(f"cloudflare rule not found: {rule_id!r}")
     index = _index_for(body, len(rows), updating=True)
+    if index == current_index + 1:
+        index = None
     payload = rule_to_api(body, index)
     updated = client.update_ruleset_rule(zone_id, ruleset_id, rule_id, payload)
     return rule_from_api(updated)

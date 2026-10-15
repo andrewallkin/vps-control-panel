@@ -182,6 +182,103 @@ def test_update_rule_uses_patch_and_returns_rule(rules_client):
     assert events[0].operation == "cloudflare.rule.update"
 
 
+def test_update_rule_in_place_omits_position(rules_client):
+    client, holder = rules_client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        method, path = request.method, request.url.path
+        if method == "GET" and path.endswith("/entrypoint"):
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "result": {
+                        "id": "rs-1",
+                        "rules": [
+                            {
+                                "id": "rule-1",
+                                "description": "Inbound web hooks\n\nAllow inbound webhooks",
+                                "expression": 'http.request.uri.path eq "/api/strava/webhook"',
+                                "action": "skip",
+                                "enabled": True,
+                                "logging": {"enabled": True},
+                                "action_parameters": {"ruleset": "current"},
+                            }
+                        ],
+                    },
+                },
+            )
+        if method == "PATCH" and "/rulesets/rs-1/rules/rule-1" in path:
+            body = json.loads(request.content)
+            assert "position" not in body, "PATCH with unchanged position is rejected by Cloudflare"
+            updated = {**body, "id": "rule-1"}
+            return httpx.Response(
+                200,
+                json={"success": True, "result": {"id": "rs-1", "rules": [updated]}},
+            )
+        raise AssertionError(f"{method} {path}")
+
+    holder["transport"] = httpx.MockTransport(handler)
+    response = client.put(
+        "/v1/cloudflare/rules/rule-1",
+        params={"domain": "example.com"},
+        json=_body(name="Inbound web hooks"),
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == "rule-1"
+
+
+def test_update_rule_to_new_position_sends_position(rules_client):
+    client, holder = rules_client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        method, path = request.method, request.url.path
+        if method == "GET" and path.endswith("/entrypoint"):
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "result": {
+                        "id": "rs-1",
+                        "rules": [
+                            {
+                                "id": "rule-1",
+                                "description": "First",
+                                "expression": "true",
+                                "action": "block",
+                                "enabled": True,
+                            },
+                            {
+                                "id": "rule-2",
+                                "description": "Second",
+                                "expression": "false",
+                                "action": "block",
+                                "enabled": True,
+                            },
+                        ],
+                    },
+                },
+            )
+        if method == "PATCH" and "/rulesets/rs-1/rules/rule-1" in path:
+            body = json.loads(request.content)
+            assert body["position"] == {"index": 2}
+            moved = {**body, "id": "rule-1"}
+            return httpx.Response(
+                200,
+                json={"success": True, "result": {"id": "rs-1", "rules": [moved]}},
+            )
+        raise AssertionError(f"{method} {path}")
+
+    holder["transport"] = httpx.MockTransport(handler)
+    response = client.put(
+        "/v1/cloudflare/rules/rule-1",
+        params={"domain": "example.com"},
+        json=_body(name="First", placement={"kind": "custom", "position": 2}),
+    )
+    assert response.status_code == 200
+    assert response.json()["id"] == "rule-1"
+
+
 def test_list_permission_is_not_an_empty_zone(rules_client):
     client, holder = rules_client
 
