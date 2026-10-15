@@ -71,6 +71,18 @@ describe('ProjectPage database rotate', () => {
         if (url.includes('/deploys')) {
           return Promise.resolve(jsonResponse([]))
         }
+        if (url.includes('/api/database/databases')) {
+          return Promise.resolve(
+            jsonResponse([
+              {
+                name: 'demo',
+                owner: 'demo_user',
+                size_bytes: 8192,
+                attached_slug: 'demo',
+              },
+            ]),
+          )
+        }
         if (url.includes('/api/database/rotate')) {
           if (rotateStatus === 403) {
             return Promise.resolve(jsonResponse({ detail: 'step_up_required' }, 403))
@@ -140,6 +152,19 @@ describe('ProjectPage database rotate', () => {
       await screen.findByRole('alertdialog', { name: 'Deploy to apply environment changes' }),
     ).toBeInTheDocument()
     expect(screen.queryByText(/restart services/i)).not.toBeInTheDocument()
+  })
+
+  it('shows the database size', async () => {
+    renderWithProviders(
+      <Routes>
+        <Route path="/projects/:slug" element={<ProjectPage />} />
+      </Routes>,
+      { routerProps: { initialEntries: ['/projects/demo'] } },
+    )
+    expect(await screen.findByRole('heading', { name: 'Demo' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: 'Database' }))
+
+    expect(await screen.findByText('8 KiB')).toBeInTheDocument()
   })
 
   it('shows an error when rotate fails', async () => {

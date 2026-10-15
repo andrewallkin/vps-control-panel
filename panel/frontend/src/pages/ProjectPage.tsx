@@ -12,7 +12,7 @@ import { TagPicker } from '../components/projects/TagPicker'
 import { StatusBadge } from '../components/StatusBadge'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
-import { rotateDatabasePassword } from '../lib/databaseApi'
+import { fetchDatabases, rotateDatabasePassword } from '../lib/databaseApi'
 import { composeServiceStatusVariant } from '../lib/composeServiceStatus'
 import { fetchContainerMetrics } from '../lib/dashboardApi'
 import { fetchDomains } from '../lib/domainsApi'
@@ -332,6 +332,15 @@ export function ProjectPage() {
     enabled: Boolean(slug) && activeTab === 'database',
     refetchIntervalInBackground: false,
   })
+
+  const databasesQuery = useQuery({
+    queryKey: ['database', 'databases'],
+    queryFn: fetchDatabases,
+    enabled: Boolean(slug) && activeTab === 'database' && Boolean(project?.db_name),
+    refetchIntervalInBackground: false,
+  })
+  const databaseSizeBytes = databasesQuery.data?.find((row) => row.name === project?.db_name)
+    ?.size_bytes
 
   const domainsQuery = useQuery({
     queryKey: ['domains'],
@@ -931,7 +940,9 @@ export function ProjectPage() {
             </div>
             <div>
               <dt className="text-muted-foreground">Size</dt>
-              <dd className="font-mono">—</dd>
+              <dd className="font-mono">
+                {databaseSizeBytes == null ? '—' : formatBytes(databaseSizeBytes)}
+              </dd>
             </div>
           </dl>
           {project.database_mode !== 'none' ? (
