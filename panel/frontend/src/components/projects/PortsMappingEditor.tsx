@@ -14,11 +14,17 @@ function rowHint(
   if (holder === undefined) {
     return { text: 'free', tone: 'free' }
   }
-  if (holder.owner === selfSlug && holder.env_var === draft.env_var) {
+  if (holder.owner === selfSlug) {
     return { text: 'current', tone: 'current' }
   }
-  if (holder.owner !== null && holder.env_var !== null) {
-    return { text: `used by ${holder.owner} (${holder.env_var})`, tone: 'taken' }
+  if (holder.owner !== null) {
+    return {
+      text:
+        holder.env_var !== null
+          ? `used by ${holder.owner} (${holder.env_var})`
+          : `used by ${holder.owner}`,
+      tone: 'taken',
+    }
   }
   return { text: 'in use on this server', tone: 'taken' }
 }

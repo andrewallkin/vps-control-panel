@@ -29,6 +29,7 @@ export interface ComposePsService {
   health: string
   image: string
   started_at: string
+  ports?: string[]
 }
 
 export interface ProjectEnvEntry {

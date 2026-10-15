@@ -89,6 +89,19 @@ export function ProjectPortsSection({ slug }: ProjectPortsSectionProps) {
     <div className="space-y-4">
       {portsQuery.isPending ? (
         <p className="text-sm text-muted-foreground">Loading port mappings…</p>
+      ) : portsQuery.isError ? (
+        <div className="space-y-2">
+          <p className="text-sm text-destructive" role="alert">
+            {errorText(portsQuery.error)}
+          </p>
+          <button
+            type="button"
+            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer"
+            onClick={() => portsQuery.refetch()}
+          >
+            Retry
+          </button>
+        </div>
       ) : (
         <>
           <PortsMappingEditor

@@ -65,13 +65,18 @@ export function validatePortDrafts(
     if (holder === undefined) {
       continue
     }
-    if (holder.owner === selfSlug && holder.env_var === draft.env_var) {
+    if (holder.owner === selfSlug) {
+      // Own DB allocation or a port bound by this project's own container:
+      // keeping it formalises the existing binding.
       continue
     }
-    if (holder.owner !== null && holder.env_var !== null) {
+    if (holder.owner !== null) {
       return {
         ok: false,
-        error: `Port ${port} is used by ${holder.owner} (${holder.env_var})`,
+        error:
+          holder.env_var !== null
+            ? `Port ${port} is used by ${holder.owner} (${holder.env_var})`
+            : `Port ${port} is used by ${holder.owner}`,
       }
     }
     return { ok: false, error: `Port ${port} is already in use on this server` }
