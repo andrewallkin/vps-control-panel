@@ -117,6 +117,71 @@ def test_create_rule_on_missing_entrypoint_and_list(rules_client):
     assert events[0].operation == "cloudflare.rule.create"
 
 
+def test_update_rule_uses_patch_and_returns_rule(rules_client):
+    client, holder = rules_client
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        method, path = request.method, request.url.path
+        if method == "GET" and path.endswith("/entrypoint"):
+            return httpx.Response(
+                200,
+                json={
+                    "success": True,
+                    "result": {
+                        "id": "rs-1",
+                        "rules": [
+                            {
+                                "id": "rule-1",
+                                "description": "Allow webhooks\n\nStrava and Telegram",
+                                "expression": 'http.request.uri.path eq "/api/strava/webhook"',
+                                "action": "skip",
+                                "enabled": True,
+                                "logging": {"enabled": True},
+                                "action_parameters": {"ruleset": "current"},
+                            }
+                        ],
+                    },
+                },
+            )
+        if method == "PATCH" and "/rulesets/rs-1/rules/rule-1" in path:
+            body = json.loads(request.content)
+            assert body["action"] == "managed_challenge"
+            assert "action_parameters" not in body
+            updated = {
+                "id": "rule-1",
+                "description": "Challenge bots\n\nsuspicious paths",
+                "expression": body["expression"],
+                "action": "managed_challenge",
+                "enabled": True,
+            }
+            return httpx.Response(
+                200,
+                json={"success": True, "result": {"id": "rs-1", "rules": [updated]}},
+            )
+        raise AssertionError(f"{method} {path}")
+
+    holder["transport"] = httpx.MockTransport(handler)
+    response = client.put(
+        "/v1/cloudflare/rules/rule-1",
+        params={"domain": "example.com"},
+        json=_body(
+            name="Challenge bots",
+            description="suspicious paths",
+            action="managed_challenge",
+            skip=[],
+        ),
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == "rule-1"
+    assert payload["action"] == "managed_challenge"
+    assert payload["name"] == "Challenge bots"
+    assert payload["description"] == "suspicious paths"
+    assert payload["skip"] == []
+    events = audit.list_events(client.app.state.db)
+    assert events[0].operation == "cloudflare.rule.update"
+
+
 def test_list_permission_is_not_an_empty_zone(rules_client):
     client, holder = rules_client
 

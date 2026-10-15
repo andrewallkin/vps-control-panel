@@ -284,12 +284,17 @@ class CloudflareClient:
         rule: dict[str, Any],
     ) -> dict[str, Any]:
         result = self._request(
-            "PUT",
+            "PATCH",
             f"/zones/{zone_id}/rulesets/{ruleset_id}/rules/{rule_id}",
             json=rule,
         )
         if not isinstance(result, dict):
             raise CloudflareError("unexpected Cloudflare rule response")
+        rows = result.get("rules")
+        if isinstance(rows, list):
+            for row in rows:
+                if isinstance(row, dict) and str(row.get("id")) == rule_id:
+                    return row
         return result
 
     def delete_ruleset_rule(self, zone_id: str, ruleset_id: str, rule_id: str) -> None:
