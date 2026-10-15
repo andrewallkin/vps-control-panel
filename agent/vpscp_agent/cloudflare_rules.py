@@ -213,9 +213,7 @@ def update_rule(
         raise CloudflareError("Zone WAF Edit is required")
     if ruleset_id is None:
         raise NotFoundError(f"cloudflare rule not found: {rule_id!r}")
-    current_index = next(
-        (i for i, row in enumerate(rows) if str(row.get("id")) == rule_id), None
-    )
+    current_index = next((i for i, row in enumerate(rows) if str(row.get("id")) == rule_id), None)
     if current_index is None:
         raise NotFoundError(f"cloudflare rule not found: {rule_id!r}")
     index = _index_for(body, len(rows), updating=True)
