@@ -11,6 +11,7 @@ from vpscp_agent.hostnames import (
     allocate_port,
     claim_hostnames,
     list_ports,
+    list_used_ports,
     release_ports,
     release_site,
 )
@@ -113,6 +114,44 @@ def test_allocate_port_idempotent(state_db: StateDB):
     first = allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: set())
     second = allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: {10000})
     assert second == first
+
+
+def test_allocate_port_explicit_free(state_db: StateDB):
+    port = allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: set(), port=8001)
+    assert port == 8001
+    assert list_ports(state_db, "owner-a") == [{"port": 8001, "env_var": "APP_PORT"}]
+
+
+def test_allocate_port_explicit_taken_by_db_conflict(state_db: StateDB):
+    allocate_port(state_db, "owner-b", "WEB_PORT", listening_ports=lambda: set())
+    with pytest.raises(ConflictError):
+        allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: set(), port=10000)
+
+
+def test_allocate_port_explicit_listening_conflict(state_db: StateDB):
+    with pytest.raises(ConflictError):
+        allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: {8001}, port=8001)
+
+
+def test_allocate_port_explicit_remaps_own_var(state_db: StateDB):
+    first = allocate_port(
+        state_db, "owner-a", "APP_PORT", listening_ports=lambda: set(), port=10000
+    )
+    assert first == 10000
+    second = allocate_port(
+        state_db, "owner-a", "APP_PORT", listening_ports=lambda: set(), port=10001
+    )
+    assert second == 10001
+    assert list_ports(state_db, "owner-a") == [{"port": 10001, "env_var": "APP_PORT"}]
+
+
+def test_list_used_ports_merges_allocations_and_listening(state_db: StateDB):
+    allocate_port(state_db, "owner-a", "APP_PORT", listening_ports=lambda: set())
+    used = list_used_ports(state_db, listening_ports=lambda: {5432, 10000})
+    assert used == [
+        {"port": 5432, "owner": None, "env_var": None},
+        {"port": 10000, "owner": "owner-a", "env_var": "APP_PORT"},
+    ]
 
 
 def test_allocate_port_retries_after_port_integrity_error(state_db: StateDB, monkeypatch):
@@ -259,6 +298,23 @@ def test_register_domain_empty_zone_id_returns_400(server_client):
         json={"name": "example.com", "zone_id": ""},
     )
     assert response.status_code == 400
+
+
+def test_used_ports_route(server_client, monkeypatch):
+    db = server_client.app.state.db
+    monkeypatch.setattr(
+        "vpscp_agent.routes.server._listening_ports",
+        lambda: {5432},
+    )
+    allocate_port(db, "myapp", "WEB_PORT", listening_ports=lambda: set())
+
+    resp = server_client.get("/v1/ports/used")
+
+    assert resp.status_code == 200
+    assert resp.json() == [
+        {"port": 5432, "owner": None, "env_var": None},
+        {"port": 10000, "owner": "myapp", "env_var": "WEB_PORT"},
+    ]
 
 
 def test_port_routes(server_client, monkeypatch):

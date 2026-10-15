@@ -18,6 +18,10 @@ from vpscp_agent.validation import safe_project_path, validate_project_slug
 SERVICE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,62}$")
 IMAGE_VAR_RE = re.compile(r"\$\{(DOCKER_IMAGE_[A-Z0-9_]+)(:-[^}]*)?\}")
 SERVICE_HEADER_RE = re.compile(r"^[ ]{2}[A-Za-z0-9_-]+:")
+PORT_BINDING_RE = re.compile(
+    r"(?:\d{1,3}(?:\.\d{1,3}){3}:)?[\"']?"
+    r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}\"']+))?\}:(\d+)"
+)
 
 POSTGRES_NET_WARNING = "compose file does not join postgres-net"
 
@@ -102,6 +106,59 @@ def migrate_argv(service: str, command: str) -> list[str]:
     if not parts:
         raise ValueError("command must not be empty")
     return ["run", "--rm", "--no-deps", service, *parts]
+
+
+def _service_names_from_raw(text: str) -> list[str]:
+    names: list[str] = []
+    in_services = False
+    for line in text.splitlines():
+        if line.strip() == "services:":
+            in_services = True
+            continue
+        if not in_services:
+            continue
+        if line and not line[0].isspace():
+            in_services = False
+            continue
+        match = SERVICE_HEADER_RE.match(line)
+        if match is not None:
+            names.append(line.strip().rstrip(":"))
+    return names
+
+
+def _port_default(value: str | None) -> int | None:
+    if value is None:
+        return None
+    stripped = value.strip().strip("\"'")
+    return int(stripped) if stripped.isdigit() else None
+
+
+def get_compose_ports(
+    settings: Settings,
+    db: StateDB,
+    runner: Runner,
+    slug: str,
+) -> dict[str, Any]:
+    _row, _project_dir, compose_file = require_compose_project(settings, db, slug)
+    compose_path = safe_project_path(settings.apps_dir, slug, compose_file)
+    raw_text = compose_path.read_text(encoding="utf-8")
+    ports: list[dict[str, Any]] = []
+    for name in _service_names_from_raw(raw_text):
+        seen: set[str] = set()
+        slice_text = _service_raw_slice(raw_text, name)
+        for match in PORT_BINDING_RE.finditer(slice_text):
+            env_var = match.group(1)
+            if env_var in seen:
+                continue
+            seen.add(env_var)
+            ports.append(
+                {
+                    "service": name,
+                    "env_var": env_var,
+                    "default": _port_default(match.group(2)),
+                }
+            )
+    return {"ports": ports}
 
 
 def _collect_networks(config: dict[str, Any]) -> set[str]:

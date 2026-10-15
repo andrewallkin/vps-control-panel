@@ -371,3 +371,81 @@ describe('ProjectPage overview, logs, and migrations', () => {
     expect(screen.queryByRole('heading', { name: 'Migration log' })).not.toBeInTheDocument()
   })
 })
+
+describe('ProjectPage ports tab', () => {
+  beforeEach(() => {
+    window.location.hash = ''
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        const method = init?.method ?? 'GET'
+        if (url.endsWith('/api/projects/demo') && method === 'GET') {
+          return Promise.resolve(jsonResponse(project))
+        }
+        if (url.endsWith('/api/projects/demo/ports') && method === 'GET') {
+          return Promise.resolve(
+            jsonResponse({
+              ports: [
+                { service: 'backend', env_var: 'BACKEND_PORT', default: 8000, host_port: 8001 },
+              ],
+            }),
+          )
+        }
+        if (url.endsWith('/api/ports/used')) {
+          return Promise.resolve(
+            jsonResponse([
+              { port: 8001, owner: 'demo', env_var: 'BACKEND_PORT' },
+              { port: 8000, owner: 'spliteasy', env_var: 'WEB_PORT' },
+            ]),
+          )
+        }
+        if (url.endsWith('/api/projects/demo/ports') && method === 'PUT') {
+          return Promise.resolve(
+            jsonResponse({
+              ports: [
+                { service: 'backend', env_var: 'BACKEND_PORT', default: 8000, host_port: 8002 },
+              ],
+            }),
+          )
+        }
+        if (url.includes('/domains')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function renderPortsTab() {
+    window.location.hash = '#ports'
+    return renderWithProviders(
+      <Routes>
+        <Route path="/projects/:slug" element={<ProjectPage />} />
+      </Routes>,
+      { routerProps: { initialEntries: ['/projects/demo#ports'] } },
+    )
+  }
+
+  it('shows port mappings with in-use hints', async () => {
+    renderPortsTab()
+    const backend = (await screen.findByLabelText('BACKEND_PORT host port')) as HTMLInputElement
+    expect(backend.value).toBe('8001')
+    expect(await screen.findByText(/current/i)).toBeInTheDocument()
+    expect(screen.getByText(/compose default 8000/i)).toBeInTheDocument()
+  })
+
+  it('saves edited ports', async () => {
+    const user = userEvent.setup()
+    renderPortsTab()
+    const backend = (await screen.findByLabelText('BACKEND_PORT host port')) as HTMLInputElement
+    await user.clear(backend)
+    await user.type(backend, '8002')
+    await user.click(screen.getByRole('button', { name: /save/i }))
+    expect(await screen.findByText(/redeploy/i)).toBeInTheDocument()
+  })
+})

@@ -6,6 +6,7 @@ import { ComposeLogsViewer } from '../components/projects/ComposeLogsViewer'
 import { EnvEditor } from '../components/projects/EnvEditor'
 import { HostnameEditor } from '../components/projects/HostnameEditor'
 import { ProjectDeleteSection } from '../components/projects/ProjectDeleteSection'
+import { ProjectPortsSection } from '../components/projects/ProjectPortsSection'
 import { RouteEditor } from '../components/projects/RouteEditor'
 import { ServiceMappingEditor } from '../components/projects/ServiceMappingEditor'
 import { TagPicker } from '../components/projects/TagPicker'
@@ -37,6 +38,7 @@ import {
   fetchProjectDeploys,
   fetchProjectDumps,
   fetchProjectEnv,
+  fetchProjectPorts,
   fetchProjectTags,
   deployToApplyEnv,
   patchProjectEnv,
@@ -60,6 +62,7 @@ const TABS = [
   { id: 'logs', label: 'Logs' },
   { id: 'environment', label: 'Environment' },
   { id: 'routing', label: 'Routing' },
+  { id: 'ports', label: 'Ports' },
   { id: 'database', label: 'Database' },
   { id: 'settings', label: 'Settings' },
 ] as const
@@ -348,6 +351,16 @@ export function ProjectPage() {
     enabled: activeTab === 'routing',
     refetchIntervalInBackground: false,
   })
+
+  const portsQuery = useQuery({
+    queryKey: ['projects', slug, 'ports'],
+    queryFn: () => fetchProjectPorts(slug),
+    enabled: activeTab === 'routing',
+    refetchIntervalInBackground: false,
+  })
+  const portEnvVarOptions = (portsQuery.data?.ports ?? [])
+    .map((row) => row.env_var)
+    .filter((envVar) => envVar !== '')
 
   const [migrateJobId, setMigrateJobId] = useState<string | null>(null)
   const migrateDismissTimer = useRef<number | null>(null)
@@ -915,7 +928,11 @@ export function ProjectPage() {
             domains={(domainsQuery.data ?? []).map((row) => row.name)}
             onChange={setHostnamesDraft}
           />
-          <RouteEditor routes={routesDraft} onChange={setRoutesDraft} />
+          <RouteEditor
+            routes={routesDraft}
+            onChange={setRoutesDraft}
+            portEnvVarOptions={portEnvVarOptions}
+          />
           <button
             type="button"
             disabled={routingMutation.isPending}
@@ -924,6 +941,12 @@ export function ProjectPage() {
           >
             {routingMutation.isPending ? 'Saving…' : 'Save routing'}
           </button>
+        </div>
+      ) : null}
+
+      {activeTab === 'ports' ? (
+        <div role="tabpanel" className="min-w-0 space-y-4">
+          <ProjectPortsSection slug={slug} />
         </div>
       ) : null}
 

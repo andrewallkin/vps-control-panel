@@ -18,6 +18,22 @@ export interface CreationState {
   status: 'running' | 'failed' | 'ready' | string
   steps: CreationStep[]
   public_key?: string | null
+  port_choices?: Record<string, number | null>
+  ports?: Record<string, number | null>
+  ports_confirmed?: boolean
+}
+
+export interface UsedPortRow {
+  port: number
+  owner: string | null
+  env_var: string | null
+}
+
+export interface ProjectPortRow {
+  service: string | null
+  env_var: string
+  default: number | null
+  host_port: number | null
 }
 
 export interface ProjectHostname {
@@ -315,6 +331,36 @@ export async function fetchDeployKeyPublic(slug: string): Promise<{ public_key: 
   return apiJson(`/api/projects/${encodeURIComponent(slug)}/deploy-key`)
 }
 
+export async function fetchUsedPorts(): Promise<UsedPortRow[]> {
+  return apiJson('/api/ports/used')
+}
+
+export async function fetchProjectPorts(slug: string): Promise<{ ports: ProjectPortRow[] }> {
+  return apiJson(`/api/projects/${encodeURIComponent(slug)}/ports`)
+}
+
+export async function putProjectPorts(
+  slug: string,
+  ports: Record<string, number>,
+): Promise<{ ports: ProjectPortRow[] }> {
+  return apiJson(`/api/projects/${encodeURIComponent(slug)}/ports`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ports }),
+  })
+}
+
+export async function confirmCreationPorts(
+  slug: string,
+  ports: Record<string, number>,
+): Promise<{ slug: string; creation_state: CreationState }> {
+  return apiJson(`/api/projects/${encodeURIComponent(slug)}/creation/ports`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ports }),
+  })
+}
+
 export function projectCreationStatusLabel(status: string): string {
   if (status === 'ready') {
     return 'Ready'
@@ -327,6 +373,9 @@ export function projectCreationStatusLabel(status: string): string {
   }
   if (status === 'awaiting_deploy_key') {
     return 'Add deploy key'
+  }
+  if (status === 'awaiting_ports') {
+    return 'Set ports'
   }
   return status
 }

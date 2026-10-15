@@ -16,7 +16,11 @@ from vpscp_panel.models import (
     ProjectRoute,
     ProjectService,
 )
-from vpscp_panel.project_creation import initial_creation_state, run_creation
+from vpscp_panel.project_creation import (
+    confirm_creation_ports,
+    initial_creation_state,
+    run_creation,
+)
 
 
 def _make_project(
@@ -418,3 +422,155 @@ def test_delete_project_requires_csrf(client, admin_user, frozen_time, db_sessio
 
     assert response.status_code == 403
     assert response.json() == {"detail": "csrf_failed"}
+
+
+COMPOSE_PORTS_PAYLOAD = {
+    "ports": [
+        {"service": "web", "env_var": "APP_PORT", "default": 8000},
+        {"service": "backend", "env_var": "BACKEND_PORT", "default": 9000},
+    ]
+}
+
+
+def _port_pause_handler(
+    *,
+    compose_ports_payload: dict,
+    allocate_calls: list[dict],
+    env_put_content: list[str],
+):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/projects" and request.method == "POST":
+            return httpx.Response(200, json={"slug": "myapp"})
+        if path == "/v1/projects/myapp/clone" and request.method == "POST":
+            return httpx.Response(200, json={"job_id": "job-1"})
+        if path == "/v1/jobs/job-1" and request.method == "GET":
+            return httpx.Response(200, json={"status": "succeeded"})
+        if path == "/v1/projects/myapp/compose-ports" and request.method == "GET":
+            return httpx.Response(200, json=compose_ports_payload)
+        if path == "/v1/ports/allocate" and request.method == "POST":
+            body = json.loads(request.content.decode())
+            allocate_calls.append(body)
+            return httpx.Response(200, json={"port": body.get("port") or 10001})
+        if path == "/v1/db/create" and request.method == "POST":
+            return httpx.Response(
+                200,
+                json={"db_name": "myapp", "db_user": "myapp_user", "password": "pw"},
+            )
+        if path == "/v1/projects/myapp/env" and request.method == "PUT":
+            body = json.loads(request.content.decode())
+            env_put_content.append(body["content"])
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/nginx/sites" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        if path == "/v1/dns/records/upsert" and request.method == "POST":
+            return httpx.Response(200, json={"ok": True})
+        return httpx.Response(404, json={"detail": f"unexpected {request.method} {path}"})
+
+    return handler
+
+
+@pytest.mark.asyncio
+async def test_run_creation_pauses_for_port_confirmation(db_session):
+    handler = _port_pause_handler(
+        compose_ports_payload=COMPOSE_PORTS_PAYLOAD,
+        allocate_calls=[],
+        env_put_content=[],
+    )
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(db_session)
+
+    await run_creation(db_session, agent, "myapp")
+
+    project = db_session.get(Project, "myapp")
+    assert project is not None
+    state = json.loads(project.creation_state)
+    assert state["status"] == "awaiting_ports"
+    ports_step = next(step for step in state["steps"] if step["name"] == "ports")
+    assert ports_step["status"] == "pending"
+    assert (
+        db_session.scalars(
+            select(PortAllocation).where(PortAllocation.project_slug == "myapp")
+        ).all()
+        == []
+    )
+
+
+@pytest.mark.asyncio
+async def test_confirm_ports_resumes_creation_with_explicit_ports(db_session):
+    allocate_calls: list[dict] = []
+    env_put_content: list[str] = []
+    handler = _port_pause_handler(
+        compose_ports_payload=COMPOSE_PORTS_PAYLOAD,
+        allocate_calls=allocate_calls,
+        env_put_content=env_put_content,
+    )
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(db_session)
+
+    await run_creation(db_session, agent, "myapp")
+    confirm_creation_ports(db_session, "myapp", {"APP_PORT": 10001, "BACKEND_PORT": 8001})
+    await run_creation(db_session, agent, "myapp")
+
+    project = db_session.get(Project, "myapp")
+    assert project is not None
+    state = json.loads(project.creation_state)
+    assert state["status"] == "ready"
+
+    allocations = {
+        row.env_var: row.host_port
+        for row in db_session.scalars(
+            select(PortAllocation).where(PortAllocation.project_slug == "myapp")
+        ).all()
+    }
+    assert allocations == {"APP_PORT": 10001, "BACKEND_PORT": 8001}
+    assert {
+        "owner": "myapp",
+        "env_var": "BACKEND_PORT",
+        "port": 8001,
+    } in allocate_calls
+    assert len(env_put_content) == 1
+    assert "BACKEND_PORT=8001" in env_put_content[0]
+    assert "APP_PORT=10001" in env_put_content[0]
+
+
+@pytest.mark.asyncio
+async def test_run_creation_without_compose_ports_does_not_pause(db_session):
+    allocate_calls: list[dict] = []
+    env_put_content: list[str] = []
+    handler = _port_pause_handler(
+        compose_ports_payload={"ports": []},
+        allocate_calls=allocate_calls,
+        env_put_content=env_put_content,
+    )
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(db_session)
+
+    await run_creation(db_session, agent, "myapp")
+
+    project = db_session.get(Project, "myapp")
+    assert project is not None
+    state = json.loads(project.creation_state)
+    assert state["status"] == "ready"
+    assert allocate_calls == [{"owner": "myapp", "env_var": "APP_PORT"}]
+
+
+@pytest.mark.asyncio
+async def test_confirm_ports_validates_input(db_session):
+    handler = _port_pause_handler(
+        compose_ports_payload=COMPOSE_PORTS_PAYLOAD,
+        allocate_calls=[],
+        env_put_content=[],
+    )
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(handler))
+    _make_project(db_session)
+    await run_creation(db_session, agent, "myapp")
+
+    with pytest.raises(ValueError):
+        confirm_creation_ports(db_session, "myapp", {"APP_PORT": 10001, "BACKEND_PORT": 10001})
+    with pytest.raises(ValueError):
+        confirm_creation_ports(db_session, "myapp", {"APP_PORT": 70000})
+    with pytest.raises(ValueError):
+        confirm_creation_ports(db_session, "myapp", {"lower case": 8001})
+    with pytest.raises(ValueError):
+        confirm_creation_ports(db_session, "myapp", {"UNEXPECTED_VAR": 8001})
