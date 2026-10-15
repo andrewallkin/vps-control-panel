@@ -55,7 +55,6 @@ export function RuleFormDialog({
 }: RuleFormDialogProps) {
   const titleId = useId()
   const nameId = useId()
-  const descriptionId = useId()
   const expressionId = useId()
   const actionId = useId()
   const orderId = useId()
@@ -149,7 +148,6 @@ export function RuleFormDialog({
             onSubmit({
               ...form,
               name: form.name.trim(),
-              description: form.description.trim(),
               expression: form.expression.trim(),
             })
           }}
@@ -175,23 +173,6 @@ export function RuleFormDialog({
                 {errors.name}
               </p>
             ) : null}
-          </div>
-
-          <div>
-            <label htmlFor={descriptionId} className="block text-sm font-medium">
-              Description
-            </label>
-            <textarea
-              id={descriptionId}
-              rows={2}
-              value={form.description}
-              aria-describedby={`${descriptionId}-hint`}
-              className={fieldClass}
-              onChange={(event) => update({ description: event.target.value })}
-            />
-            <p id={`${descriptionId}-hint`} className="mt-1 text-sm text-muted-foreground">
-              Shown in the rules list. Leave blank to use a summary of the expression.
-            </p>
           </div>
 
           <div>

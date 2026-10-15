@@ -46,11 +46,6 @@ type EditorState =
 
 type PendingSave = { editor: EditorState; draft: RuleDraft }
 
-function storedDescription(draft: RuleDraft): string {
-  const summary = describeExpression(draft.expression)
-  return draft.description.trim() === summary ? '' : draft.description.trim()
-}
-
 function errorDetail(error: unknown): string {
   if (error instanceof ApiError) {
     const body = error.body as { detail?: string } | null
@@ -98,12 +93,11 @@ export function RulesPage() {
   }
 
   async function saveRule(current: EditorState, draft: RuleDraft) {
-    const payload = { ...draft, description: storedDescription(draft) }
     if (current.mode === 'edit') {
-      await updateCloudflareRule(selectedDomain, current.ruleId, payload)
+      await updateCloudflareRule(selectedDomain, current.ruleId, draft)
       setToast('Rule updated.')
     } else {
-      await createCloudflareRule(selectedDomain, payload)
+      await createCloudflareRule(selectedDomain, draft)
       setToast('Rule added.')
     }
     setEditor(null)

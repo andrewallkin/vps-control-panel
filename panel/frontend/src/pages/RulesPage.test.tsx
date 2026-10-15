@@ -26,7 +26,7 @@ vi.mock('../lib/cloudflareRulesApi', () => ({
     const rule: CloudflareCustomRule = {
       id: 'rule-new',
       name: draft.name,
-      description: draft.description,
+      description: '',
       expression: draft.expression,
       action: draft.action,
       enabled: draft.enabled,
@@ -38,10 +38,11 @@ vi.mock('../lib/cloudflareRulesApi', () => ({
   }),
   updateCloudflareRule: vi.fn(async (domain: string, ruleId: string, draft: RuleDraft) => {
     const current = store[domain] ?? []
+    const existing = current.find((item) => item.id === ruleId)
     const rule: CloudflareCustomRule = {
       id: ruleId,
       name: draft.name,
-      description: draft.description,
+      description: existing?.description ?? '',
       expression: draft.expression,
       action: draft.action,
       enabled: draft.enabled,
@@ -89,7 +90,7 @@ describe('RulesPage', () => {
     }
   })
 
-  it('shows the rule name and description, and the full expression in the editor', async () => {
+  it('shows the rule name and the full expression in the editor', async () => {
     const user = userEvent.setup()
     renderWithProviders(<RulesPage />)
 
@@ -105,15 +106,14 @@ describe('RulesPage', () => {
     const name = within(dialog).getByLabelText('Rule name')
     await user.clear(name)
     await user.type(name, 'Webhook bypass')
-    const description = within(dialog).getByLabelText('Description')
-    await user.clear(description)
-    await user.type(description, 'Strava and Telegram webhooks')
     await user.click(within(dialog).getByRole('button', { name: 'Save rule' }))
 
     await waitFor(() => {
       expect(screen.getByText('Webhook bypass')).toBeInTheDocument()
     })
-    expect(within(rowFor('Webhook bypass')).getByText('Strava and Telegram webhooks')).toBeInTheDocument()
+    expect(
+      within(rowFor('Webhook bypass')).getByText('URI Path equals /api/strava/webhook'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('status')).toHaveTextContent('Rule updated.')
   })
 
@@ -138,6 +138,17 @@ describe('RulesPage', () => {
     const adminIndex = names.findIndex((text) => text.includes('Block admin'))
     const webhookIndex = names.findIndex((text) => text.includes('Allow webhooks'))
     expect(adminIndex).toBeGreaterThan(webhookIndex)
+  })
+
+  it('has no description field in the rule form', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<RulesPage />)
+    await screen.findByText('Allow webhooks')
+
+    await user.click(screen.getByRole('button', { name: 'Add rule' }))
+    const dialog = screen.getByRole('dialog', { name: 'Add rule' })
+    expect(within(dialog).getByLabelText('Rule name')).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText('Description')).not.toBeInTheDocument()
   })
 
   it('sends no skip components when the action is not skip', async () => {

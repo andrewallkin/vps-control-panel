@@ -39,7 +39,6 @@ export interface CloudflareCustomRule {
 
 export interface RuleDraft {
   name: string
-  description: string
   expression: string
   action: RuleAction
   enabled: boolean
@@ -158,7 +157,6 @@ export function customSlots(otherRules: CloudflareCustomRule[]): { position: num
 export function emptyDraft(): RuleDraft {
   return {
     name: '',
-    description: '',
     expression: '',
     action: 'skip',
     enabled: true,
@@ -178,7 +176,6 @@ export function draftFromRule(rule: CloudflareCustomRule, rules: CloudflareCusto
         : { kind: 'custom', position: index + 1 }
   return {
     name: rule.name,
-    description: rule.description.trim() || describeExpression(rule.expression),
     expression: rule.expression,
     action: rule.action,
     enabled: rule.enabled,
