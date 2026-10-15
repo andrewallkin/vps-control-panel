@@ -7,6 +7,7 @@ from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, field_validator
 
 from vpscp_agent import audit
+from vpscp_agent.docker_ops import container_host_ports
 from vpscp_agent.domains import DomainRecord, list_domains, register_domain, unregister_domain
 from vpscp_agent.hostnames import allocate_port, list_ports, list_used_ports, release_ports
 from vpscp_agent.state import StateDB
@@ -23,6 +24,18 @@ def _listening_ports() -> set[int]:
         if conn.status == psutil.CONN_LISTEN and conn.laddr:
             ports.add(conn.laddr.port)
     return ports
+
+
+def _container_projects(runner) -> dict[int, str]:
+    """Host ports currently bound by containers, mapped to their compose project."""
+    bindings = container_host_ports(runner)
+    return {
+        entry["host_port"]: binding["project"]
+        for binding in bindings
+        if binding["project"] is not None
+        for entry in binding["ports"]
+        if entry["ip"] in ("", "127.0.0.1", "::1")
+    }
 
 
 def _get_setting(db: StateDB, key: str) -> str | None:
@@ -164,7 +177,11 @@ def delete_domain(name: DomainName, request: Request) -> Response:
 
 @router.get("/v1/ports/used")
 def get_used_ports(request: Request) -> list[dict[str, int | str | None]]:
-    return list_used_ports(request.app.state.db, listening_ports=_listening_ports)
+    return list_used_ports(
+        request.app.state.db,
+        listening_ports=_listening_ports,
+        container_projects=_container_projects(request.app.state.runner),
+    )
 
 
 @router.get("/v1/ports")
@@ -183,6 +200,7 @@ def post_allocate_port(body: AllocatePortBody, request: Request) -> dict[str, in
             body.env_var,
             listening_ports=_listening_ports,
             port=body.port,
+            container_projects=_container_projects(request.app.state.runner),
         )
     return {"port": port}
 

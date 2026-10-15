@@ -253,7 +253,15 @@ async def run_creation(db: Session, agent: AgentClient, slug: str) -> None:
         _save_state(db, project, state)
 
         if step_name == "clone":
-            paused = await _maybe_pause_for_ports(db, agent, project, state)
+            try:
+                paused = await _maybe_pause_for_ports(db, agent, project, state)
+            except AgentError as exc:
+                ports_step = _step_by_name(state, "ports")
+                ports_step["status"] = "failed"
+                ports_step["error"] = str(exc.detail)
+                state["status"] = "failed"
+                _save_state(db, project, state)
+                return
             if paused:
                 return
 
@@ -273,7 +281,9 @@ async def _maybe_pause_for_ports(
         return False
     try:
         payload = await agent.get(f"/v1/projects/{project.slug}/compose-ports")
-    except AgentError:
+    except AgentError as exc:
+        if exc.status >= 500:
+            raise
         return False
     choices: dict[str, int | None] = {}
     if isinstance(payload, dict):
@@ -381,7 +391,9 @@ async def _step_ports(
     env_vars: list[str] = []
     try:
         payload = await agent.get(f"/v1/projects/{project.slug}/compose-ports")
-    except AgentError:
+    except AgentError as exc:
+        if exc.status >= 500:
+            raise
         payload = {}
     if isinstance(payload, dict) and isinstance(payload.get("ports"), list):
         for entry in payload["ports"]:

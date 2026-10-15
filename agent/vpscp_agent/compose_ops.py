@@ -10,6 +10,7 @@ from typing import Any
 from vpscp_agent.commands import CommandError, Runner
 from vpscp_agent.config import Settings
 from vpscp_agent.db_ops import NotFoundError
+from vpscp_agent.docker_ops import container_host_ports
 from vpscp_agent.jobs import JobContext
 from vpscp_agent.projects import get_project_row
 from vpscp_agent.state import StateDB
@@ -319,4 +320,18 @@ def compose_ps(
         timeout=120,
     )
     services = parse_compose_ps(result.stdout)
+    published: dict[str, list[str]] = {}
+    for binding in container_host_ports(runner):
+        if binding["project"] != slug:
+            continue
+        rendered = [
+            f"{entry['ip']}:{entry['host_port']}->{entry['container_port']}"
+            if entry["ip"]
+            else f"{entry['host_port']}->{entry['container_port']}"
+            for entry in binding["ports"]
+        ]
+        key = binding["service"] or ""
+        published.setdefault(key, []).extend(rendered)
+    for service in services:
+        service["ports"] = published.get(service["service"], [])
     return {"services": services}

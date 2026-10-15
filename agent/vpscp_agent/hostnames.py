@@ -70,13 +70,16 @@ def allocate_port(
     *,
     listening_ports: ListeningPorts | None = None,
     port: int | None = None,
+    container_projects: dict[int, str] | None = None,
 ) -> int:
     validate_slug(owner)
     validate_env_key(env_var)
     listen = listening_ports if listening_ports is not None else _default_listening_ports
 
     if port is not None:
-        return _allocate_explicit_port(db, owner, env_var, port, listen)
+        return _allocate_explicit_port(
+            db, owner, env_var, port, listen, container_projects=container_projects
+        )
 
     with db.connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -128,9 +131,12 @@ def _allocate_explicit_port(
     env_var: str,
     requested: int,
     listen: ListeningPorts,
+    *,
+    container_projects: dict[int, str] | None = None,
 ) -> int:
     if not 1 <= requested <= 65535:
         raise ValueError(f"port out of range: {requested}")
+    bindings = container_projects or {}
     with db.connect() as conn:
         conn.execute("BEGIN IMMEDIATE")
         try:
@@ -150,7 +156,15 @@ def _allocate_explicit_port(
                     f"port {requested} is allocated to {holder['owner']} ({holder['env_var']})"
                 )
             if requested in listen():
-                raise ConflictError(f"port {requested} is already listening on the host")
+                container_project = bindings.get(requested)
+                if container_project is not None and container_project == owner:
+                    pass  # adopting a port already bound by this project's own container
+                elif container_project is not None:
+                    raise ConflictError(
+                        f"port {requested} is used by the {container_project} container"
+                    )
+                else:
+                    raise ConflictError(f"port {requested} is already listening on the host")
             if row is not None:
                 conn.execute(
                     "UPDATE port_allocation SET port = ? WHERE owner = ? AND env_var = ?",
@@ -172,8 +186,10 @@ def list_used_ports(
     db: StateDB,
     *,
     listening_ports: ListeningPorts | None = None,
+    container_projects: dict[int, str] | None = None,
 ) -> list[dict[str, int | str | None]]:
     listen = listening_ports if listening_ports is not None else _default_listening_ports
+    bindings = container_projects or {}
     with db.connect() as conn:
         rows = conn.execute(
             "SELECT port, owner, env_var FROM port_allocation ORDER BY port"
@@ -187,7 +203,13 @@ def list_used_ports(
         for row in rows
     }
     for port in listen():
-        used.setdefault(port, {"port": port, "owner": None, "env_var": None})
+        if port in used:
+            continue
+        project = bindings.get(port)
+        if project is not None:
+            used[port] = {"port": port, "owner": project, "env_var": None}
+        else:
+            used[port] = {"port": port, "owner": None, "env_var": None}
     return sorted(used.values(), key=lambda item: int(item["port"]))
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -86,6 +87,49 @@ def docker_df(runner: Runner) -> DockerDiskUsage:
 def prune_images(runner: Runner) -> dict[str, int]:
     result = runner(_PRUNE_ARGS)
     return {"reclaimed_bytes": _parse_prune_reclaimed_bytes(result.stdout)}
+
+
+_PS_ARGS = ["docker", "ps", "--format", "{{json .}}"]
+
+
+def container_host_ports(runner: Runner) -> list[dict[str, Any]]:
+    """Published host port bindings grouped by compose project and service."""
+    result = runner(_PS_ARGS)
+    bindings: list[dict[str, Any]] = []
+    for line in result.stdout.splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        network = row.get("NetworkSettings") or {}
+        raw_ports = network.get("Ports") or {}
+        ports: list[dict[str, int | str]] = []
+        for container_port, mappings in raw_ports.items():
+            if not isinstance(mappings, list):
+                continue
+            container_number = int(container_port.split("/")[0])
+            for mapping in mappings:
+                host_port = mapping.get("HostPort")
+                if host_port is None:
+                    continue
+                ports.append(
+                    {
+                        "ip": str(mapping.get("HostIp") or ""),
+                        "host_port": int(host_port),
+                        "container_port": container_number,
+                    }
+                )
+        if not ports:
+            continue
+        labels = row.get("Labels") or {}
+        bindings.append(
+            {
+                "project": labels.get("com.docker.compose.project"),
+                "service": labels.get("com.docker.compose.service"),
+                "container": row.get("Names") or "",
+                "ports": ports,
+            }
+        )
+    return bindings
 
 
 def prune_build_cache(runner: Runner) -> dict[str, int]:
