@@ -39,7 +39,17 @@ export function ProjectPortsSection({ slug }: ProjectPortsSectionProps) {
   })
   const usedPorts = usedPortsQuery.data ?? []
 
-  const [rows, setRows] = useState<PortDraft[]>([])
+  const toRows = (data: NonNullable<typeof portsQuery.data>): PortDraft[] =>
+    data.ports.map((row) => ({
+      env_var: row.env_var,
+      default: row.default,
+      service: row.service,
+      host_port: row.host_port === null ? '' : String(row.host_port),
+    }))
+
+  const [rows, setRows] = useState<PortDraft[]>(() =>
+    portsQuery.data ? toRows(portsQuery.data) : [],
+  )
   const [appliedData, setAppliedData] = useState(portsQuery.data)
   const [dirty, setDirty] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -48,14 +58,7 @@ export function ProjectPortsSection({ slug }: ProjectPortsSectionProps) {
   if (portsQuery.data !== undefined && portsQuery.data !== appliedData) {
     setAppliedData(portsQuery.data)
     if (!dirty) {
-      setRows(
-        portsQuery.data.ports.map((row) => ({
-          env_var: row.env_var,
-          default: row.default,
-          service: row.service,
-          host_port: row.host_port === null ? '' : String(row.host_port),
-        })),
-      )
+      setRows(toRows(portsQuery.data))
     }
   }
 
