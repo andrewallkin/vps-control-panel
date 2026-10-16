@@ -28,6 +28,22 @@ describe('ProjectPortsSection', () => {
     putMock.mockResolvedValue({ ports: [] })
   })
 
+  it('renders port mappings when mounted with a warm query cache', async () => {
+    const { QueryClient } = await import('@tanstack/react-query')
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    queryClient.setQueryData(['projects', 'myapp', 'ports'], {
+      ports: [
+        { service: 'backend', env_var: 'BACKEND_PORT', default: 8000, host_port: 8001 },
+        { service: 'frontend', env_var: 'FRONTEND_PORT', default: 3000, host_port: 10001 },
+      ],
+    })
+    render(<ProjectPortsSection slug="myapp" />, { queryClient })
+    expect(await screen.findByLabelText('BACKEND_PORT host port')).toHaveValue('8001')
+    expect(screen.getByLabelText('FRONTEND_PORT host port')).toHaveValue('10001')
+  })
+
   it('renders fetched port mappings with their host ports', async () => {
     render(<ProjectPortsSection slug="myapp" />)
     const backend = (await screen.findByLabelText('BACKEND_PORT host port')) as HTMLInputElement
