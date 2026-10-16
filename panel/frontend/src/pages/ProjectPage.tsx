@@ -264,6 +264,42 @@ export function ProjectPage() {
     })
   }
 
+  const deployMutation = useMutation({
+    mutationFn: (body: {
+      tags?: Record<string, string>
+      build?: boolean
+      run_migrations?: boolean
+    }) => startProjectDeploy(slug, body),
+    onSuccess: (data) => {
+      setActiveDeployId(data.id)
+      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
+    },
+  })
+
+  const redeployMutation = useMutation({
+    mutationFn: (deployId: number) => redeployDeploy(deployId),
+    onSuccess: (data) => {
+      setActiveDeployId(data.id)
+      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
+    },
+  })
+
+  const applyDeployMutation = useMutation({
+    mutationFn: () => deployToApplyEnv(slug),
+    onSuccess: (data) => {
+      setApplyPrompt(null)
+      setApplyDeployError(null)
+      setActiveDeployId(data.id)
+      selectTab('deploy')
+      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
+    },
+    onError: (error) => {
+      setApplyDeployError(apiErrorDetail(error) || 'Deploy failed.')
+    },
+  })
+
+  const deployPending =
+    deployMutation.isPending || redeployMutation.isPending || applyDeployMutation.isPending
   const deploysQuery = useQuery({
     queryKey: ['project', slug, 'deploys'],
     queryFn: () => fetchProjectDeploys(slug),
@@ -271,6 +307,12 @@ export function ProjectPage() {
     refetchInterval: (query) => {
       if (activeTab !== 'deploy') {
         return false
+      }
+      // The deploy POST blocks until the deploy finishes, so a freshly
+      // started deploy only shows up via this polling — the mutation's
+      // success handler (which invalidates) fires way too late.
+      if (deployPending) {
+        return 2000
       }
       if (activeDeployId !== null) {
         return 2000
@@ -290,7 +332,9 @@ export function ProjectPage() {
   const latestSucceeded = deploys.find((row) => row.status === 'succeeded')
   const runningDeployId = runningDeploy?.id ?? null
   const [seenRunningDeployId, setSeenRunningDeployId] = useState<number | null>(null)
-  if (seenRunningDeployId !== runningDeployId) {
+  // Adopt a newly running deploy, but keep activeDeployId when the deploy
+  // finishes so DeployLogBox can hold the terminal log for its grace period.
+  if (runningDeployId !== null && seenRunningDeployId !== runningDeployId) {
     setSeenRunningDeployId(runningDeployId)
     setActiveDeployId(runningDeployId)
   }
@@ -388,26 +432,6 @@ export function ProjectPage() {
       clearMigrateDismiss()
       setActiveDeployId(null)
       setMigrateJobId(data.job_id)
-    },
-  })
-
-  const deployMutation = useMutation({
-    mutationFn: (body: {
-      tags?: Record<string, string>
-      build?: boolean
-      run_migrations?: boolean
-    }) => startProjectDeploy(slug, body),
-    onSuccess: (data) => {
-      setActiveDeployId(data.id)
-      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
-    },
-  })
-
-  const redeployMutation = useMutation({
-    mutationFn: (deployId: number) => redeployDeploy(deployId),
-    onSuccess: (data) => {
-      setActiveDeployId(data.id)
-      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
     },
   })
 
@@ -548,20 +572,6 @@ export function ProjectPage() {
         setRotateMessage(null)
         setRotateError(apiErrorDetail(error) || 'Request failed.')
       }
-    },
-  })
-
-  const applyDeployMutation = useMutation({
-    mutationFn: () => deployToApplyEnv(slug),
-    onSuccess: (data) => {
-      setApplyPrompt(null)
-      setApplyDeployError(null)
-      setActiveDeployId(data.id)
-      selectTab('deploy')
-      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
-    },
-    onError: (error) => {
-      setApplyDeployError(apiErrorDetail(error) || 'Deploy failed.')
     },
   })
 
