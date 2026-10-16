@@ -128,6 +128,7 @@ def deploy_row_payload(row: Deploy) -> dict[str, Any]:
         "started_at": row.started_at.isoformat(),
         "finished_at": row.finished_at.isoformat() if row.finished_at else None,
         "log": row.log,
+        "job_id": row.job_id,
     }
 
 
