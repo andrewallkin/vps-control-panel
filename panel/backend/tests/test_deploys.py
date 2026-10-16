@@ -154,6 +154,45 @@ def test_image_deploy_succeeded(
         assert svc.current_tag == "backend-main-abc1234"
 
 
+def test_deploys_list_includes_agent_job_id(
+    client_factory, admin_user, frozen_time, db_session, agent_requests
+):
+    """Each deploy row exposes the agent's job_id so the frontend can stream
+    live log lines over SSE while the deploy runs."""
+    _ready_project(db_session)
+    tags = {"DOCKER_IMAGE_WEB": "backend-main-abc1234"}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/v1/projects/myapp/deploy" and request.method == "POST":
+            return httpx.Response(200, json={"job_id": "job-live-1"})
+        if path == "/v1/jobs/job-live-1/events" and request.method == "GET":
+            return httpx.Response(
+                200,
+                content=_sse_bytes(
+                    ("line", {"n": 0, "text": "hello"}),
+                    ("end", {"status": "succeeded", "result": {}, "error": None}),
+                ),
+            )
+        return httpx.Response(404, json={"detail": f"unexpected {request.method} {path}"})
+
+    client = client_factory(transport=httpx.MockTransport(handler))
+    auth = login(client, admin_user, frozen_time)
+
+    response = client.post(
+        "/api/projects/myapp/deploy",
+        headers={"X-CSRF-Token": auth["csrf_token"]},
+        json={"tags": tags},
+    )
+    assert response.status_code == 202, response.text
+
+    listing = client.get("/api/projects/myapp/deploys")
+    assert listing.status_code == 200, listing.text
+    rows = listing.json()
+    assert rows, "expected at least one deploy row"
+    assert rows[0]["job_id"] == "job-live-1"
+
+
 def test_deploy_finished_at_uses_end_clock(
     client_factory, admin_user, frozen_time, db_session, agent_requests
 ):

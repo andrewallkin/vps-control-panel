@@ -19,6 +19,7 @@ export interface DeployRow {
   started_at: string
   finished_at: string | null
   log: string
+  job_id: string | null
 }
 
 export interface ComposePsService {
