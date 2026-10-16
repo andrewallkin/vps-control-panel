@@ -952,7 +952,9 @@ async def _project_ports_payload(
 ) -> dict[str, Any]:
     try:
         payload = await agent.get(f"/v1/projects/{slug}/compose-ports")
-    except AgentError:
+    except AgentError as exc:
+        if exc.status >= 500:
+            raise HTTPException(status_code=502, detail=str(exc.detail)) from exc
         payload = {"ports": []}
     compose_entries: list[dict[str, Any]] = []
     if isinstance(payload, dict) and isinstance(payload.get("ports"), list):

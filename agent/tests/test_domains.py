@@ -342,3 +342,59 @@ def test_port_routes(server_client, monkeypatch):
     [release_event, allocate_event] = audit.list_events(db)[:2]
     assert allocate_event.operation == "port.allocate"
     assert release_event.operation == "port.release"
+
+
+def test_list_used_ports_attributes_container_bindings(state_db: StateDB):
+    used = list_used_ports(
+        state_db,
+        listening_ports=lambda: {8000, 5432},
+        container_projects={8000: "spliteasy"},
+    )
+    assert used == [
+        {"port": 5432, "owner": None, "env_var": None},
+        {"port": 8000, "owner": "spliteasy", "env_var": None},
+    ]
+
+
+def test_allocate_port_explicit_allows_own_container_binding(state_db: StateDB):
+    port = allocate_port(
+        state_db,
+        "spliteasy",
+        "BACKEND_PORT",
+        listening_ports=lambda: {8000},
+        port=8000,
+        container_projects={8000: "spliteasy"},
+    )
+    assert port == 8000
+
+
+def test_allocate_port_explicit_conflicts_foreign_container(state_db: StateDB):
+    with pytest.raises(ConflictError) as exc_info:
+        allocate_port(
+            state_db,
+            "budget-hq",
+            "BACKEND_PORT",
+            listening_ports=lambda: {8000},
+            port=8000,
+            container_projects={8000: "spliteasy"},
+        )
+    assert "spliteasy" in str(exc_info.value)
+
+
+def test_used_ports_route_attributes_containers(server_client, monkeypatch):
+    monkeypatch.setattr(
+        "vpscp_agent.routes.server._listening_ports",
+        lambda: {8000, 5432},
+    )
+    monkeypatch.setattr(
+        "vpscp_agent.routes.server._container_projects",
+        lambda _runner: {8000: "spliteasy"},
+    )
+
+    resp = server_client.get("/v1/ports/used")
+
+    assert resp.status_code == 200
+    assert resp.json() == [
+        {"port": 5432, "owner": None, "env_var": None},
+        {"port": 8000, "owner": "spliteasy", "env_var": None},
+    ]

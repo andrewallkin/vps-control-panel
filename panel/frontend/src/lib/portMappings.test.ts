@@ -70,3 +70,18 @@ describe('validatePortDrafts', () => {
     expect(result.error).toContain('B_PORT')
   })
 })
+
+describe('adopting own container bindings', () => {
+  it('allows a port bound by the same project container even without an allocation row', () => {
+    const containerOnly: UsedPortRow[] = [{ port: 8000, owner: 'myapp', env_var: null }]
+    const result = validatePortDrafts([draft('BACKEND_PORT', '8000')], containerOnly, 'myapp')
+    expect(result.ok).toBe(true)
+  })
+
+  it('still blocks a container port owned by another project', () => {
+    const foreign: UsedPortRow[] = [{ port: 8000, owner: 'spliteasy', env_var: null }]
+    const result = validatePortDrafts([draft('BACKEND_PORT', '8000')], foreign, 'myapp')
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain('spliteasy')
+  })
+})

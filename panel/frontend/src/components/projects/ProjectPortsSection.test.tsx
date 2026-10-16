@@ -76,3 +76,21 @@ describe('ProjectPortsSection', () => {
     })
   })
 })
+
+describe('ProjectPortsSection error state', () => {
+  it('shows an error and retries when loading fails', async () => {
+    const user = userEvent.setup()
+    const { fetchProjectPorts } = await import('../../lib/projectsApi')
+    const fetchMock = vi.mocked(fetchProjectPorts)
+    fetchMock.mockRejectedValueOnce(new ApiError(502, { detail: 'agent restarting' }))
+    fetchMock.mockResolvedValueOnce({
+      ports: [
+        { service: 'backend', env_var: 'BACKEND_PORT', default: 8000, host_port: 8001 },
+      ],
+    })
+    render(<ProjectPortsSection slug="myapp" />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(/agent restarting/i)
+    await user.click(screen.getByRole('button', { name: /retry/i }))
+    expect(await screen.findByLabelText('BACKEND_PORT host port')).toBeInTheDocument()
+  })
+})

@@ -7,7 +7,12 @@ from fastapi.testclient import TestClient
 from tests.fakes import FakeRunner
 from vpscp_agent import audit
 from vpscp_agent.commands import CommandError, CommandResult
-from vpscp_agent.docker_ops import docker_df, prune_build_cache, prune_images
+from vpscp_agent.docker_ops import (
+    container_host_ports,
+    docker_df,
+    prune_build_cache,
+    prune_images,
+)
 from vpscp_agent.main import create_app
 
 DF_ARGS = ["docker", "system", "df", "--format", "{{json .}}"]
@@ -320,3 +325,69 @@ def test_post_prune_build_cache_returns_503_on_docker_failure(docker_client):
 
     assert response.status_code == 503
     assert "docker unavailable" in response.json()["detail"]
+
+
+DOCKER_PS_LINES = "\n".join(
+    [
+        json.dumps(
+            {
+                "Names": "spliteasy-backend-1",
+                "Labels": {
+                    "com.docker.compose.project": "spliteasy",
+                    "com.docker.compose.service": "backend",
+                },
+                "NetworkSettings": {
+                    "Ports": {
+                        "8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8000"}],
+                        "9100/tcp": None,
+                    }
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "Names": "vpscp-panel-1",
+                "Labels": {"com.docker.compose.project": "vpscp"},
+                "NetworkSettings": {
+                    "Ports": {"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
+                },
+            }
+        ),
+        json.dumps(
+            {
+                "Names": "postgres-central",
+                "Labels": {},
+                "NetworkSettings": {"Ports": {"5432/tcp": None}},
+            }
+        ),
+    ]
+)
+
+
+def test_container_host_ports_parses_bindings():
+    runner = FakeRunner()
+    runner.on("docker ps", stdout=DOCKER_PS_LINES)
+
+    bindings = container_host_ports(runner)
+
+    assert bindings == [
+        {
+            "project": "spliteasy",
+            "service": "backend",
+            "container": "spliteasy-backend-1",
+            "ports": [{"ip": "127.0.0.1", "host_port": 8000, "container_port": 8000}],
+        },
+        {
+            "project": "vpscp",
+            "service": None,
+            "container": "vpscp-panel-1",
+            "ports": [{"ip": "127.0.0.1", "host_port": 8080, "container_port": 8080}],
+        },
+    ]
+
+
+def test_container_host_ports_empty_output():
+    runner = FakeRunner()
+    runner.on("docker ps", stdout="")
+
+    assert container_host_ports(runner) == []

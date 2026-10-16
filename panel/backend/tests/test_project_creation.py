@@ -574,3 +574,32 @@ async def test_confirm_ports_validates_input(db_session):
         confirm_creation_ports(db_session, "myapp", {"lower case": 8001})
     with pytest.raises(ValueError):
         confirm_creation_ports(db_session, "myapp", {"UNEXPECTED_VAR": 8001})
+
+
+@pytest.mark.asyncio
+async def test_run_creation_fails_when_compose_ports_unavailable(db_session):
+    handler = _port_pause_handler(
+        compose_ports_payload=COMPOSE_PORTS_PAYLOAD,
+        allocate_calls=[],
+        env_put_content=[],
+    )
+    calls: list[httpx.Request] = []
+
+    def failing_handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if request.url.path.endswith("/compose-ports") and request.method == "GET":
+            return httpx.Response(503, json={"detail": "agent restarting"})
+        return handler(request)
+
+    agent = AgentClient("/fake.sock", transport=httpx.MockTransport(failing_handler))
+    _make_project(db_session)
+
+    await run_creation(db_session, agent, "myapp")
+
+    project = db_session.get(Project, "myapp")
+    assert project is not None
+    state = json.loads(project.creation_state)
+    assert state["status"] == "failed"
+    ports_step = next(step for step in state["steps"] if step["name"] == "ports")
+    assert ports_step["status"] == "failed"
+    assert "agent restarting" in ports_step["error"]

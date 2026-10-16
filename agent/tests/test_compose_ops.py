@@ -8,6 +8,7 @@ from tests.fakes import FakeRunner
 from vpscp_agent.compose_ops import (
     compose_base_argv,
     compose_project_cwd,
+    compose_ps,
     get_compose_ports,
     get_compose_services,
     parse_compose_ps,
@@ -131,7 +132,7 @@ def test_compose_invocation_argv(compose_setup, extra, expected_tail):
     elif extra[0] in ("pull", "up", "run"):
         run_compose_job(settings, db, runner, slug, extra)
 
-    assert len(runner.calls) == 1
+    assert len(runner.calls) == (2 if extra[0] == "ps" else 1)
     call = runner.calls[0]
     assert call["cwd"] == project_dir
     assert call["args"] == _expected_base(slug, "docker-compose.yml") + expected_tail
@@ -446,3 +447,66 @@ def test_restart_409_when_deploy_lock_held(tmp_path):
         resp = client.post(f"/v1/projects/{slug}/compose/restart")
         assert resp.status_code == 409
         gate.set()
+
+
+def test_compose_ps_includes_published_ports(compose_setup):
+    settings, db, runner, slug, project_dir = compose_setup
+    (project_dir / "docker-compose.yml").write_text("services: {}\n")
+    runner.on(
+        lambda args: args[-3:] == ["ps", "--format", "json"],
+        stdout=json.dumps(
+            [
+                {
+                    "Service": "backend",
+                    "Name": "budget-hq-backend-1",
+                    "State": "running",
+                    "Health": "",
+                    "Image": "img",
+                    "CreatedAt": "",
+                }
+            ]
+        ),
+        returncode=0,
+    )
+    runner.on(
+        "docker ps",
+        stdout=json.dumps(
+            {
+                "Names": "budget-hq-backend-1",
+                "Labels": {
+                    "com.docker.compose.project": "budget-hq",
+                    "com.docker.compose.service": "backend",
+                },
+                "NetworkSettings": {
+                    "Ports": {"8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8001"}]}
+                },
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "Names": "other-1",
+                "Labels": {
+                    "com.docker.compose.project": "other",
+                    "com.docker.compose.service": "web",
+                },
+                "NetworkSettings": {
+                    "Ports": {"80/tcp": [{"HostIp": "127.0.0.1", "HostPort": "9999"}]}
+                },
+            }
+        ),
+    )
+
+    result = compose_ps(settings, db, runner, slug)
+
+    assert result["services"][0]["ports"] == ["127.0.0.1:8001->8000"]
+
+
+def test_compose_ps_without_bindings_has_empty_ports(compose_setup):
+    settings, db, runner, slug, project_dir = compose_setup
+    (project_dir / "docker-compose.yml").write_text("services: {}\n")
+    runner.on("docker compose", stdout="[]")
+
+    result = compose_ps(settings, db, runner, slug)
+
+    assert result["services"] == []

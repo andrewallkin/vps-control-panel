@@ -449,3 +449,70 @@ describe('ProjectPage ports tab', () => {
     expect(await screen.findByText(/redeploy/i)).toBeInTheDocument()
   })
 })
+
+describe('ProjectPage overview ports column', () => {
+  beforeEach(() => {
+    window.location.hash = ''
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.endsWith('/api/projects/demo')) {
+          return Promise.resolve(jsonResponse(project))
+        }
+        if (url.includes('/compose/ps')) {
+          return Promise.resolve(
+            jsonResponse({
+              services: [
+                {
+                  service: 'backend',
+                  state: 'running',
+                  health: '',
+                  image: 'img:1',
+                  started_at: '',
+                  container: 'demo-backend-1',
+                  ports: ['127.0.0.1:8000->8000'],
+                },
+                {
+                  service: 'frontend',
+                  state: 'running',
+                  health: '',
+                  image: 'img:2',
+                  started_at: '',
+                  container: 'demo-frontend-1',
+                  ports: [],
+                },
+              ],
+            }),
+          )
+        }
+        if (url.includes('/api/metrics/containers')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function renderOverview() {
+    return renderWithProviders(
+      <Routes>
+        <Route path="/projects/:slug" element={<ProjectPage />} />
+      </Routes>,
+      { routerProps: { initialEntries: ['/projects/demo'] } },
+    )
+  }
+
+  it('shows published host ports per service', async () => {
+    renderOverview()
+    expect(await screen.findByText('127.0.0.1:8000->8000')).toBeInTheDocument()
+    const rows = screen.getAllByRole('row')
+    const frontendRow = rows.find((row) => row.textContent?.includes('frontend'))
+    expect(frontendRow).toBeDefined()
+    expect(frontendRow!.textContent).not.toContain('127.0.0.1')
+  })
+})

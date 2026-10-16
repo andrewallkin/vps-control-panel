@@ -78,3 +78,31 @@ describe('PortsMappingEditor', () => {
     expect(screen.getByText(/current/i)).toBeInTheDocument()
   })
 })
+
+describe('own container bindings', () => {
+  it('shows current for a port bound by the same project container without an allocation', () => {
+    const own: UsedPortRow[] = [{ port: 8000, owner: 'myapp', env_var: null }]
+    render(
+      <PortsMappingEditor
+        rows={[{ env_var: 'BACKEND_PORT', default: 8000, host_port: '8000', service: 'backend' }]}
+        usedPorts={own}
+        selfSlug="myapp"
+        onChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/^current$/i)).toBeInTheDocument()
+  })
+
+  it('shows used by project for a container port owned by another project', () => {
+    const foreign: UsedPortRow[] = [{ port: 8000, owner: 'spliteasy', env_var: null }]
+    render(
+      <PortsMappingEditor
+        rows={[{ env_var: 'BACKEND_PORT', default: 8000, host_port: '8000', service: 'backend' }]}
+        usedPorts={foreign}
+        selfSlug="myapp"
+        onChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByText(/used by spliteasy/i)).toBeInTheDocument()
+  })
+})

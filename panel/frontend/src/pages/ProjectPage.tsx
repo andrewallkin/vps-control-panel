@@ -659,6 +659,7 @@ export function ProjectPage() {
                     <th scope="col" className="px-3 py-2 font-medium">Service</th>
                     <th scope="col" className="px-3 py-2 font-medium">Status</th>
                     <th scope="col" className="px-3 py-2 font-medium">Image</th>
+                    <th scope="col" className="px-3 py-2 font-medium">Ports</th>
                     <th scope="col" className="px-3 py-2 font-medium">Started</th>
                     <th scope="col" className="px-3 py-2 text-right font-medium">CPU</th>
                     <th scope="col" className="px-3 py-2 text-right font-medium">Memory</th>
@@ -667,7 +668,7 @@ export function ProjectPage() {
                 <tbody className="divide-y divide-border">
                   {(psQuery.data?.services ?? []).length === 0 && !psQuery.isPending ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                      <td colSpan={7} className="px-3 py-6 text-sm text-muted-foreground">
                         No services yet.
                       </td>
                     </tr>
@@ -688,6 +689,9 @@ export function ProjectPage() {
                           <StatusBadge variant={variant} label={svc.state || variant} />
                         </td>
                         <td className="min-w-0 px-3 py-2 font-mono text-xs break-all">{svc.image}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                          {(svc.ports ?? []).length > 0 ? svc.ports!.join(', ') : '—'}
+                        </td>
                         <td className="px-3 py-2 text-muted-foreground">{svc.started_at || '—'}</td>
                         <td className="px-3 py-2 text-right font-mono">
                           {metrics ? `${metrics.cpu_percent.toFixed(1)}%` : '—'}

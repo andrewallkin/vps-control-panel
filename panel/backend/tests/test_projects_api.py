@@ -1331,3 +1331,36 @@ def test_creation_ports_confirm_rejects_when_not_awaiting(
             headers=_csrf(auth),
         )
     assert response.status_code == 409
+
+
+def test_get_project_ports_surfaces_agent_error(
+    client_factory, admin_user, frozen_time, db_session
+):
+    _add_project_with_ports(db_session)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v1/projects/portapp/compose-ports"
+        return httpx.Response(503, json={"detail": "agent restarting"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.get("/api/projects/portapp/ports", headers=_csrf(auth))
+    assert response.status_code == 502
+    assert response.json() == {"detail": "agent restarting"}
+
+
+def test_get_project_ports_tolerates_legacy_agent_404(
+    client_factory, admin_user, frozen_time, db_session
+):
+    _add_project_with_ports(db_session)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"detail": "not found"})
+
+    with client_factory(transport=httpx.MockTransport(handler)) as client:
+        auth = login(client, admin_user, frozen_time)
+        response = client.get("/api/projects/portapp/ports", headers=_csrf(auth))
+    assert response.status_code == 200
+    assert response.json() == {
+        "ports": [{"service": None, "env_var": "APP_PORT", "default": None, "host_port": 10001}]
+    }
