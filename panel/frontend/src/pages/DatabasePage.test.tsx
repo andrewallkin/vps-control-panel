@@ -164,6 +164,52 @@ describe('DatabasePage', () => {
     expect(dropButton).toBeEnabled()
   })
 
+  it('shows a success message after dropping a database with a 204 response', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/database/drop') && init?.method === 'POST') {
+          return Promise.resolve(new Response(null, { status: 204 }))
+        }
+        if (url.includes('/api/database/databases')) {
+          return Promise.resolve(jsonResponse(databases))
+        }
+        if (url.includes('/api/projects') && !url.includes('/api/projects/')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        if (url.includes('/api/database/dumps/')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+    renderWithProviders(<DatabasePage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('orphan_db')).toBeInTheDocument()
+    })
+
+    await user.click(screen.getAllByRole('button', { name: /^drop$/i })[0]!)
+    await user.type(screen.getByLabelText(/type database name to confirm/i), 'orphan_db')
+    await user.click(screen.getByRole('button', { name: /^drop database$/i }))
+    await user.click(await screen.findByRole('button', { name: /mock verify/i }))
+
+    expect(await screen.findByText('Database dropped.')).toBeInTheDocument()
+    expect(screen.queryByText('Request failed.')).not.toBeInTheDocument()
+  })
+
   it('restore warning mentions the safety dump', () => {
     renderWithProviders(<DatabasePage />)
 

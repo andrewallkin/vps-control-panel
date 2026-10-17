@@ -1,4 +1,4 @@
-import { apiJson } from './api'
+import { ApiError, apiFetch, apiJson } from './api'
 
 export interface DatabaseRow {
   name: string
@@ -53,11 +53,15 @@ export async function rotateDatabasePassword(
 }
 
 export async function dropDatabase(payload: DropDatabasePayload): Promise<void> {
-  await apiJson('/api/database/drop', {
+  const response = await apiFetch('/api/database/drop', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null)
+    throw new ApiError(response.status, body)
+  }
 }
 
 export async function fetchDatabaseDumps(slug: string): Promise<DatabaseDumpRow[]> {
