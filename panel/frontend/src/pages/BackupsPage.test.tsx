@@ -76,6 +76,15 @@ describe('BackupsPage', () => {
     expect(screen.queryByDisplayValue(/private_key/i)).not.toBeInTheDocument()
   })
 
+  it('labels schedule hours with the configured timezone, not UTC', async () => {
+    renderWithProviders(<BackupsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Schedule hours (UTC time)')).toBeInTheDocument()
+    })
+    expect(screen.queryByText(/UTC clock/i)).not.toBeInTheDocument()
+  })
+
   it('renders an overdue badge when backup status is overdue', async () => {
     renderWithProviders(<BackupsPage />)
 
