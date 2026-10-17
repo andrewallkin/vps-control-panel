@@ -11,7 +11,7 @@ import {
   type DragEvent,
 } from 'react'
 import { StepUpDialog } from '../StepUpDialog'
-import { isStepUpRequired } from '../../lib/api'
+import { apiErrorDetail, isStepUpRequired } from '../../lib/api'
 import {
   formatScheduleHours,
   parseScheduleHours,
@@ -263,7 +263,7 @@ export function BackupSettingsForm({
         setStepUpOpen(true)
         return
       }
-      setFormError('Could not save backup settings.')
+      setFormError(apiErrorDetail(error) || 'Could not save backup settings.')
     }
   }
 
@@ -335,6 +335,10 @@ export function BackupSettingsForm({
     }
     if (!payload.schedule_hours) {
       setFormError('Select at least one schedule hour.')
+      return
+    }
+    if (payload.archive_passphrase && payload.archive_passphrase.trim().length < 12) {
+      setFormError('Archive passphrase must be at least 12 characters.')
       return
     }
     if (saveNeedsStepUp(payload)) {
