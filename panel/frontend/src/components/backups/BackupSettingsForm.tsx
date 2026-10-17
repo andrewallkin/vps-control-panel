@@ -524,7 +524,7 @@ export function BackupSettingsForm({
 
       <div className="space-y-2">
         <span id={`${idPrefix}-hours-label`} className="text-sm font-medium">
-          Schedule hours (UTC clock)
+          Schedule hours ({timezone.trim() || 'UTC'} time)
         </span>
         <div
           className="grid w-max max-w-full grid-cols-[repeat(6,2.5rem)] gap-2 @min-[40rem]:grid-cols-[repeat(12,2.5rem)]"
@@ -550,6 +550,10 @@ export function BackupSettingsForm({
             )
           })}
         </div>
+        <p className="text-xs text-muted-foreground">
+          Backups run at the selected hours in the timezone above. Backup filenames in the bucket
+          use UTC.
+        </p>
       </div>
 
       <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
