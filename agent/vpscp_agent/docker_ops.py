@@ -91,6 +91,47 @@ def prune_images(runner: Runner) -> dict[str, int]:
 
 _PS_ARGS = ["docker", "ps", "--format", "{{json .}}"]
 
+_PS_PORT_PATTERN = re.compile(
+    r"^(?:(?:\[(?P<ip6>[^\]]+)\]|(?P<ip>[^:\s\[]+)):)?(?P<host>\d+)->(?P<container>\d+)/(?:tcp|udp)$"
+)
+
+
+def _parse_labels(raw: Any) -> dict[str, str]:
+    """Parse docker ps labels, which may be a dict or a comma-joined string."""
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str):
+        return {}
+    labels: dict[str, str] = {}
+    for part in raw.split(","):
+        if "=" not in part:
+            continue
+        key, _, value = part.partition("=")
+        labels[key.strip()] = value.strip()
+    return labels
+
+
+def _ports_from_ps_string(raw: str) -> list[dict[str, int | str]]:
+    """Parse docker ps Ports entries like '0.0.0.0:8000->8000/tcp, [::]:8000->8000/tcp'."""
+    ports: list[dict[str, int | str]] = []
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        match = _PS_PORT_PATTERN.match(part)
+        if match is None:
+            continue
+        ip6 = match.group("ip6")
+        ip = ip6 if ip6 is not None else (match.group("ip") or "")
+        ports.append(
+            {
+                "ip": ip,
+                "host_port": int(match.group("host")),
+                "container_port": int(match.group("container")),
+            }
+        )
+    return ports
+
 
 def container_host_ports(runner: Runner) -> list[dict[str, Any]]:
     """Published host port bindings grouped by compose project and service."""
@@ -103,24 +144,27 @@ def container_host_ports(runner: Runner) -> list[dict[str, Any]]:
         network = row.get("NetworkSettings") or {}
         raw_ports = network.get("Ports") or {}
         ports: list[dict[str, int | str]] = []
-        for container_port, mappings in raw_ports.items():
-            if not isinstance(mappings, list):
-                continue
-            container_number = int(container_port.split("/")[0])
-            for mapping in mappings:
-                host_port = mapping.get("HostPort")
-                if host_port is None:
+        if isinstance(raw_ports, dict):
+            for container_port, mappings in raw_ports.items():
+                if not isinstance(mappings, list):
                     continue
-                ports.append(
-                    {
-                        "ip": str(mapping.get("HostIp") or ""),
-                        "host_port": int(host_port),
-                        "container_port": container_number,
-                    }
-                )
+                container_number = int(container_port.split("/")[0])
+                for mapping in mappings:
+                    host_port = mapping.get("HostPort")
+                    if host_port is None:
+                        continue
+                    ports.append(
+                        {
+                            "ip": str(mapping.get("HostIp") or ""),
+                            "host_port": int(host_port),
+                            "container_port": container_number,
+                        }
+                    )
+        if not ports:
+            ports = _ports_from_ps_string(str(row.get("Ports") or ""))
         if not ports:
             continue
-        labels = row.get("Labels") or {}
+        labels = _parse_labels(row.get("Labels"))
         bindings.append(
             {
                 "project": labels.get("com.docker.compose.project"),

@@ -332,32 +332,32 @@ DOCKER_PS_LINES = "\n".join(
         json.dumps(
             {
                 "Names": "spliteasy-backend-1",
-                "Labels": {
-                    "com.docker.compose.project": "spliteasy",
-                    "com.docker.compose.service": "backend",
-                },
-                "NetworkSettings": {
-                    "Ports": {
-                        "8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8000"}],
-                        "9100/tcp": None,
-                    }
-                },
+                "Labels": (
+                    "com.docker.compose.project=spliteasy,"
+                    "com.docker.compose.service=backend"
+                ),
+                "Ports": "127.0.0.1:8000->8000/tcp, [::]:8000->8000/tcp",
             }
         ),
         json.dumps(
             {
                 "Names": "vpscp-panel-1",
-                "Labels": {"com.docker.compose.project": "vpscp"},
-                "NetworkSettings": {
-                    "Ports": {"8080/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8080"}]}
-                },
+                "Labels": "com.docker.compose.project=vpscp",
+                "Ports": "8080->8080/tcp",
             }
         ),
         json.dumps(
             {
                 "Names": "postgres-central",
-                "Labels": {},
-                "NetworkSettings": {"Ports": {"5432/tcp": None}},
+                "Labels": "",
+                "Ports": "",
+            }
+        ),
+        json.dumps(
+            {
+                "Names": "exposed-only-1",
+                "Labels": "com.docker.compose.project=other,com.docker.compose.service=web",
+                "Ports": "5432/tcp",
             }
         ),
     ]
@@ -375,13 +375,16 @@ def test_container_host_ports_parses_bindings():
             "project": "spliteasy",
             "service": "backend",
             "container": "spliteasy-backend-1",
-            "ports": [{"ip": "127.0.0.1", "host_port": 8000, "container_port": 8000}],
+            "ports": [
+                {"ip": "127.0.0.1", "host_port": 8000, "container_port": 8000},
+                {"ip": "::", "host_port": 8000, "container_port": 8000},
+            ],
         },
         {
             "project": "vpscp",
             "service": None,
             "container": "vpscp-panel-1",
-            "ports": [{"ip": "127.0.0.1", "host_port": 8080, "container_port": 8080}],
+            "ports": [{"ip": "", "host_port": 8080, "container_port": 8080}],
         },
     ]
 
@@ -391,3 +394,36 @@ def test_container_host_ports_empty_output():
     runner.on("docker ps", stdout="")
 
     assert container_host_ports(runner) == []
+
+
+def test_container_host_ports_falls_back_to_network_settings():
+    runner = FakeRunner()
+    runner.on(
+        "docker ps",
+        stdout=json.dumps(
+            {
+                "Names": "spliteasy-backend-1",
+                "Labels": {
+                    "com.docker.compose.project": "spliteasy",
+                    "com.docker.compose.service": "backend",
+                },
+                "NetworkSettings": {
+                    "Ports": {
+                        "8000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "8000"}],
+                        "9100/tcp": None,
+                    }
+                },
+            }
+        ),
+    )
+
+    bindings = container_host_ports(runner)
+
+    assert bindings == [
+        {
+            "project": "spliteasy",
+            "service": "backend",
+            "container": "spliteasy-backend-1",
+            "ports": [{"ip": "127.0.0.1", "host_port": 8000, "container_port": 8000}],
+        }
+    ]

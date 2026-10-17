@@ -311,7 +311,7 @@ describe('ProjectPage overview, logs, and migrations', () => {
     expect(await screen.findByRole('heading', { name: 'Demo' })).toBeInTheDocument()
     expect(await screen.findByText('backend')).toBeInTheDocument()
     expect(screen.getByText('frontend')).toBeInTheDocument()
-    expect(screen.getByText('2026-10-14 16:00:00 +0000 UTC')).toBeInTheDocument()
+    expect(screen.getByText('14-10-2026 18:00:00 SAST')).toBeInTheDocument()
     expect(screen.getByText('1.5%')).toBeInTheDocument()
     expect(screen.getByText('0.4%')).toBeInTheDocument()
     expect(screen.getByText('1 MiB')).toBeInTheDocument()
@@ -514,5 +514,59 @@ describe('ProjectPage overview ports column', () => {
     const frontendRow = rows.find((row) => row.textContent?.includes('frontend'))
     expect(frontendRow).toBeDefined()
     expect(frontendRow!.textContent).not.toContain('127.0.0.1')
+  })
+})
+
+describe('ProjectPage deploy tab tags refresh', () => {
+  let tagsFetches = 0
+
+  beforeEach(() => {
+    tagsFetches = 0
+    window.location.hash = ''
+    vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.endsWith('/api/projects/demo')) {
+          return Promise.resolve(jsonResponse(project))
+        }
+        if (url.includes('/tags')) {
+          tagsFetches += 1
+          return Promise.resolve(jsonResponse({ services: [] }))
+        }
+        if (url.includes('/deploys')) {
+          return Promise.resolve(jsonResponse([]))
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  function renderProjectPage() {
+    return renderWithProviders(
+      <Routes>
+        <Route path="/projects/:slug" element={<ProjectPage />} />
+      </Routes>,
+      { routerProps: { initialEntries: ['/projects/demo'] } },
+    )
+  }
+
+  it('refetches Docker Hub tags every time the deploy tab is entered', async () => {
+    const user = userEvent.setup()
+    renderProjectPage()
+    expect(await screen.findByRole('heading', { name: 'Demo' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: 'Deploy' }))
+    await vi.waitFor(() => expect(tagsFetches).toBeGreaterThan(0))
+    const fetchesAfterFirstEntry = tagsFetches
+
+    await user.click(screen.getByRole('tab', { name: 'Logs' }))
+    await user.click(screen.getByRole('tab', { name: 'Deploy' }))
+    await vi.waitFor(() => expect(tagsFetches).toBeGreaterThan(fetchesAfterFirstEntry))
   })
 })
