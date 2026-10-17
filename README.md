@@ -5,9 +5,7 @@ Self-hosted control panel for a single Ubuntu VPS: central Postgres with GCS bac
 [![CI](https://github.com/andrewallkin/vps-control-panel/actions/workflows/ci.yml/badge.svg)](https://github.com/andrewallkin/vps-control-panel/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-<!-- TODO: add a screenshot of the panel, e.g.
 ![Dashboard](docs/screenshot.png)
--->
 
 ## Features
 
