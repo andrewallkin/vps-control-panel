@@ -123,3 +123,13 @@ export function isStepUpRequired(error: unknown): boolean {
   const body = error.body as { detail?: string } | null
   return body?.detail === 'step_up_required'
 }
+
+export function apiErrorDetail(error: unknown): string {
+  if (error instanceof ApiError && error.body && typeof error.body === 'object') {
+    const detail = (error.body as { detail?: unknown }).detail
+    if (typeof detail === 'string') {
+      return detail
+    }
+  }
+  return ''
+}

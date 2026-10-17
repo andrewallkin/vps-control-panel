@@ -22,7 +22,7 @@ import {
 } from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
-import { ApiError, isStepUpRequired } from '../lib/api'
+import { ApiError, apiErrorDetail, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, uploadFailureMessage, type UploadProgress } from '../lib/chunkedUpload'
 import { ACCEPT, isAcceptedDump } from '../lib/dumpFile'
@@ -84,16 +84,6 @@ function databaseSummary(rows: DatabaseRow[]): string {
     return `${rows.length} ${noun}, none attached to a project`
   }
   return `${rows.length} ${noun}, ${unattached} not attached to a project`
-}
-
-function apiErrorDetail(error: unknown): string {
-  if (error instanceof ApiError && error.body && typeof error.body === 'object') {
-    const detail = (error.body as { detail?: unknown }).detail
-    if (typeof detail === 'string') {
-      return detail
-    }
-  }
-  return ''
 }
 
 function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
