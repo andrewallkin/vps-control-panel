@@ -332,10 +332,7 @@ DOCKER_PS_LINES = "\n".join(
         json.dumps(
             {
                 "Names": "spliteasy-backend-1",
-                "Labels": (
-                    "com.docker.compose.project=spliteasy,"
-                    "com.docker.compose.service=backend"
-                ),
+                "Labels": "com.docker.compose.project=spliteasy,com.docker.compose.service=backend",
                 "Ports": "127.0.0.1:8000->8000/tcp, [::]:8000->8000/tcp",
             }
         ),
