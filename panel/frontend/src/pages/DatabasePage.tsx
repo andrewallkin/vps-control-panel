@@ -1,4 +1,4 @@
-import { FileArrowUp, Trash, Warning } from '@phosphor-icons/react'
+import { FileArrowUp, Info, Trash, Warning } from '@phosphor-icons/react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
@@ -166,7 +166,7 @@ export function DatabasePage() {
   const [adoptSlug, setAdoptSlug] = useState('')
   const [passwordMode, setPasswordMode] = useState<'rotate' | 'keep'>('rotate')
   const [keepPassword, setKeepPassword] = useState('')
-  const [writeDatabaseUrl, setWriteDatabaseUrl] = useState(true)
+  const [writeDatabaseUrl, setWriteDatabaseUrl] = useState(false)
 
   const [dropTarget, setDropTarget] = useState<DatabaseRow | null>(null)
   const [dropConfirmText, setDropConfirmText] = useState('')
@@ -500,14 +500,25 @@ export function DatabasePage() {
               />
             </div>
           ) : null}
-          <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={writeDatabaseUrl}
-              onChange={(event) => setWriteDatabaseUrl(event.target.checked)}
-            />
-            Write DATABASE_URL into the project .env
-          </label>
+          <div className="flex items-center gap-2 text-sm">
+            <label className="flex min-h-11 items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={writeDatabaseUrl}
+                onChange={(event) => setWriteDatabaseUrl(event.target.checked)}
+              />
+              Write DATABASE_URL into the project .env
+            </label>
+            <span
+              role="img"
+              aria-label="About the database variables"
+              tabIndex={0}
+              title="The panel always writes POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER and POSTGRES_PASSWORD to .env. DATABASE_URL is a single combined connection string. Tick this box only if your app reads DATABASE_URL."
+              className="flex shrink-0 cursor-help items-center"
+            >
+              <Info weight="regular" aria-hidden className="size-4 text-muted-foreground" />
+            </span>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"

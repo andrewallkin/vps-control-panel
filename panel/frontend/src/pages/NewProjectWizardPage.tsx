@@ -1,4 +1,4 @@
-import { Plus, Spinner, Trash } from '@phosphor-icons/react'
+import { Info, Plus, Spinner, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -24,10 +24,13 @@ import {
   fetchAdoptableDatabases,
   fetchDeployKeyPublic,
   fetchProject,
+  fetchProjectTags,
   retryProjectCreate,
+  startProjectDeploy,
   testProjectAccess,
   type ProjectHostname,
 } from '../lib/projectsApi'
+import type { RegistryTagOption } from '../lib/projectDeployTypes'
 import { slugFromName, validateProjectSlug } from '../lib/slugFromName'
 import {
   prepareServiceMappingRows,
@@ -53,6 +56,21 @@ function defaultDbName(slug: string): string {
 
 function defaultDbUser(dbName: string): string {
   return `${dbName}_user`
+}
+
+function defaultRegistryTags(
+  services: { image_env_var: string; tags: RegistryTagOption[] | string[] }[],
+): Record<string, string> {
+  const tags: Record<string, string> = {}
+  for (const svc of services) {
+    const first = svc.tags[0]
+    if (typeof first === 'string') {
+      tags[svc.image_env_var] = first
+    } else if (first?.name) {
+      tags[svc.image_env_var] = first.name
+    }
+  }
+  return tags
 }
 
 export function NewProjectWizardPage() {
@@ -86,7 +104,7 @@ export function NewProjectWizardPage() {
   const [dbName, setDbName] = useState('')
   const [dbUser, setDbUser] = useState('')
   const [adoptedDbName, setAdoptedDbName] = useState('')
-  const [writeDatabaseUrl, setWriteDatabaseUrl] = useState(true)
+  const [writeDatabaseUrl, setWriteDatabaseUrl] = useState(false)
   const [migrationService, setMigrationService] = useState('')
   const [migrationCommand, setMigrationCommand] = useState('')
   const [envRows, setEnvRows] = useState<EnvRow[]>([])
@@ -97,6 +115,7 @@ export function NewProjectWizardPage() {
   const watchingCreation = useRef(false)
   const [testAccessMessage, setTestAccessMessage] = useState<string | null>(null)
   const [serviceRows, setServiceRows] = useState<ServiceMappingRow[]>([])
+  const [deployNowPending, setDeployNowPending] = useState(false)
 
   const domainsQuery = useQuery({
     queryKey: ['domains'],
@@ -194,21 +213,15 @@ export function NewProjectWizardPage() {
 
   const dbSyncKey = `${databaseMode}\0${slug}`
   const [appliedDbSyncKey, setAppliedDbSyncKey] = useState<string | null>(null)
-  if (appliedDbSyncKey !== dbSyncKey) {
-    setAppliedDbSyncKey(dbSyncKey)
-    if (databaseMode === 'new' && slug) {
-      const name = defaultDbName(slug)
-      setDbName(name)
-      setDbUser(defaultDbUser(name))
-      setWriteDatabaseUrl(true)
-    }
-    if (databaseMode === 'none') {
+    if (appliedDbSyncKey !== dbSyncKey) {
+      setAppliedDbSyncKey(dbSyncKey)
+      if (databaseMode === 'new' && slug) {
+        const name = defaultDbName(slug)
+        setDbName(name)
+        setDbUser(defaultDbUser(name))
+      }
       setWriteDatabaseUrl(false)
     }
-    if (databaseMode === 'adopted') {
-      setWriteDatabaseUrl(true)
-    }
-  }
 
   const routePortEnvVars = useMemo(
     () => routes.map((r) => r.port_env_var).filter(Boolean),
@@ -468,6 +481,31 @@ export function NewProjectWizardPage() {
       setStep(STEP_ORDER[index + 1]!)
     }
   }
+
+  const handleDeployNow = useCallback(async () => {
+    const target = activeCreationSlug ?? slug
+    if (!target || deployNowPending) {
+      return
+    }
+    setDeployNowPending(true)
+    try {
+      const project = await fetchProject(target)
+      if (project.deploy_mode === 'build') {
+        void startProjectDeploy(target, { build: true, run_migrations: true }).catch(() => {})
+      } else {
+        const tagsData = await fetchProjectTags(target)
+        const tags = defaultRegistryTags(tagsData.services)
+        if (Object.keys(tags).length > 0) {
+          void startProjectDeploy(target, { tags, run_migrations: true }).catch(() => {})
+        }
+      }
+    } catch {
+      // Landing on the deploy tab lets the user start the deploy manually.
+    } finally {
+      setDeployNowPending(false)
+    }
+    navigate(`/projects/${encodeURIComponent(target)}#deploy`)
+  }, [activeCreationSlug, slug, deployNowPending, navigate])
 
   const creationState = creationPollQuery.data?.creation_state
   const publicKey =
@@ -881,14 +919,25 @@ export function NewProjectWizardPage() {
                   ))}
                 </ul>
               </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={writeDatabaseUrl}
-                  onChange={(e) => setWriteDatabaseUrl(e.target.checked)}
-                />
-                Write DATABASE_URL to .env
-              </label>
+              <div className="flex items-center gap-2 text-sm">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={writeDatabaseUrl}
+                    onChange={(e) => setWriteDatabaseUrl(e.target.checked)}
+                  />
+                  Write DATABASE_URL to .env
+                </label>
+                <span
+                  role="img"
+                  aria-label="About the database variables"
+                  tabIndex={0}
+                  title="The panel always writes POSTGRES_HOST, POSTGRES_PORT, POSTGRES_DB, POSTGRES_USER and POSTGRES_PASSWORD to .env. DATABASE_URL is a single combined connection string. Tick this box only if your app reads DATABASE_URL."
+                  className="flex shrink-0 cursor-help items-center"
+                >
+                  <Info weight="regular" aria-hidden className="size-4 text-muted-foreground" />
+                </span>
+              </div>
             </div>
           ) : null}
           <div className="space-y-2">
@@ -1053,13 +1102,25 @@ export function NewProjectWizardPage() {
                 />
               ) : null}
               {creationState.status === 'ready' ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => navigate(`/projects/${encodeURIComponent(activeCreationSlug ?? slug)}`)}
-                >
-                  Open project
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={deployNowPending}
+                    className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => {
+                      void handleDeployNow()
+                    }}
+                  >
+                    {deployNowPending ? 'Starting deploy…' : 'Deploy now'}
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer"
+                    onClick={() => navigate(`/projects/${encodeURIComponent(activeCreationSlug ?? slug)}`)}
+                  >
+                    Open project
+                  </button>
+                </div>
               ) : null}
             </>
           ) : null}

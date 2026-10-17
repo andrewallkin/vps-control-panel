@@ -33,6 +33,34 @@ export function formatDateTime(iso: string): string {
   return `${day} ${month} ${year}, ${hours}:${minutes}:${seconds}`
 }
 
+const DOCKER_TIMESTAMP_RE =
+  /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2}) ([+-])(\d{2})(\d{2})?/
+
+const SAST_OFFSET_MINUTES = 2 * 60
+
+export function formatStartedAt(raw: string): string {
+  const match = DOCKER_TIMESTAMP_RE.exec(raw)
+  if (!match) {
+    return raw
+  }
+  const [, year, month, day, hours, minutes, seconds, sign, offH, offM] = match
+  const offsetMinutes =
+    (Number(offH) * 60 + Number(offM ?? '00')) * (sign === '-' ? -1 : 1)
+  const utcMs = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hours),
+    Number(minutes),
+    Number(seconds),
+  )
+  const sast = new Date(utcMs + (SAST_OFFSET_MINUTES - offsetMinutes) * 60_000)
+  return (
+    `${pad2(sast.getUTCDate())}-${pad2(sast.getUTCMonth() + 1)}-${sast.getUTCFullYear()} ` +
+    `${pad2(sast.getUTCHours())}:${pad2(sast.getUTCMinutes())}:${pad2(sast.getUTCSeconds())} SAST`
+  )
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes < 0) {
     return '—'

@@ -20,7 +20,7 @@ import { composeServiceStatusVariant } from '../lib/composeServiceStatus'
 import { fetchContainerMetrics } from '../lib/dashboardApi'
 import { fetchDomains } from '../lib/domainsApi'
 import type { EnvRow } from '../lib/envEditorUtils'
-import { formatBytes } from '../lib/format'
+import { formatBytes, formatStartedAt } from '../lib/format'
 import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
 import type { ComposePsService, RegistryTagOption } from '../lib/projectDeployTypes'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -244,6 +244,14 @@ export function ProjectPage() {
     enabled: Boolean(slug) && activeTab === 'deploy' && project?.deploy_mode === 'image',
     refetchIntervalInBackground: false,
   })
+
+  const imageDeployTab =
+    Boolean(slug) && activeTab === 'deploy' && project?.deploy_mode === 'image'
+  useEffect(() => {
+    if (imageDeployTab) {
+      void queryClient.invalidateQueries({ queryKey: ['project', slug, 'tags'] })
+    }
+  }, [imageDeployTab, queryClient, slug])
 
   const tagsData = tagsQuery.data
   const [appliedTagsData, setAppliedTagsData] = useState(tagsData)
@@ -702,7 +710,9 @@ export function ProjectPage() {
                         <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
                           {(svc.ports ?? []).length > 0 ? svc.ports!.join(', ') : '—'}
                         </td>
-                        <td className="px-3 py-2 text-muted-foreground">{svc.started_at || '—'}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {svc.started_at ? formatStartedAt(svc.started_at) : '—'}
+                        </td>
                         <td className="px-3 py-2 text-right font-mono">
                           {metrics ? `${metrics.cpu_percent.toFixed(1)}%` : '—'}
                         </td>

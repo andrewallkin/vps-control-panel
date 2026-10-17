@@ -80,7 +80,7 @@ export function ProjectsListPage() {
                   to={href}
                   className="flex cursor-pointer flex-col gap-2 px-4 py-4 transition-colors duration-200 hover:bg-muted sm:flex-row sm:items-center sm:justify-between lg:gap-4 lg:px-6"
                 >
-                  <div className="min-w-0 flex-1 lg:flex lg:items-baseline lg:gap-6 xl:gap-10">
+                  <div className="min-w-0 flex-1 lg:grid lg:grid-cols-[12rem_1fr] lg:items-baseline lg:gap-4">
                     <p className="font-medium text-foreground">{project.display_name}</p>
                     <p className="font-mono text-sm text-muted-foreground">{project.slug}</p>
                   </div>

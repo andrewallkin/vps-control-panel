@@ -4,6 +4,7 @@ import {
   formatDateTime,
   formatPercent,
   formatSecondsAgo,
+  formatStartedAt,
   formatUptime,
 } from './format'
 
@@ -15,6 +16,24 @@ describe('formatDateTime', () => {
 
   it('returns the original string when not parseable', () => {
     expect(formatDateTime('not-a-date')).toBe('not-a-date')
+  })
+})
+
+describe('formatStartedAt', () => {
+  it('converts a UTC docker timestamp to SAST', () => {
+    expect(formatStartedAt('2026-10-14 16:00:00 +0000 UTC')).toBe(
+      '14-10-2026 18:00:00 SAST',
+    )
+  })
+
+  it('keeps an already-SAST docker timestamp unchanged', () => {
+    expect(formatStartedAt('2026-10-14 16:00:00 +0200 SAST')).toBe(
+      '14-10-2026 16:00:00 SAST',
+    )
+  })
+
+  it('returns the original string when not parseable', () => {
+    expect(formatStartedAt('4 days ago')).toBe('4 days ago')
   })
 })
 
