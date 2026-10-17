@@ -76,13 +76,46 @@ describe('BackupsPage', () => {
     expect(screen.queryByDisplayValue(/private_key/i)).not.toBeInTheDocument()
   })
 
-  it('labels schedule hours with the configured timezone, not UTC', async () => {
+  it('labels schedule hours with the configured timezone, not UTC clock', async () => {
     renderWithProviders(<BackupsPage />)
 
     await waitFor(() => {
-      expect(screen.getByText('Schedule hours (UTC time)')).toBeInTheDocument()
+      expect(screen.getByText('Schedule hours (UTC)')).toBeInTheDocument()
     })
     expect(screen.queryByText(/UTC clock/i)).not.toBeInTheDocument()
+  })
+
+  it('labels schedule hours with the timezone abbreviation when known', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/backups/settings')) {
+          return Promise.resolve(
+            jsonResponse({ ...configuredSettings, timezone: 'Africa/Johannesburg' }),
+          )
+        }
+        if (url.includes('/api/backups/status')) {
+          return Promise.resolve(jsonResponse(overdueStatus))
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+    renderWithProviders(<BackupsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Schedule hours (SAST)')).toBeInTheDocument()
+    })
   })
 
   it('renders an overdue badge when backup status is overdue', async () => {

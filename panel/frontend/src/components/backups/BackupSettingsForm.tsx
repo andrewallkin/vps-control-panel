@@ -24,6 +24,19 @@ import { filterTimeZones, listTimeZones } from '../../lib/timezones'
 
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, hour) => hour)
 
+const TIMEZONE_ABBREVIATIONS: Record<string, string> = {
+  UTC: 'UTC',
+  'Africa/Johannesburg': 'SAST',
+}
+
+function timezoneLabel(timezone: string): string {
+  const trimmed = timezone.trim()
+  if (!trimmed) {
+    return 'UTC'
+  }
+  return TIMEZONE_ABBREVIATIONS[trimmed] ?? trimmed
+}
+
 type PendingSave = BackupSettingsPut
 
 type PassphraseAction = 'keep' | 'set' | 'clear'
@@ -524,7 +537,7 @@ export function BackupSettingsForm({
 
       <div className="space-y-2">
         <span id={`${idPrefix}-hours-label`} className="text-sm font-medium">
-          Schedule hours ({timezone.trim() || 'UTC'} time)
+          Schedule hours ({timezoneLabel(timezone)})
         </span>
         <div
           className="grid w-max max-w-full grid-cols-[repeat(6,2.5rem)] gap-2 @min-[40rem]:grid-cols-[repeat(12,2.5rem)]"
