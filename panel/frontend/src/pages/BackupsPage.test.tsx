@@ -1,4 +1,5 @@
 import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BackupsPage } from './BackupsPage'
 import { renderWithProviders } from '../test/renderWithProviders'
@@ -116,6 +117,90 @@ describe('BackupsPage', () => {
     await waitFor(() => {
       expect(screen.getByText('Schedule hours (SAST)')).toBeInTheDocument()
     })
+  })
+
+  it('rejects a short archive passphrase before saving', async () => {
+    const user = userEvent.setup()
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+      if (url.includes('/api/backups/settings')) {
+        return Promise.resolve(
+          jsonResponse({ ...configuredSettings, archive_passphrase_set: false }),
+        )
+      }
+      if (url.includes('/api/backups/status')) {
+        return Promise.resolve(jsonResponse(overdueStatus))
+      }
+      if (url.includes('/api/auth/me')) {
+        return Promise.resolve(
+          jsonResponse({
+            username: 'admin',
+            setup_complete: true,
+            csrf_token: 'csrf',
+            stepped_up_until: null,
+          }),
+        )
+      }
+      return Promise.resolve(jsonResponse({}))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    renderWithProviders(<BackupsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Set passphrase' })).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Set passphrase' }))
+    await user.type(screen.getByLabelText('New archive passphrase'), 'short')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(
+      await screen.findByText('Archive passphrase must be at least 12 characters.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Backup settings saved.')).not.toBeInTheDocument()
+    expect(
+      fetchMock.mock.calls.filter(([url]) => String(url).includes('/api/backups/settings')).length,
+    ).toBe(1)
+  })
+
+  it('shows the server error detail when saving backup settings fails', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/backups/settings')) {
+          if (init?.method === 'PUT') {
+            return Promise.resolve(
+              jsonResponse({ detail: 'invalid bucket name: "my-backups!"' }, 422),
+            )
+          }
+          return Promise.resolve(jsonResponse(configuredSettings))
+        }
+        if (url.includes('/api/backups/status')) {
+          return Promise.resolve(jsonResponse(overdueStatus))
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+    renderWithProviders(<BackupsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+    })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('invalid bucket name: "my-backups!"')).toBeInTheDocument()
+    expect(screen.queryByText('Could not save backup settings.')).not.toBeInTheDocument()
   })
 
   it('renders an overdue badge when backup status is overdue', async () => {
