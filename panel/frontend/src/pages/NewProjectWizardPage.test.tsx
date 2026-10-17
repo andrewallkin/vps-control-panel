@@ -108,6 +108,23 @@ describe('NewProjectWizardPage database step', () => {
     await user.click(screen.getByLabelText('Create new'))
   }
 
+  it('explains the deploy key is generated at the end of setup when no key exists yet', async () => {
+    const user = userEvent.setup()
+    renderWithProviders(<NewProjectWizardPage />, {
+      routerProps: { initialEntries: ['/projects/new'] },
+    })
+
+    await screen.findByRole('link', { name: '← Projects' })
+
+    await user.type(screen.getByLabelText('Display name'), 'Test App')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await user.type(screen.getByLabelText('Repository URL'), 'git@github.com:owner/name.git')
+
+    expect(await screen.findByText(/generated at the end of setup/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Creation waits until you add it/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Add this read-only deploy key/i)).not.toBeInTheDocument()
+  })
+
   it('starts with the DATABASE_URL checkbox unticked when creating a new database', async () => {
     await goToDatabaseStep()
 

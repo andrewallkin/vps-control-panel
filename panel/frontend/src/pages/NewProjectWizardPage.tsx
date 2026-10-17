@@ -658,16 +658,20 @@ export function NewProjectWizardPage() {
           ) : null}
           {isSshRepoUrl(repoUrl) ? (
             <div className="rounded-md border border-border bg-background p-3 text-sm text-muted-foreground">
-              <p>
-                Add this read-only deploy key under the repo&apos;s Settings → Deploy keys.
-              </p>
               {publicKey ? (
-                <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
-                  {publicKey}
-                </pre>
+                <>
+                  <p>
+                    Add this read-only deploy key under the repo&apos;s Settings → Deploy keys.
+                  </p>
+                  <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+                    {publicKey}
+                  </pre>
+                </>
               ) : (
-                <p className="mt-2 text-xs">
-                  The key is created when you start the project. Creation waits until you add it.
+                <p>
+                  A read-only deploy key for this project is generated at the end of setup — the
+                  progress screen will show it. Add it under the repo&apos;s Settings → Deploy
+                  keys, then continue.
                 </p>
               )}
             </div>
