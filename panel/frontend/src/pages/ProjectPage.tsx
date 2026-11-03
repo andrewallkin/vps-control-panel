@@ -21,7 +21,13 @@ import { fetchContainerMetrics } from '../lib/dashboardApi'
 import { fetchDomains } from '../lib/domainsApi'
 import type { EnvRow } from '../lib/envEditorUtils'
 import { formatBytes, formatStartedAt } from '../lib/format'
-import { entriesToEnvRows, envKeysToPatchUnset, envRowsToPatchSet } from '../lib/projectEnv'
+import {
+  entriesToEnvRows,
+  envKeysToPatchUnset,
+  envRowsToPatchSet,
+  fillRenamedSetValues,
+  renamedRowsNeedingReveal,
+} from '../lib/projectEnv'
 import type { ComposePsService, RegistryTagOption } from '../lib/projectDeployTypes'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { StepUpDialog } from '../components/StepUpDialog'
@@ -451,8 +457,21 @@ export function ProjectPage() {
       rows: EnvRow[]
       loadedKeys: string[]
     }) => {
-      const set = envRowsToPatchSet(rows)
+      let set = envRowsToPatchSet(rows)
       const unset = envKeysToPatchUnset(loadedKeys, rows, routePortEnvVars)
+      const renamed = renamedRowsNeedingReveal(rows)
+      if (renamed.length > 0) {
+        // A renamed row keeps the masked placeholder as its value, so saving
+        // would delete the original key without recreating it. Fetch the
+        // stored value for the original key and patch it under the new name.
+        const data = await fetchProjectEnv(slug, { reveal: true })
+        const revealed = new Map(data.entries.map((entry) => [entry.key, entry.value]))
+        const filled = fillRenamedSetValues(set, renamed, revealed)
+        if (filled.missing.length > 0) {
+          throw new Error(`Could not load the value for: ${filled.missing.join(', ')}`)
+        }
+        set = filled.set
+      }
       await patchProjectEnv(slug, set, unset)
     },
     onSuccess: () => {

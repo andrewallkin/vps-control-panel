@@ -44,6 +44,11 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
         }
         const next = { ...row, ...patch }
         if (!row.locked && (patch.value !== undefined || patch.key !== undefined)) {
+          // A key change records the original key so a rename can preserve the
+          // stored value: the masked placeholder cannot be written to the .env.
+          if (patch.key !== undefined && patch.key !== row.key) {
+            next.renamedFrom = row.renamedFrom ?? row.key
+          }
           return { ...next, edited: true }
         }
         return next
@@ -230,11 +235,14 @@ function EnvValueDialog({
   }, [onClose])
 
   useEffect(() => {
-    if (field !== 'value' || !onRevealValue || row.edited || !isMaskedEnvPlaceholder(row.value)) {
+    if (field !== 'value' || !onRevealValue || !isMaskedEnvPlaceholder(row.value)) {
       return
     }
+    // After a rename the backend still stores the value under the original
+    // key, so the reveal must look that key up, not the edited one.
+    const lookupKey = row.renamedFrom ?? row.key
     let cancelled = false
-    onRevealValue(row.key)
+    onRevealValue(lookupKey)
       .then((value) => {
         if (!cancelled) {
           setDraft(value)
@@ -248,7 +256,7 @@ function EnvValueDialog({
     return () => {
       cancelled = true
     }
-  }, [field, onRevealValue, row.edited, row.key, row.value])
+  }, [field, onRevealValue, row.renamedFrom, row.key, row.value])
 
   const label = field === 'key' ? 'Full key' : 'Full value'
 
