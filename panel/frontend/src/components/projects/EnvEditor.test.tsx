@@ -90,4 +90,38 @@ describe('EnvEditor', () => {
     expect(screen.queryByRole('button', { name: 'POSTGRES_PASSWORD key' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'FOO key' })).toBeInTheDocument()
   })
+
+  it('reveals the original value after renaming a key', async () => {
+    const user = userEvent.setup()
+    let changeRows: EnvRow[] = []
+    function RenameHarness() {
+      const [rows, setRows] = useState<EnvRow[]>([
+        { key: 'OLD_KEY', value: '••••ab', locked: false },
+      ])
+      return (
+        <EnvEditor
+          rows={rows}
+          routePortEnvVars={[]}
+          onChange={(next) => {
+            changeRows = next
+            setRows(next)
+          }}
+          onRevealValue={async (key) => (key === 'OLD_KEY' ? 'real-secret' : '')}
+        />
+      )
+    }
+    render(<RenameHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'OLD_KEY key' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Full key' }), {
+      target: { value: 'NEW_KEY' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Done' }))
+
+    expect(changeRows[0]).toMatchObject({ key: 'NEW_KEY', renamedFrom: 'OLD_KEY' })
+    expect(screen.getByRole('button', { name: 'NEW_KEY key' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'NEW_KEY' }))
+    expect(await screen.findByRole('textbox', { name: 'Full value' })).toHaveValue('real-secret')
+  })
 })

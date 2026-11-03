@@ -4,6 +4,8 @@ export interface EnvRow {
   locked: boolean
   /** True after the user changed this row in the editor (not set from API load). */
   edited?: boolean
+  /** Original key before the user renamed this row in the editor. */
+  renamedFrom?: string
 }
 
 export function isMaskedEnvPlaceholder(value: string): boolean {
