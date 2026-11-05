@@ -145,7 +145,7 @@ def _create_sql(db_name: str, db_user: str) -> tuple[str, str]:
     call1 = (
         "\\getenv pw VPSCP_PW\n"
         f"CREATE ROLE {user_q} WITH LOGIN PASSWORD :'pw';\n"
-        f"CREATE DATABASE {db_q};\n"
+        f"CREATE DATABASE {db_q} OWNER {user_q};\n"
         f"REVOKE CONNECT ON DATABASE {db_q} FROM PUBLIC;\n"
         f"GRANT CONNECT ON DATABASE {db_q} TO {user_q};\n"
     )
