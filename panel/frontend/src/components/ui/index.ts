@@ -27,6 +27,13 @@ export { Field, type FieldControlProps, type FieldProps } from './Field'
 export { IconButton, type IconButtonProps } from './IconButton'
 export { Input, type InputProps } from './Input'
 export { PageHeader, type PageHeaderProps } from './PageHeader'
+export {
+  PRODUCT_NAME,
+  ProductLogo,
+  type ProductLogoNamePlacement,
+  type ProductLogoProps,
+  type ProductLogoSize,
+} from './ProductLogo'
 export { Select, type SelectProps } from './Select'
 export { Skeleton } from './Skeleton'
 export { Spinner, type SpinnerProps } from './Spinner'

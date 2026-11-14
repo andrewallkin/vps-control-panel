@@ -26,6 +26,7 @@ import {
   IconButton,
   Input,
   PageHeader,
+  ProductLogo,
   Select,
   Skeleton,
   Spinner,
@@ -74,6 +75,15 @@ export function UiShowcasePage() {
             <Button size="sm" leftIcon={<Plus weight="bold" className="size-4" aria-hidden />}>
               With icon
             </Button>
+          </div>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product logo</h2>
+          <div className="flex flex-wrap items-center gap-8">
+            <ProductLogo size="sm" showName nameClassName="tracking-tight" />
+            <ProductLogo size="sm" showName />
+            <ProductLogo size="md" showName="below" nameClassName="tracking-tight text-foreground" />
           </div>
         </section>
 
