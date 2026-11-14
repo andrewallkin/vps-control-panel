@@ -15,6 +15,7 @@ import { ProjectPage } from '../pages/ProjectPage'
 import { ProjectsListPage } from '../pages/ProjectsListPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { SetupPage } from '../pages/SetupPage'
+import { UiShowcasePage } from '../pages/UiShowcasePage'
 
 function AuthLoading() {
   return (
@@ -160,6 +161,7 @@ function SetupEntry() {
 export function AppRoutes() {
   return (
     <Routes>
+      {import.meta.env.DEV ? <Route path="/__ui" element={<UiShowcasePage />} /> : null}
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<Layout />}>
