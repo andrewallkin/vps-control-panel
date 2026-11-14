@@ -1,16 +1,28 @@
 :root {
-  --color-background: #0F172A;
-  --color-card: #1B2336;
-  --color-muted: #272F42;
-  --color-muted-foreground: #94A3B8;
-  --color-foreground: #F8FAFC;
-  --color-primary: #1E293B;
-  --color-secondary: #334155;
-  --color-border: #475569;
-  --color-accent: #22C55E;
-  --color-destructive: #EF4444;
-  --color-ring: #FFFFFF;
-  --color-warning: #F59E0B;
+  --color-background: #0b0d12;
+  --color-card: #12151c;
+  --color-muted: #191d26;
+  --color-muted-foreground: #8b93a3;
+  --color-foreground: #edeff3;
+  --color-primary: #161a22;
+  --color-secondary: #222733;
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-border-strong: rgba(255, 255, 255, 0.14);
+  --color-accent: #22c55e;
+  --color-accent-hover: #4ade80;
+  --color-accent-foreground: #052e14;
+  --color-accent-soft: rgba(34, 197, 94, 0.12);
+  --color-destructive: #f2555a;
+  --color-destructive-soft: rgba(242, 85, 90, 0.12);
+  --color-warning: #f5a524;
+  --color-warning-soft: rgba(245, 165, 36, 0.12);
+  --color-info: #60a5fa;
+  --color-info-soft: rgba(96, 165, 250, 0.12);
+  --color-ring: rgba(74, 222, 128, 0.6);
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --shadow-popover: 0 8px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --font-size-base: 14px;
 }
 
 @media (prefers-reduced-motion: reduce) {
