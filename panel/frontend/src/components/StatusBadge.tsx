@@ -1,27 +1,14 @@
-import { CheckCircle, Warning, XCircle } from '@phosphor-icons/react'
-import type { ReactNode } from 'react'
+import { Badge, type BadgeTone } from './ui/Badge'
 
 export type StatusVariant = 'healthy' | 'warning' | 'critical'
 
 const variantConfig: Record<
   StatusVariant,
-  { label: string; className: string; icon: ReactNode }
+  { label: string; tone: BadgeTone }
 > = {
-  healthy: {
-    label: 'Healthy',
-    className: 'text-accent',
-    icon: <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0" />,
-  },
-  warning: {
-    label: 'Degraded',
-    className: 'text-warning',
-    icon: <Warning weight="regular" aria-hidden className="size-4 shrink-0" />,
-  },
-  critical: {
-    label: 'Down',
-    className: 'text-destructive',
-    icon: <XCircle weight="regular" aria-hidden className="size-4 shrink-0" />,
-  },
+  healthy: { label: 'Healthy', tone: 'success' },
+  warning: { label: 'Degraded', tone: 'warning' },
+  critical: { label: 'Down', tone: 'danger' },
 }
 
 export interface StatusBadgeProps {
@@ -33,12 +20,9 @@ export function StatusBadge({ variant, label }: StatusBadgeProps) {
   const config = variantConfig[variant]
   const text = label ?? config.label
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 text-sm font-medium ${config.className}`}
-    >
-      {config.icon}
-      <span>{text}</span>
-    </span>
+    <Badge tone={config.tone} dot>
+      {text}
+    </Badge>
   )
 }
 

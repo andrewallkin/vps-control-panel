@@ -1,6 +1,14 @@
-import { Spinner } from '@phosphor-icons/react'
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import { ApiError, stepUpRequest } from '../lib/api'
+import { Button } from './ui/Button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from './ui/Dialog'
+import { Input } from './ui/Input'
 
 export interface StepUpDialogProps {
   open: boolean
@@ -31,18 +39,9 @@ export function StepUpDialog({
       return
     }
     inputRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy && !submitting) {
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, busy, submitting, onCancel])
+  }, [open])
 
-  if (!open) {
-    return null
-  }
+  const disabled = busy || submitting
 
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault()
@@ -63,77 +62,63 @@ export function StepUpDialog({
     }
   }
 
-  const disabled = busy || submitting
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-background/80 cursor-pointer"
-        aria-label="Dismiss dialog"
-        disabled={disabled}
-        onClick={onCancel}
-      />
-      <form
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !disabled) {
+          onCancel()
+        }
+      }}
+    >
+      <DialogContent
+        busy={disabled}
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descId}
-        className="relative z-10 w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-lg"
-        onSubmit={(event) => void onSubmit(event)}
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          inputRef.current?.focus()
+        }}
       >
-        <h2 id={titleId} className="text-base font-semibold">
-          {title}
-        </h2>
-        <p id={descId} className="mt-2 text-sm text-muted-foreground">
-          {description}
-        </p>
-        <div className="mt-4 space-y-2">
-          <label htmlFor="step-up-code" className="text-sm font-medium">
-            Authenticator code
-          </label>
-          <input
-            ref={inputRef}
-            id="step-up-code"
-            name="code"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={6}
-            value={code}
-            disabled={disabled}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? 'step-up-code-error' : undefined}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
-            onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
-          />
-          {error ? (
-            <p id="step-up-code-error" className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-        </div>
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            disabled={disabled}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={onCancel}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={disabled || code.trim().length !== 6}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? (
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+        <form onSubmit={(event) => void onSubmit(event)}>
+          <DialogTitle id={titleId}>{title}</DialogTitle>
+          <DialogDescription id={descId}>{description}</DialogDescription>
+          <div className="mt-4 space-y-2">
+            <label htmlFor="step-up-code" className="text-sm font-medium">
+              Authenticator code
+            </label>
+            <Input
+              ref={inputRef}
+              id="step-up-code"
+              name="code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              disabled={disabled}
+              mono
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? 'step-up-code-error' : undefined}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ''))}
+            />
+            {error ? (
+              <p id="step-up-code-error" className="text-sm text-destructive" role="alert">
+                {error}
+              </p>
             ) : null}
-            Verify
-          </button>
-        </div>
-      </form>
-    </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="secondary" disabled={disabled} onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={submitting} disabled={disabled || code.trim().length !== 6}>
+              Verify
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -1,5 +1,13 @@
-import { Spinner } from '@phosphor-icons/react'
 import { useEffect, useId, useRef } from 'react'
+import { Button } from './ui/Button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogTitle,
+} from './ui/Dialog'
+import { cn } from '../lib/cn'
 
 export interface ConfirmDialogProps {
   open: boolean
@@ -35,71 +43,48 @@ export function ConfirmDialog({
       return
     }
     cancelRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !busy) {
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, busy, onCancel])
-
-  if (!open) {
-    return null
-  }
+  }, [open])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-background/80 cursor-pointer"
-        aria-label="Dismiss dialog"
-        disabled={busy}
-        onClick={onCancel}
-      />
-      <div
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !busy) {
+          onCancel()
+        }
+      }}
+    >
+      <DialogContent
+        busy={busy}
         role="alertdialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descId}
-        className="relative z-10 w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-lg"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          cancelRef.current?.focus()
+        }}
       >
-        <h2 id={titleId} className="text-base font-semibold">
-          {title}
-        </h2>
-        <p id={descId} className="mt-2 text-sm text-muted-foreground">
-          {description}
-        </p>
+        <DialogTitle id={titleId}>{title}</DialogTitle>
+        <DialogDescription id={descId}>{description}</DialogDescription>
         {error ? (
           <p className="mt-3 text-sm text-destructive" role="alert">
             {error}
           </p>
         ) : null}
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button
-            ref={cancelRef}
-            type="button"
-            disabled={busy}
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={onCancel}
-          >
+        <DialogFooter>
+          <Button ref={cancelRef} variant="secondary" disabled={busy} onClick={onCancel}>
             {cancelLabel}
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-              tone === 'danger'
-                ? 'bg-destructive text-foreground'
-                : 'bg-accent font-semibold text-background'
-            }`}
+          </Button>
+          <Button
+            variant={tone === 'danger' ? 'danger' : 'primary'}
+            loading={busy}
+            className={cn(tone === 'danger' && 'bg-destructive text-foreground hover:bg-destructive/90')}
             onClick={onConfirm}
           >
-            {busy ? <Spinner weight="regular" aria-hidden className="size-4 animate-spin" /> : null}
             {confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
