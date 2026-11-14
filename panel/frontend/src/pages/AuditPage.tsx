@@ -1,54 +1,64 @@
-import { CaretDown, CheckCircle, MagnifyingGlass, Spinner, XCircle } from '@phosphor-icons/react'
+import { CheckCircle, MagnifyingGlass, XCircle } from '@phosphor-icons/react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import {
+  Badge,
+  Button,
+  Input,
+  PageHeader,
+  Select,
+  Spinner,
+  Table,
+  TableContainer,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '../components/ui'
 import { fetchAudit, type AuditEntry } from '../lib/auditApi'
 import { formatDateTime } from '../lib/format'
 
 function AuditResultBadge({ ok }: { ok: boolean }) {
   if (ok) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-accent">
+      <Badge tone="success">
         <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0" />
         ok
-      </span>
+      </Badge>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-destructive">
+    <Badge tone="danger">
       <XCircle weight="regular" aria-hidden className="size-4 shrink-0" />
       failed
-    </span>
+    </Badge>
   )
 }
 
 function AuditRow({ entry }: { entry: AuditEntry }) {
   return (
-    <tr>
-      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs text-muted-foreground">
+    <TR>
+      <TD className="whitespace-nowrap font-mono text-xs text-muted-foreground">
         {formatDateTime(entry.time)}
-      </td>
-      <td className="px-3 py-2 capitalize">{entry.source}</td>
-      <td className="px-3 py-2 font-mono text-xs">{entry.operation}</td>
-      <td className="px-3 py-2">
+      </TD>
+      <TD className="capitalize">{entry.source}</TD>
+      <TD className="font-mono text-xs">{entry.operation}</TD>
+      <TD>
         <details>
           <summary className="cursor-pointer text-sm text-muted-foreground">Params</summary>
-          <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs">
+          <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
             {JSON.stringify(entry.params, null, 2)}
           </pre>
         </details>
-      </td>
-      <td className="px-3 py-2">
+      </TD>
+      <TD>
         <AuditResultBadge ok={entry.ok} />
-      </td>
-      <td className="whitespace-nowrap px-3 py-2 text-right font-mono text-xs">
-        {entry.duration_ms} ms
-      </td>
-    </tr>
+      </TD>
+      <TD className="whitespace-nowrap text-right font-mono text-xs">{entry.duration_ms} ms</TD>
+    </TR>
   )
 }
-
-const fieldClass =
-  'h-10 w-full min-w-0 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200 [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-50'
 
 export function AuditPage() {
   const [operationInput, setOperationInput] = useState('')
@@ -118,12 +128,10 @@ export function AuditPage() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Audit</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Merged panel and agent operation history.
-        </p>
-      </div>
+      <PageHeader
+        title="Audit"
+        description="Merged panel and agent operation history."
+      />
 
       <section className="space-y-3" aria-labelledby="audit-filters-heading">
         <div className="flex items-center justify-between gap-3">
@@ -131,13 +139,9 @@ export function AuditPage() {
             Filters
           </h2>
           {filtersActive ? (
-            <button
-              type="button"
-              className="cursor-pointer text-sm font-medium text-muted-foreground transition-colors duration-200 hover:text-foreground"
-              onClick={clearFilters}
-            >
+            <Button variant="ghost" size="sm" className="h-auto px-0" onClick={clearFilters}>
               Clear
-            </button>
+            </Button>
           ) : null}
         </div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(9rem,0.7fr)_minmax(0,1fr)_minmax(0,1fr)] xl:items-end">
@@ -151,12 +155,12 @@ export function AuditPage() {
                 aria-hidden
                 className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
               />
-              <input
+              <Input
                 id="audit-filter-operation"
                 type="search"
                 value={operationInput}
                 placeholder="Exact operation name"
-                className={`${fieldClass} pl-9 font-mono`}
+                className="pl-9 font-mono"
                 onChange={(event) => setOperationInput(event.target.value)}
               />
             </div>
@@ -165,35 +169,27 @@ export function AuditPage() {
             <label htmlFor="audit-filter-ok" className="block text-sm font-medium">
               Result
             </label>
-            <div className="relative">
-              <select
-                id="audit-filter-ok"
-                value={okFilter}
-                className={`${fieldClass} appearance-none pr-8`}
-                onChange={(event) =>
-                  setOkFilter(event.target.value as 'all' | 'ok' | 'failed')
-                }
-              >
-                <option value="all">All</option>
-                <option value="ok">Ok</option>
-                <option value="failed">Failed</option>
-              </select>
-              <CaretDown
-                weight="regular"
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
-              />
-            </div>
+            <Select
+              id="audit-filter-ok"
+              value={okFilter}
+              onChange={(event) =>
+                setOkFilter(event.target.value as 'all' | 'ok' | 'failed')
+              }
+            >
+              <option value="all">All</option>
+              <option value="ok">Ok</option>
+              <option value="failed">Failed</option>
+            </Select>
           </div>
           <div className="min-w-0 space-y-1">
             <label htmlFor="audit-filter-since" className="block text-sm font-medium">
               Since
             </label>
-            <input
+            <Input
               id="audit-filter-since"
               type="datetime-local"
               value={sinceFilter}
-              className={fieldClass}
+              className="[color-scheme:dark]"
               onChange={(event) => setSinceFilter(event.target.value)}
             />
           </div>
@@ -201,12 +197,13 @@ export function AuditPage() {
             <label htmlFor="audit-filter-until" className="block text-sm font-medium">
               Until
             </label>
-            <input
+            <Input
               id="audit-filter-until"
               type="datetime-local"
               value={untilFilter}
               aria-invalid={rangeInvalid}
-              className={fieldClass}
+              className="[color-scheme:dark]"
+              invalid={rangeInvalid}
               onChange={(event) => setUntilFilter(event.target.value)}
             />
           </div>
@@ -227,50 +224,46 @@ export function AuditPage() {
           <h2 id="audit-log-heading" className="text-base font-semibold">
             Events
           </h2>
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="w-full min-w-[800px] text-left text-sm">
-              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">Time</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Source</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Operation</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Params</th>
-                  <th scope="col" className="px-3 py-2 font-medium">Result</th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">Duration</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+          <TableContainer>
+            <Table className="min-w-[800px]">
+              <THead>
+                <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                  <TH scope="col" className="font-medium normal-case tracking-normal">Time</TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">Source</TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">Operation</TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">Params</TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">Result</TH>
+                  <TH scope="col" className="text-right font-medium normal-case tracking-normal">Duration</TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-border">
                 {auditQuery.isPending ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
-                      <span className="inline-flex items-center gap-2">
-                        <Spinner
-                          weight="regular"
-                          aria-hidden
-                          className="size-4 animate-spin"
-                        />
+                  <TR className="hover:bg-transparent">
+                    <TD colSpan={6}>
+                      <span className="inline-flex items-center gap-2 text-muted-foreground">
+                        <Spinner />
                         Loading audit log…
                       </span>
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 ) : entries.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                  <TR className="hover:bg-transparent">
+                    <TD colSpan={6} className="text-muted-foreground">
                       No audit entries match these filters.
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 ) : (
                   entries.map((entry, index) => (
                     <AuditRow key={`${entry.time}-${entry.operation}-${index}`} entry={entry} />
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TBody>
+            </Table>
+          </TableContainer>
           <div ref={loadMoreRef} className="h-4" aria-hidden />
           {auditQuery.isFetchingNextPage ? (
             <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+              <Spinner />
               Loading more…
             </p>
           ) : null}

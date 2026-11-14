@@ -1,4 +1,4 @@
-import { ArrowsClockwise, Plus, Spinner, Trash } from '@phosphor-icons/react'
+import { ArrowsClockwise, Plus, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { AddDomainDialog } from '../components/domains/AddDomainDialog'
@@ -6,6 +6,22 @@ import { CertStatusBadge } from '../components/domains/CertStatusBadge'
 import { RemoveDomainDialog } from '../components/domains/RemoveDomainDialog'
 import { SslModeBadge } from '../components/domains/SslModeBadge'
 import { LogViewer } from '../components/setup/LogViewer'
+import {
+  Alert,
+  Button,
+  Card,
+  CardBody,
+  EmptyState,
+  PageHeader,
+  Spinner,
+  Table,
+  TableContainer,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '../components/ui'
 import { ApiError } from '../lib/api'
 import {
   deleteDomain,
@@ -148,31 +164,25 @@ export function DomainsPage() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Domains</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            One wildcard certificate and one Cloudflare SSL mode cover every name in each
-            registered zone.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={!canAdd}
-          className="inline-flex shrink-0 items-center gap-2 self-start rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed lg:self-auto"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus weight="regular" aria-hidden className="size-4" />
-          Add domain
-        </button>
-      </div>
+      <PageHeader
+        title="Domains"
+        description="One wildcard certificate and one Cloudflare SSL mode cover every name in each registered zone."
+        actions={
+          <Button
+            disabled={!canAdd}
+            className="self-start lg:self-auto"
+            leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
+            onClick={() => setAddOpen(true)}
+          >
+            Add domain
+          </Button>
+        }
+      />
 
       {!zonesQuery.data?.configured ? (
-        <div className="rounded-lg border border-warning/50 bg-warning/10 px-4 py-3">
-          <p className="text-sm text-warning">
-            Cloudflare is not configured. Add an API token in Settings before registering domains.
-          </p>
-        </div>
+        <Alert tone="warning">
+          Cloudflare is not configured. Add an API token in Settings before registering domains.
+        </Alert>
       ) : null}
 
       {actionError ? (
@@ -213,45 +223,45 @@ export function DomainsPage() {
       ) : null}
 
       {tableLoading ? (
-        <div className="rounded-lg border border-border bg-card px-3 py-6 text-sm text-muted-foreground">
-          Loading domains…
-        </div>
+        <Card>
+          <CardBody className="text-sm text-muted-foreground">Loading domains…</CardBody>
+        </Card>
       ) : null}
       {!tableLoading && !domainsQuery.isError && domains.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card px-3 py-6 text-sm text-muted-foreground">
-          No domains registered yet.
-        </div>
+        <Card>
+          <EmptyState title="No domains registered yet." />
+        </Card>
       ) : null}
       {!tableLoading
         ? domains.map((row) => {
             const names = zoneHostnames(row)
             const zoneName = zoneNameById.get(row.zone_id) ?? row.zone_id
             return (
-              <section key={row.name} className="overflow-hidden rounded-lg border border-border bg-card">
+              <Card key={row.name} className="overflow-hidden p-0">
                 <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 space-y-1">
                     <p className="text-xs font-medium text-muted-foreground">Zone</p>
                     <h2 className="truncate font-mono text-base font-semibold">{zoneName}</h2>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       disabled={reissueMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors duration-200 hover:bg-muted cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                      leftIcon={<ArrowsClockwise weight="regular" aria-hidden className="size-4" />}
                       onClick={() => reissueMutation.mutate(row.name)}
                     >
-                      <ArrowsClockwise weight="regular" aria-hidden className="size-4" />
                       Reissue
-                    </button>
-                    <button
-                      type="button"
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
                       disabled={removeMutation.isPending}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-3 py-2 text-sm font-medium whitespace-nowrap text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                      leftIcon={<Trash weight="regular" aria-hidden className="size-4" />}
                       onClick={() => setRemoveTarget(row.name)}
                     >
-                      <Trash weight="regular" aria-hidden className="size-4" />
                       Remove
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <dl className="grid divide-y divide-border border-b border-border sm:grid-cols-2 sm:divide-x sm:divide-y-0">
@@ -276,35 +286,35 @@ export function DomainsPage() {
                     </dd>
                   </div>
                 </dl>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[32rem] text-left text-sm">
-                    <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                      <tr>
-                        <th scope="col" className="min-w-0 px-3 py-2 font-medium">
+                <TableContainer contained={false}>
+                  <Table className="min-w-[32rem]">
+                    <THead>
+                      <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                        <TH scope="col" className="min-w-0 px-3 font-medium normal-case tracking-normal">
                           Name
-                        </th>
-                        <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                        </TH>
+                        <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                           Type
-                        </th>
-                        <th scope="col" className="min-w-0 px-3 py-2 font-medium">
+                        </TH>
+                        <TH scope="col" className="min-w-0 px-3 font-medium normal-case tracking-normal">
                           Use
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
+                        </TH>
+                      </TR>
+                    </THead>
+                    <TBody className="divide-y divide-border">
                       {names.map((entry) => (
-                        <tr key={entry.fqdn}>
-                          <td className="min-w-0 px-3 py-2 font-mono text-sm break-all">{entry.fqdn}</td>
-                          <td className="whitespace-nowrap px-3 py-2">
+                        <TR key={entry.fqdn} className="hover:bg-transparent">
+                          <TD className="min-w-0 px-3 font-mono text-sm break-all">{entry.fqdn}</TD>
+                          <TD className="whitespace-nowrap px-3">
                             {hostnameType(row.name, entry.fqdn)}
-                          </td>
-                          <td className="min-w-0 px-3 py-2 text-muted-foreground">{hostnameUse(entry)}</td>
-                        </tr>
+                          </TD>
+                          <TD className="min-w-0 px-3 text-muted-foreground">{hostnameUse(entry)}</TD>
+                        </TR>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
+                    </TBody>
+                  </Table>
+                </TableContainer>
+              </Card>
             )
           })
         : null}
@@ -327,7 +337,7 @@ export function DomainsPage() {
 
       {registerMutation.isPending ? (
         <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+          <Spinner />
           Registering domain…
         </p>
       ) : null}

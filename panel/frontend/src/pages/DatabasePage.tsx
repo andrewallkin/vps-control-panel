@@ -1,4 +1,4 @@
-import { FileArrowUp, Info, Trash, Warning } from '@phosphor-icons/react'
+import { FileArrowUp, Info, Trash } from '@phosphor-icons/react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
@@ -22,6 +22,22 @@ import {
 } from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Input,
+  PageHeader,
+  Select,
+  Table,
+  TableContainer,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '../components/ui'
 import { ApiError, apiErrorDetail, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, uploadFailureMessage, type UploadProgress } from '../lib/chunkedUpload'
@@ -54,18 +70,6 @@ type PendingStepUp =
   | { kind: 'rotate'; slug: string }
   | { kind: 'drop'; payload: DropDatabasePayload }
   | null
-
-const secondaryButtonClass =
-  'inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-
-const dangerButtonClass =
-  'inline-flex min-h-11 items-center gap-2 rounded-md border border-destructive/50 px-3 text-sm font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-
-const primaryButtonClass =
-  'inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-
-const fieldClass =
-  'mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
 
 const RESTORE_STEPS = [
   'The file is checked as a gzip-compressed pg_dumpall archive.',
@@ -402,12 +406,10 @@ export function DatabasePage() {
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Database</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          PostgreSQL databases on the central cluster, and dumps for each attached project.
-        </p>
-      </div>
+      <PageHeader
+        title="Database"
+        description="PostgreSQL databases on the central cluster, and dumps for each attached project."
+      />
 
       {actionError ? (
         <p className="text-sm text-destructive" role="alert">
@@ -421,11 +423,8 @@ export function DatabasePage() {
       ) : null}
 
       {adoptTarget ? (
-        <section
-          ref={adoptPanelRef}
-          className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6"
-          aria-labelledby="adopt-heading"
-        >
+        <section ref={adoptPanelRef} aria-labelledby="adopt-heading">
+          <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-1">
             <h2 id="adopt-heading" className="text-base font-semibold">
               Adopt <span className="font-mono">{adoptTarget.name}</span>
@@ -439,9 +438,9 @@ export function DatabasePage() {
               <label htmlFor="adopt-project" className="block text-sm font-medium">
                 Project
               </label>
-              <select
+              <Select
                 id="adopt-project"
-                className={fieldClass}
+                className="mt-1.5"
                 value={adoptSlug}
                 onChange={(event) => setAdoptSlug(event.target.value)}
               >
@@ -451,7 +450,7 @@ export function DatabasePage() {
                     {project.display_name} ({project.slug})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">Password</legend>
@@ -480,20 +479,19 @@ export function DatabasePage() {
               <label htmlFor="adopt-keep-password" className="block text-sm font-medium">
                 Current database password
               </label>
-              <input
+              <Input
                 id="adopt-keep-password"
                 type="password"
                 autoComplete="off"
                 value={keepPassword}
+                className="mt-1.5"
                 onChange={(event) => setKeepPassword(event.target.value)}
-                className={fieldClass}
               />
             </div>
           ) : null}
           <div className="flex items-center gap-2 text-sm">
             <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={writeDatabaseUrl}
                 onChange={(event) => setWriteDatabaseUrl(event.target.checked)}
               />
@@ -510,31 +508,28 @@ export function DatabasePage() {
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <Button
+              className="min-h-11"
               disabled={
                 !adoptSlug ||
                 adoptMutation.isPending ||
                 (passwordMode === 'keep' && keepPassword.trim() === '')
               }
-              className={primaryButtonClass}
               onClick={submitAdopt}
             >
               Adopt database
-            </button>
-            <button type="button" className={secondaryButtonClass} onClick={() => setAdoptTarget(null)}>
+            </Button>
+            <Button type="button" variant="secondary" className="min-h-11" onClick={() => setAdoptTarget(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
+          </Card>
         </section>
       ) : null}
 
       {dropTarget ? (
-        <section
-          ref={dropPanelRef}
-          className="space-y-4 rounded-lg border border-destructive/40 bg-card p-4 sm:p-6"
-          aria-labelledby="drop-heading"
-        >
+        <section ref={dropPanelRef} aria-labelledby="drop-heading">
+          <Card className="space-y-4 border-destructive/40 p-4 sm:p-6">
           <div className="space-y-1">
             <h2 id="drop-heading" className="text-base font-semibold text-destructive">
               Drop <span className="font-mono">{dropTarget.name}</span>
@@ -548,20 +543,20 @@ export function DatabasePage() {
             <label className="block text-sm font-medium" htmlFor={dropConfirmInputId}>
               Type database name to confirm
             </label>
-            <input
+            <Input
               id={dropConfirmInputId}
               type="text"
               autoComplete="off"
               spellCheck={false}
               disabled={dropMutation.isPending}
               value={dropConfirmText}
+              mono
+              className="mt-1.5"
               onChange={(event) => setDropConfirmText(event.target.value)}
-              className={`${fieldClass} font-mono`}
             />
           </div>
           <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={dropRole}
               disabled={dropMutation.isPending}
               onChange={(event) => setDropRole(event.target.checked)}
@@ -569,10 +564,10 @@ export function DatabasePage() {
             Also drop the database role
           </label>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="danger"
+              className="min-h-11 bg-destructive text-foreground hover:bg-destructive/90"
               disabled={!canDrop}
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-destructive px-3 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
                 if (!dropTarget) {
                   return
@@ -589,10 +584,11 @@ export function DatabasePage() {
               }}
             >
               Drop database
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={secondaryButtonClass}
+              variant="secondary"
+              className="min-h-11"
               onClick={() => {
                 setDropTarget(null)
                 setDropConfirmText('')
@@ -600,8 +596,9 @@ export function DatabasePage() {
               }}
             >
               Cancel
-            </button>
+            </Button>
           </div>
+          </Card>
         </section>
       ) : null}
 
@@ -619,41 +616,41 @@ export function DatabasePage() {
               <p className="text-sm text-muted-foreground">{databaseSummary(rows)}</p>
             ) : null}
           </div>
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-3 font-medium">
+          <TableContainer>
+            <Table className="min-w-[720px]">
+              <THead>
+                <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Name
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Owner
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Size
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Project
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right font-medium">
+                  </TH>
+                  <TH scope="col" className="text-right font-medium normal-case tracking-normal">
                     Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
+                  </TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-border">
                 {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-sm text-muted-foreground">
+                  <TR className="hover:bg-transparent">
+                    <TD colSpan={5} className="py-8 text-muted-foreground">
                       {databasesQuery.isPending ? 'Loading…' : 'No databases yet.'}
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 ) : (
                   rows.map((row) => (
-                    <tr key={row.name} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-mono font-medium">{row.name}</td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">{row.owner}</td>
-                      <td className="px-4 py-3 tabular-nums">{formatBytes(row.size_bytes)}</td>
-                      <td className="px-4 py-3">
+                    <TR key={row.name}>
+                      <TD className="font-mono font-medium">{row.name}</TD>
+                      <TD className="font-mono text-muted-foreground">{row.owner}</TD>
+                      <TD className="tabular-nums">{formatBytes(row.size_bytes)}</TD>
+                      <TD>
                         {row.attached_slug ? (
                           <Link
                             to={`/projects/${encodeURIComponent(row.attached_slug)}`}
@@ -664,13 +661,13 @@ export function DatabasePage() {
                         ) : (
                           <StatusBadge variant="warning" label="Unattached" />
                         )}
-                      </td>
-                      <td className="px-4 py-2">
+                      </TD>
+                      <TD>
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           {!row.attached_slug ? (
-                            <button
-                              type="button"
-                              className={secondaryButtonClass}
+                            <Button
+                              variant="secondary"
+                              className="min-h-11"
                               onClick={() => {
                                 setAdoptTarget(row)
                                 setAdoptSlug('')
@@ -680,21 +677,21 @@ export function DatabasePage() {
                               }}
                             >
                               Adopt
-                            </button>
+                            </Button>
                           ) : null}
                           {row.attached_slug ? (
-                            <button
-                              type="button"
+                            <Button
+                              variant="secondary"
+                              className="min-h-11"
                               disabled={rotateMutation.isPending}
-                              className={secondaryButtonClass}
                               onClick={() => rotateMutation.mutate(row.attached_slug!)}
                             >
                               Rotate password
-                            </button>
+                            </Button>
                           ) : null}
-                          <button
-                            type="button"
-                            className={dangerButtonClass}
+                          <Button
+                            variant="danger"
+                            className="min-h-11"
                             onClick={() => {
                               setDropTarget(row)
                               setDropConfirmText('')
@@ -702,15 +699,15 @@ export function DatabasePage() {
                             }}
                           >
                             Drop
-                          </button>
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TBody>
+            </Table>
+          </TableContainer>
         </section>
       )}
 
@@ -726,7 +723,7 @@ export function DatabasePage() {
             const dumpQuery = dumpQueries[index]
             const dumps = dumpQuery?.data ?? []
             return (
-              <div key={slug} className="overflow-hidden rounded-lg border border-border bg-card">
+              <Card key={slug} className="overflow-hidden p-0">
                 <h3 className="border-b border-border px-4 py-3 text-sm font-semibold">
                   <Link
                     to={`/projects/${encodeURIComponent(slug)}`}
@@ -758,16 +755,13 @@ export function DatabasePage() {
                     ))
                   )}
                 </ul>
-              </div>
+              </Card>
             )
           })}
         </section>
       ) : null}
 
-      <section
-        className="overflow-hidden rounded-lg border border-border bg-card"
-        aria-labelledby="restore-heading"
-      >
+      <Card className="overflow-hidden p-0" aria-labelledby="restore-heading">
         <div className="border-b border-border px-4 py-4 sm:px-6">
           <h2 id="restore-heading" className="text-base font-semibold">
             Cluster restore
@@ -781,16 +775,10 @@ export function DatabasePage() {
         {!restoreJobId ? (
           <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
             <div>
-              <div className="flex gap-3 rounded-md border border-warning/50 bg-warning/10 px-4 py-3">
-                <Warning weight="regular" aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-                <div className="space-y-1 text-sm">
-                  <p className="font-medium text-foreground">Before you restore</p>
-                  <p className="text-muted-foreground">
-                    If the cluster already has data, project containers that use it are stopped and
-                    a safety dump is taken first. Nothing is overwritten until you confirm.
-                  </p>
-                </div>
-              </div>
+              <Alert tone="warning" title="Before you restore">
+                If the cluster already has data, project containers that use it are stopped and
+                a safety dump is taken first. Nothing is overwritten until you confirm.
+              </Alert>
               <h3 className="mt-5 text-sm font-semibold">What the restore does</h3>
               <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
                 {RESTORE_STEPS.map((step) => (
@@ -817,14 +805,15 @@ export function DatabasePage() {
                   Drag a .sql or .sql.gz file here, or choose a file. You confirm your password
                   before the upload starts.
                 </p>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  className="mt-4 min-h-11"
                   disabled={uploading}
-                  className={`${secondaryButtonClass} mt-4`}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Choose file
-                </button>
+                </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -843,10 +832,10 @@ export function DatabasePage() {
                     bytesPerSec={uploadProgress.bytesPerSec}
                     etaSec={uploadProgress.etaSec}
                   />
-                  <button type="button" className={secondaryButtonClass} onClick={cancelUpload}>
+                  <Button type="button" variant="secondary" className="min-h-11" onClick={cancelUpload}>
                     <Trash weight="regular" aria-hidden className="size-4" />
                     Cancel upload
-                  </button>
+                  </Button>
                 </div>
               ) : null}
 
@@ -866,16 +855,16 @@ export function DatabasePage() {
         {!restoreJobId && uploadInfo ? (
           <div className="space-y-3 border-t border-border px-4 py-4 sm:px-6">
             <UploadInfoPanel info={uploadInfo} />
-            <button
-              type="button"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-destructive px-4 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            <Button
+              variant="danger"
+              className="min-h-11 bg-destructive text-foreground hover:bg-destructive/90"
               onClick={() => {
                 setConfirmDialogKey((value) => value + 1)
                 setConfirmOpen(true)
               }}
             >
               Restore from dump
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -895,7 +884,7 @@ export function DatabasePage() {
             />
           </div>
         ) : null}
-      </section>
+      </Card>
 
       <RestoreConfirmDialog
         key={confirmDialogKey}

@@ -5,6 +5,21 @@ import { ConfirmDialog } from '../components/ConfirmDialog'
 import { RuleFormDialog } from '../components/rules/RuleFormDialog'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { Toast } from '../components/Toast'
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  PageHeader,
+  Select,
+  Table,
+  TableContainer,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '../components/ui'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
 import {
@@ -26,18 +41,8 @@ import { fetchDomains } from '../lib/domainsApi'
 
 function ActionBadge({ action }: { action: RuleAction }) {
   const tone =
-    action === 'block'
-      ? 'border-destructive/40 text-destructive'
-      : action === 'skip'
-        ? 'border-border bg-muted text-foreground'
-        : 'border-warning/50 text-warning'
-  return (
-    <span
-      className={`inline-flex whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${tone}`}
-    >
-      {actionLabel(action)}
-    </span>
-  )
+    action === 'block' ? 'danger' : action === 'skip' ? 'neutral' : 'warning'
+  return <Badge tone={tone}>{actionLabel(action)}</Badge>
 }
 
 type EditorState =
@@ -141,53 +146,52 @@ export function RulesPage() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Rules</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Cloudflare custom rules for a domain. Changes are saved to that zone.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={!selectedDomain || permissionDenied || domainsQuery.isPending}
-          className="inline-flex min-h-11 cursor-pointer items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={() => setEditor({ mode: 'create', draft: emptyDraft() })}
-        >
-          <Plus weight="regular" aria-hidden className="size-4" />
-          Add rule
-        </button>
-      </div>
+      <PageHeader
+        title="Rules"
+        description="Cloudflare custom rules for a domain. Changes are saved to that zone."
+        actions={
+          <Button
+            disabled={!selectedDomain || permissionDenied || domainsQuery.isPending}
+            className="min-h-11"
+            leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
+            onClick={() => setEditor({ mode: 'create', draft: emptyDraft() })}
+          >
+            Add rule
+          </Button>
+        }
+      />
 
-      <section className="space-y-3 rounded-lg border border-border bg-card p-4">
-        <label htmlFor="rules-domain" className="block text-sm font-medium">
-          Domain
-        </label>
-        <select
-          id="rules-domain"
-          value={selectedDomain}
-          disabled={domains.length === 0}
-          className="w-full max-w-md rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50"
-          onChange={(event) => {
-            setDomain(event.target.value)
-            setEditor(null)
-            setDeleteTarget(null)
-            setActionError(null)
-          }}
-        >
-          {domains.length === 0 ? <option value="">No domains yet</option> : null}
-          {domains.map((item) => (
-            <option key={item.name} value={item.name}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-        {domainsQuery.isError ? (
-          <p className="text-sm text-destructive" role="alert">
-            Could not load domains.
-          </p>
-        ) : null}
-      </section>
+      <Card>
+        <CardBody className="space-y-3">
+          <label htmlFor="rules-domain" className="block text-sm font-medium">
+            Domain
+          </label>
+          <Select
+            id="rules-domain"
+            className="max-w-md"
+            value={selectedDomain}
+            disabled={domains.length === 0}
+            onChange={(event) => {
+              setDomain(event.target.value)
+              setEditor(null)
+              setDeleteTarget(null)
+              setActionError(null)
+            }}
+          >
+            {domains.length === 0 ? <option value="">No domains yet</option> : null}
+            {domains.map((item) => (
+              <option key={item.name} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+          </Select>
+          {domainsQuery.isError ? (
+            <p className="text-sm text-destructive" role="alert">
+              Could not load domains.
+            </p>
+          ) : null}
+        </CardBody>
+      </Card>
 
       {permissionDenied ? (
         <p className="text-sm text-destructive" role="alert">
@@ -212,55 +216,53 @@ export function RulesPage() {
             {rules.length} {rules.length === 1 ? 'rule' : 'rules'}
           </span>
         </h2>
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-              <tr>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+        <TableContainer>
+          <Table className="min-w-[720px]">
+            <THead>
+              <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Order
-                </th>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Name
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="px-3 font-medium normal-case tracking-normal">
                   Description
-                </th>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Action
-                </th>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Status
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="px-3 font-medium normal-case tracking-normal">
                   <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
+                </TH>
+              </TR>
+            </THead>
+            <TBody>
               {rules.map((rule, index) => (
-                <tr key={rule.id} className="border-b border-border last:border-b-0">
-                  <td className="whitespace-nowrap px-3 py-3 font-mono text-xs">{index + 1}</td>
-                  <td className="whitespace-nowrap px-3 py-3 font-medium">{rule.name}</td>
-                  <td className="max-w-xl px-3 py-3 text-muted-foreground">
+                <TR key={rule.id}>
+                  <TD className="whitespace-nowrap px-3 font-mono text-xs">{index + 1}</TD>
+                  <TD className="whitespace-nowrap px-3 font-medium">{rule.name}</TD>
+                  <TD className="max-w-xl px-3 text-muted-foreground">
                     {rule.description.trim() || describeExpression(rule.expression)}
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3">
+                  </TD>
+                  <TD className="whitespace-nowrap px-3">
                     <ActionBadge action={rule.action} />
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3">
-                    <span className="inline-flex items-center gap-2">
-                      <span
-                        aria-hidden
-                        className={`size-2 rounded-full ${rule.enabled ? 'bg-accent' : 'bg-muted-foreground'}`}
-                      />
+                  </TD>
+                  <TD className="whitespace-nowrap px-3">
+                    <Badge tone={rule.enabled ? 'success' : 'neutral'} dot>
                       {rule.enabled ? 'Active' : 'Disabled'}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-3 py-3">
+                    </Badge>
+                  </TD>
+                  <TD className="whitespace-nowrap px-3">
                     <div className="flex items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted"
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="min-h-11"
+                        leftIcon={<PencilSimple weight="regular" aria-hidden className="size-4" />}
                         onClick={() =>
                           setEditor({
                             mode: 'edit',
@@ -269,44 +271,44 @@ export function RulesPage() {
                           })
                         }
                       >
-                        <PencilSimple weight="regular" aria-hidden className="size-4" />
                         Edit
-                      </button>
-                      <button
-                        type="button"
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        className="min-h-11"
                         aria-label={`Delete ${rule.name}`}
-                        className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-md border border-destructive/50 bg-transparent px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10"
+                        leftIcon={<Trash weight="regular" aria-hidden className="size-4" />}
                         onClick={() => setDeleteTarget(rule)}
                       >
-                        <Trash weight="regular" aria-hidden className="size-4" />
                         Delete
-                      </button>
+                      </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TD>
+                </TR>
               ))}
               {rulesQuery.isLoading ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                <TR className="hover:bg-transparent">
+                  <TD colSpan={6} className="px-3 py-6 text-muted-foreground">
                     Loading rules…
-                  </td>
-                </tr>
+                  </TD>
+                </TR>
               ) : null}
               {!rulesQuery.isLoading && rules.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                <TR className="hover:bg-transparent">
+                  <TD colSpan={6} className="px-3 py-6 text-muted-foreground">
                     <span className="inline-flex items-center gap-2">
                       <Funnel weight="regular" aria-hidden className="size-4" />
                       {selectedDomain
                         ? 'No custom rules on this domain.'
                         : 'Add a domain before managing rules.'}
                     </span>
-                  </td>
-                </tr>
+                  </TD>
+                </TR>
               ) : null}
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
+        </TableContainer>
       </section>
 
       {editor ? (

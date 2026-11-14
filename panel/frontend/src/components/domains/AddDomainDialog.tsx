@@ -1,6 +1,6 @@
-import { Spinner } from '@phosphor-icons/react'
 import { useId, useState } from 'react'
 import type { CloudflareZone } from '../../lib/domainsApi'
+import { Button, Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle, Input, Select } from '../ui'
 
 export interface AddDomainDialogProps {
   open: boolean
@@ -24,47 +24,39 @@ export function AddDomainDialog({
   const effectiveZoneId = zoneId || zones[0]?.id || ''
   const domainName = zones.find((zone) => zone.id === effectiveZoneId)?.name ?? ''
 
-  if (!open) {
-    return null
-  }
-
   const canSubmit = Boolean(effectiveZoneId && domainName.trim() && !busy)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-background/80 cursor-pointer"
-        aria-label="Dismiss dialog"
-        disabled={busy}
-        onClick={onCancel}
-      />
-      <div
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && !busy) {
+          onCancel()
+        }
+      }}
+    >
+      <DialogContent
+        busy={busy}
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descId}
-        className="relative z-10 w-full max-w-md rounded-lg border border-border bg-card p-4 shadow-lg"
       >
-        <h2 id={titleId} className="text-base font-semibold">
-          Add domain
-        </h2>
-        <p id={descId} className="mt-2 text-sm text-muted-foreground">
+        <DialogTitle id={titleId}>Add domain</DialogTitle>
+        <DialogDescription id={descId}>
           Register an apex zone for a wildcard certificate. Subdomain zones (for example{' '}
           <span className="font-mono text-foreground">app.example.com</span> as its own zone)
           are not supported in v1.
-        </p>
+        </DialogDescription>
 
         <div className="mt-4 space-y-4">
-          <div>
-            <label htmlFor="add-domain-zone" className="block text-sm font-medium">
+          <div className="space-y-1.5">
+            <label htmlFor="add-domain-zone" className="text-sm font-medium text-foreground">
               Cloudflare zone
             </label>
-            <select
+            <Select
               id="add-domain-zone"
               value={effectiveZoneId}
               disabled={busy || zones.length === 0}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onChange={(event) => setZoneId(event.target.value)}
             >
               <option value="">Select a zone…</option>
@@ -73,47 +65,36 @@ export function AddDomainDialog({
                   {zone.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
 
-          <div>
-            <label htmlFor="add-domain-name" className="block text-sm font-medium">
+          <div className="space-y-1.5">
+            <label htmlFor="add-domain-name" className="text-sm font-medium text-foreground">
               Domain name
             </label>
-            <input
+            <Input
               id="add-domain-name"
               type="text"
               value={domainName}
               readOnly
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground read-only:opacity-80"
+              className="read-only:opacity-80"
             />
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={onCancel}
-          >
+        <DialogFooter>
+          <Button variant="secondary" disabled={busy} onClick={onCancel}>
             Cancel
-          </button>
-          <button
-            type="button"
+          </Button>
+          <Button
+            loading={busy}
             disabled={!canSubmit}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() =>
-              onSubmit({ name: domainName.trim(), zone_id: effectiveZoneId })
-            }
+            onClick={() => onSubmit({ name: domainName.trim(), zone_id: effectiveZoneId })}
           >
-            {busy ? (
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-            ) : null}
             Add domain
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
