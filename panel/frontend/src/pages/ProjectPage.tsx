@@ -62,7 +62,7 @@ import {
   type ProjectRoute,
 } from '../lib/projectsApi'
 import { buildFqdn } from '../lib/subdomainValidation'
-import type { RouteDraft } from '../lib/routeValidation'
+import { validateRoutes, type RouteDraft } from '../lib/routeValidation'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -144,6 +144,17 @@ function apiErrorDetail(error: unknown): string {
   return ''
 }
 
+function mutationErrorMessage(error: unknown, fallback: string): string {
+  const detail = apiErrorDetail(error)
+  if (detail) {
+    return detail
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
+}
+
 export function ProjectPage() {
   const { slug = '' } = useParams<{ slug: string }>()
   const navigate = useNavigate()
@@ -214,6 +225,12 @@ export function ProjectPage() {
       project.routes.map((route) => ({
         path_prefix: route.path_prefix,
         port_env_var: route.port_env_var,
+        max_body_mb: route.max_body_mb,
+        read_timeout_s: route.read_timeout_s,
+        send_timeout_s: route.send_timeout_s,
+        streaming: route.streaming,
+        websocket: route.websocket,
+        pass_authorization: route.pass_authorization,
       })),
     )
     setMigrationCommand(project.migration_command ?? '')
@@ -378,16 +395,27 @@ export function ProjectPage() {
     () => project?.routes.map((route) => route.port_env_var) ?? [],
     [project?.routes],
   )
-  const envApplyKey = envQuery.data
-    ? JSON.stringify({ entries: envQuery.data.entries, routePortEnvVars })
-    : null
-  const [appliedEnvKey, setAppliedEnvKey] = useState<string | null>(null)
-  if (envQuery.data && envApplyKey !== null && appliedEnvKey !== envApplyKey) {
-    setAppliedEnvKey(envApplyKey)
-    setLoadedEnvKeys(envQuery.data.entries.map((entry) => entry.key))
-    setEnvRows(entriesToEnvRows(envQuery.data.entries, routePortEnvVars))
-    setEnvDirty(false)
+  const envEntriesKey = envQuery.data ? JSON.stringify(envQuery.data.entries) : null
+  const envRoutePortsKey = JSON.stringify(routePortEnvVars)
+  const [appliedEnvEntriesKey, setAppliedEnvEntriesKey] = useState<string | null>(null)
+  const [appliedEnvRoutePortsKey, setAppliedEnvRoutePortsKey] = useState<string | null>(null)
+  if (envQuery.data && envEntriesKey !== null) {
+    const entriesChanged = appliedEnvEntriesKey !== envEntriesKey
+    const routePortsChanged = appliedEnvRoutePortsKey !== envRoutePortsKey
+    if (entriesChanged) {
+      setAppliedEnvEntriesKey(envEntriesKey)
+      setAppliedEnvRoutePortsKey(envRoutePortsKey)
+      setLoadedEnvKeys(envQuery.data.entries.map((entry) => entry.key))
+      setEnvRows(entriesToEnvRows(envQuery.data.entries, routePortEnvVars))
+      setEnvDirty(false)
+    } else if (!envDirty && routePortsChanged) {
+      setAppliedEnvRoutePortsKey(envRoutePortsKey)
+      setLoadedEnvKeys(envQuery.data.entries.map((entry) => entry.key))
+      setEnvRows(entriesToEnvRows(envQuery.data.entries, routePortEnvVars))
+    }
   }
+
+  const routesValidation = validateRoutes(routesDraft)
 
   const dumpsQuery = useQuery({
     queryKey: ['project', slug, 'dumps'],
@@ -485,22 +513,16 @@ export function ProjectPage() {
 
   const routingMutation = useMutation({
     mutationFn: () => {
-      const routes: ProjectRoute[] = routesDraft.map((route) => {
-        const existing = project?.routes.find(
-          (row) =>
-            row.path_prefix === route.path_prefix && row.port_env_var === route.port_env_var,
-        )
-        return {
-          path_prefix: route.path_prefix,
-          port_env_var: route.port_env_var,
-          max_body_mb: existing?.max_body_mb ?? 25,
-          read_timeout_s: existing?.read_timeout_s ?? 60,
-          send_timeout_s: existing?.send_timeout_s ?? 60,
-          streaming: existing?.streaming ?? false,
-          websocket: existing?.websocket ?? false,
-          pass_authorization: existing?.pass_authorization ?? false,
-        }
-      })
+      const routes: ProjectRoute[] = routesDraft.map((route) => ({
+        path_prefix: route.path_prefix,
+        port_env_var: route.port_env_var,
+        max_body_mb: route.max_body_mb ?? 25,
+        read_timeout_s: route.read_timeout_s ?? 60,
+        send_timeout_s: route.send_timeout_s ?? 60,
+        streaming: route.streaming ?? false,
+        websocket: route.websocket ?? false,
+        pass_authorization: route.pass_authorization ?? false,
+      }))
       return putProjectRouting(slug, { hostnames: hostnamesDraft, routes })
     },
     onSuccess: () => {
@@ -780,6 +802,11 @@ export function ProjectPage() {
               >
                 Roll back to last good deploy
               </button>
+              {redeployMutation.isError ? (
+                <p className="mt-2 text-sm text-destructive" role="alert">
+                  {mutationErrorMessage(redeployMutation.error, 'Redeploy failed.')}
+                </p>
+              ) : null}
             </div>
           ) : null}
 
@@ -797,15 +824,22 @@ export function ProjectPage() {
             </p>
           ) : null}
 
-          <MigrationRunControls
-            configured={Boolean(project.migration_service && project.migration_command)}
-            command={project.migration_command}
-            runMigrations={runMigrations}
-            onToggle={setRunMigrations}
-            onRunNow={() => migrateMutation.mutate()}
-            hasDatabase={project.database_mode !== 'none'}
-            runNowDisabled={migrateMutation.isPending}
-          />
+          <div className="space-y-2">
+            <MigrationRunControls
+              configured={Boolean(project.migration_service && project.migration_command)}
+              command={project.migration_command}
+              runMigrations={runMigrations}
+              onToggle={setRunMigrations}
+              onRunNow={() => migrateMutation.mutate()}
+              hasDatabase={project.database_mode !== 'none'}
+              runNowDisabled={migrateMutation.isPending}
+            />
+            {migrateMutation.isError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {mutationErrorMessage(migrateMutation.error, 'Migration failed.')}
+              </p>
+            ) : null}
+          </div>
 
           {project.deploy_mode === 'image' && imageServicesConfigured ? (
             <div className="space-y-4">
@@ -834,16 +868,28 @@ export function ProjectPage() {
               >
                 {deployMutation.isPending ? 'Deploying…' : 'Deploy'}
               </button>
+              {deployMutation.isError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {mutationErrorMessage(deployMutation.error, 'Deploy failed.')}
+                </p>
+              ) : null}
             </div>
           ) : project.deploy_mode === 'build' ? (
-            <button
-              type="button"
-              disabled={deployMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => deployMutation.mutate({ build: true, run_migrations: runMigrations })}
-            >
-              {deployMutation.isPending ? 'Deploying…' : 'Build & deploy'}
-            </button>
+            <>
+              <button
+                type="button"
+                disabled={deployMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => deployMutation.mutate({ build: true, run_migrations: runMigrations })}
+              >
+                {deployMutation.isPending ? 'Deploying…' : 'Build & deploy'}
+              </button>
+              {deployMutation.isError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {mutationErrorMessage(deployMutation.error, 'Deploy failed.')}
+                </p>
+              ) : null}
+            </>
           ) : null}
 
           {activeDeploy ? (
@@ -861,6 +907,11 @@ export function ProjectPage() {
             </div>
           ) : null}
 
+          {redeployMutation.isError && latestDeploy?.status !== 'failed_after_switch' ? (
+            <p className="text-sm text-destructive" role="alert">
+              {mutationErrorMessage(redeployMutation.error, 'Redeploy failed.')}
+            </p>
+          ) : null}
           <DeployHistory
             deploys={deploys}
             isPending={deploysQuery.isPending}
@@ -925,6 +976,11 @@ export function ProjectPage() {
               >
                 {envSaveMutation.isPending ? 'Saving…' : 'Save'}
               </button>
+              {envSaveMutation.isError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {mutationErrorMessage(envSaveMutation.error, 'Could not save environment.')}
+                </p>
+              ) : null}
               {envSavedMessage ? (
                 <p className="text-sm text-muted-foreground" role="status">
                   {envSavedMessage}
@@ -952,7 +1008,7 @@ export function ProjectPage() {
           />
           <button
             type="button"
-            disabled={routingMutation.isPending}
+            disabled={routingMutation.isPending || !routesValidation.ok}
             className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => routingMutation.mutate()}
           >
@@ -1083,6 +1139,11 @@ export function ProjectPage() {
               >
                 {servicesSaveMutation.isPending ? 'Saving…' : 'Save services'}
               </button>
+              {servicesSaveMutation.isError ? (
+                <p className="text-sm text-destructive" role="alert">
+                  {mutationErrorMessage(servicesSaveMutation.error, 'Could not save services.')}
+                </p>
+              ) : null}
             </section>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
@@ -1128,6 +1189,11 @@ export function ProjectPage() {
           >
             {settingsMutation.isPending ? 'Saving…' : 'Save settings'}
           </button>
+          {settingsMutation.isError ? (
+            <p className="text-sm text-destructive" role="alert">
+              {mutationErrorMessage(settingsMutation.error, 'Could not save settings.')}
+            </p>
+          ) : null}
           <ProjectDeleteSection
             slug={slug}
             onDelete={handleDelete}

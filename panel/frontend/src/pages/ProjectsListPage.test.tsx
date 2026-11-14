@@ -57,6 +57,78 @@ describe('ProjectsListPage', () => {
     vi.unstubAllGlobals()
   })
 
+  it('links awaiting_ports projects to the creation wizard', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/projects') && !url.includes('/api/projects/')) {
+          return Promise.resolve(
+            jsonResponse([
+              {
+                ...projectSummary,
+                slug: 'ports-wait',
+                display_name: 'Ports Wait',
+                creation_state: { status: 'awaiting_ports', steps: [] },
+              },
+            ]),
+          )
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+
+    renderWithProviders(<ProjectsListPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Ports Wait')).toBeInTheDocument()
+    })
+
+    const link = screen.getByRole('link', { name: /Ports Wait/i })
+    expect(link).toHaveAttribute('href', '/projects/new?slug=ports-wait')
+  })
+
+  it('does not show the empty state when loading projects fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.includes('/api/projects') && !url.includes('/api/projects/')) {
+          return Promise.resolve(jsonResponse({ detail: 'server error' }, 500))
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+
+    renderWithProviders(<ProjectsListPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not load projects.')).toBeInTheDocument()
+    })
+
+    expect(screen.queryByText('There are no projects yet.')).not.toBeInTheDocument()
+  })
+
   it('lists projects and uses full-width page layout', async () => {
     renderWithProviders(<ProjectsListPage />)
 

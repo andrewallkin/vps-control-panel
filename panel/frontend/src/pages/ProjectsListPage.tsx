@@ -54,7 +54,7 @@ export function ProjectsListPage() {
         <p className="text-sm text-destructive" role="alert">Could not load projects.</p>
       ) : null}
 
-      {!projectsQuery.isPending && projects.length === 0 ? (
+      {!projectsQuery.isPending && !projectsQuery.isError && projects.length === 0 ? (
         <div className="rounded-lg border border-border bg-card p-4 text-center">
           <p className="text-sm text-muted-foreground">There are no projects yet.</p>
           <Link
@@ -71,7 +71,10 @@ export function ProjectsListPage() {
           {projects.map((project) => {
             const status = project.creation_state.status
             const href =
-              status === 'failed' || status === 'awaiting_deploy_key' || status === 'running'
+              status === 'failed' ||
+              status === 'awaiting_deploy_key' ||
+              status === 'awaiting_ports' ||
+              status === 'running'
                 ? `/projects/new?slug=${encodeURIComponent(project.slug)}`
                 : `/projects/${encodeURIComponent(project.slug)}`
             return (

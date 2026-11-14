@@ -38,7 +38,9 @@ import {
   type ServiceMappingRow,
 } from '../lib/serviceMappingUtils'
 import { buildFqdn, validateSubdomain } from '../lib/subdomainValidation'
-import { ApiError, isStepUpRequired } from '../lib/api'
+import { ApiError, apiErrorDetail, isStepUpRequired } from '../lib/api'
+
+const DEPLOY_NOW_START_TIMEOUT_MS = 1500
 
 const STEP_ORDER: WizardStepId[] = [
   'basics',
@@ -116,6 +118,7 @@ export function NewProjectWizardPage() {
   const [testAccessMessage, setTestAccessMessage] = useState<string | null>(null)
   const [serviceRows, setServiceRows] = useState<ServiceMappingRow[]>([])
   const [deployNowPending, setDeployNowPending] = useState(false)
+  const [deployNowError, setDeployNowError] = useState<string | null>(null)
 
   const domainsQuery = useQuery({
     queryKey: ['domains'],
@@ -488,23 +491,57 @@ export function NewProjectWizardPage() {
       return
     }
     setDeployNowPending(true)
+    setDeployNowError(null)
+    const projectPath = `/projects/${encodeURIComponent(target)}#deploy`
+
+    let deployPromise: Promise<{ id: number; status: string }> | null = null
     try {
       const project = await fetchProject(target)
       if (project.deploy_mode === 'build') {
-        void startProjectDeploy(target, { build: true, run_migrations: true }).catch(() => {})
+        deployPromise = startProjectDeploy(target, { build: true, run_migrations: true })
       } else {
         const tagsData = await fetchProjectTags(target)
         const tags = defaultRegistryTags(tagsData.services)
         if (Object.keys(tags).length > 0) {
-          void startProjectDeploy(target, { tags, run_migrations: true }).catch(() => {})
+          deployPromise = startProjectDeploy(target, { tags, run_migrations: true })
         }
       }
     } catch {
-      // Landing on the deploy tab lets the user start the deploy manually.
-    } finally {
       setDeployNowPending(false)
+      navigate(projectPath)
+      return
     }
-    navigate(`/projects/${encodeURIComponent(target)}#deploy`)
+
+    if (!deployPromise) {
+      setDeployNowPending(false)
+      navigate(projectPath)
+      return
+    }
+
+    let deployStartTimeoutId: ReturnType<typeof setTimeout> | undefined
+    const outcome = await Promise.race([
+      deployPromise.then(
+        () => ({ kind: 'fulfilled' as const }),
+        (error: unknown) => ({ kind: 'rejected' as const, error }),
+      ),
+      new Promise<{ kind: 'timeout' }>((resolve) => {
+        deployStartTimeoutId = setTimeout(
+          () => resolve({ kind: 'timeout' }),
+          DEPLOY_NOW_START_TIMEOUT_MS,
+        )
+      }),
+    ])
+    clearTimeout(deployStartTimeoutId)
+
+    setDeployNowPending(false)
+
+    if (outcome.kind === 'rejected') {
+      const detail = apiErrorDetail(outcome.error)
+      setDeployNowError(detail || 'Could not start the deploy.')
+      return
+    }
+
+    navigate(projectPath)
   }, [activeCreationSlug, slug, deployNowPending, navigate])
 
   const creationState = creationPollQuery.data?.creation_state
@@ -1106,24 +1143,31 @@ export function NewProjectWizardPage() {
                 />
               ) : null}
               {creationState.status === 'ready' ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={deployNowPending}
-                    className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => {
-                      void handleDeployNow()
-                    }}
-                  >
-                    {deployNowPending ? 'Starting deploy…' : 'Deploy now'}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer"
-                    onClick={() => navigate(`/projects/${encodeURIComponent(activeCreationSlug ?? slug)}`)}
-                  >
-                    Open project
-                  </button>
+                <div className="flex flex-col gap-2">
+                  {deployNowError ? (
+                    <p className="text-sm text-destructive" role="alert">
+                      {deployNowError}
+                    </p>
+                  ) : null}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={deployNowPending}
+                      className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => {
+                        void handleDeployNow()
+                      }}
+                    >
+                      {deployNowPending ? 'Starting deploy…' : 'Deploy now'}
+                    </button>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer"
+                      onClick={() => navigate(`/projects/${encodeURIComponent(activeCreationSlug ?? slug)}`)}
+                    >
+                      Open project
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </>

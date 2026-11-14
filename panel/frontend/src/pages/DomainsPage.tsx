@@ -57,6 +57,8 @@ export function DomainsPage() {
   const [addOpen, setAddOpen] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<string | null>(null)
   const [issueJobId, setIssueJobId] = useState<string | null>(null)
+  const [issueJobRunning, setIssueJobRunning] = useState(false)
+  const [issueError, setIssueError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
   const zonesQuery = useQuery({
@@ -69,7 +71,7 @@ export function DomainsPage() {
     queryKey: ['domains'],
     queryFn: fetchDomains,
     refetchIntervalInBackground: false,
-    refetchInterval: issueJobId ? 5000 : false,
+    refetchInterval: issueJobRunning ? 5000 : false,
   })
 
   const panelHostnameQuery = useQuery({
@@ -90,7 +92,9 @@ export function DomainsPage() {
     mutationFn: registerDomain,
     onSuccess: (result) => {
       setAddOpen(false)
+      setIssueError(result.issue_error)
       setIssueJobId(result.job_id)
+      setIssueJobRunning(result.job_id !== null)
       setActionError(null)
       void queryClient.invalidateQueries({ queryKey: ['domains'] })
     },
@@ -103,6 +107,8 @@ export function DomainsPage() {
     mutationFn: reissueDomain,
     onSuccess: (result) => {
       setIssueJobId(result.job_id)
+      setIssueError(null)
+      setIssueJobRunning(true)
       setActionError(null)
       void queryClient.invalidateQueries({ queryKey: ['domains'] })
     },
@@ -172,6 +178,12 @@ export function DomainsPage() {
       {actionError ? (
         <p className="text-sm text-destructive" role="alert">
           {actionError}
+        </p>
+      ) : null}
+
+      {issueError ? (
+        <p className="text-sm text-destructive" role="alert">
+          {issueError}
         </p>
       ) : null}
 
@@ -306,6 +318,7 @@ export function DomainsPage() {
             key={issueJobId}
             jobId={issueJobId}
             onEnd={() => {
+              setIssueJobRunning(false)
               void queryClient.invalidateQueries({ queryKey: ['domains'] })
             }}
           />

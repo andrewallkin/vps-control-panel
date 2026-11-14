@@ -30,6 +30,9 @@ function shouldRedirectOn401(path: string): boolean {
   if (path === '/api/account/totp/confirm') {
     return false
   }
+  if (path === '/api/auth/step-up') {
+    return false
+  }
   return true
 }
 

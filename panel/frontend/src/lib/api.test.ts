@@ -33,4 +33,20 @@ describe('apiFetch', () => {
 
     expect(assign).not.toHaveBeenCalled()
   })
+
+  it('does not redirect to login on 401 from a wrong step-up code', async () => {
+    await apiFetch('/api/auth/step-up', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: '000000' }),
+    })
+
+    expect(assign).not.toHaveBeenCalled()
+  })
+
+  it('redirects to login on 401 from other endpoints', async () => {
+    await apiFetch('/api/projects')
+
+    expect(assign).toHaveBeenCalledWith('/login')
+  })
 })

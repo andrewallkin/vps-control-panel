@@ -1,8 +1,33 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import type { ReactElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { DomainsPage } from './DomainsPage'
+
+class MockEventSource {
+  static instances: MockEventSource[] = []
+  url: string
+  listeners: Record<string, Array<(event: MessageEvent<string>) => void>> = {}
+
+  constructor(url: string) {
+    this.url = url
+    MockEventSource.instances.push(this)
+  }
+
+  addEventListener(type: string, handler: (event: MessageEvent<string>) => void) {
+    this.listeners[type] = this.listeners[type] ?? []
+    this.listeners[type].push(handler)
+  }
+
+  close() {}
+
+  emit(type: string, data: string) {
+    for (const handler of this.listeners[type] ?? []) {
+      handler({ data } as MessageEvent<string>)
+    }
+  }
+}
 
 vi.mock('../lib/domainsApi', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../lib/domainsApi')>()),
@@ -95,5 +120,118 @@ describe('DomainsPage panel hostname', () => {
       ?.parentElement
     expect(page).toHaveClass('w-full')
     expect(page).not.toHaveClass('max-w-6xl')
+  })
+})
+
+describe('DomainsPage certificate issue', () => {
+  async function seedDomainsPage() {
+    const { fetchCloudflareZones, fetchDomains, fetchPanelHostname } = await import(
+      '../lib/domainsApi'
+    )
+    vi.mocked(fetchCloudflareZones).mockResolvedValue({
+      configured: true,
+      zones: [{ id: 'zone-1', name: 'example.com', status: 'active' }],
+    })
+    vi.mocked(fetchDomains).mockResolvedValue([
+      {
+        name: 'example.com',
+        zone_id: 'zone-1',
+        cert_status: 'missing',
+        cert_expires_at: null,
+        ssl_mode: 'strict',
+        ssl_mode_error: null,
+        warning: null,
+        hostnames: [
+          {
+            fqdn: 'example.com',
+            kind: 'zone',
+            project_slug: null,
+            project_name: null,
+          },
+        ],
+      },
+    ])
+    vi.mocked(fetchPanelHostname).mockResolvedValue({ panel_hostname: null })
+    return { fetchDomains }
+  }
+
+  it('stops polling domains after the certificate job ends', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    MockEventSource.instances = []
+    vi.stubGlobal('EventSource', MockEventSource as unknown as typeof EventSource)
+  try {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTimeAsync })
+    const { fetchDomains, reissueDomain } = await import('../lib/domainsApi')
+    await seedDomainsPage()
+    vi.mocked(reissueDomain).mockResolvedValue({ job_id: 'job-reissue-1' })
+
+    renderWithClient(<DomainsPage />)
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading domains…')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /reissue/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /certificate issue log/i })).toBeInTheDocument()
+    })
+
+    await vi.advanceTimersByTimeAsync(11_000)
+    expect(vi.mocked(fetchDomains).mock.calls.length).toBeGreaterThan(1)
+
+    const source = MockEventSource.instances[0]!
+    source.emit('end', JSON.stringify({ exit_code: 0 }))
+    await vi.advanceTimersByTimeAsync(100)
+
+    const callsAfterEnd = vi.mocked(fetchDomains).mock.calls.length
+    await vi.advanceTimersByTimeAsync(15_000)
+    expect(vi.mocked(fetchDomains).mock.calls.length).toBe(callsAfterEnd)
+    expect(screen.getByRole('heading', { name: /certificate issue log/i })).toBeInTheDocument()
+  } finally {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  }
+  })
+
+  it('shows issuance error when register succeeds without a job', async () => {
+    const user = userEvent.setup()
+    const { fetchDomains, registerDomain } = await import('../lib/domainsApi')
+    await seedDomainsPage()
+    vi.mocked(registerDomain).mockResolvedValue({
+      job_id: null,
+      issue_error: 'DNS challenge failed',
+    })
+    vi.mocked(fetchDomains).mockResolvedValue([
+      {
+        name: 'example.com',
+        zone_id: 'zone-1',
+        cert_status: 'missing',
+        cert_expires_at: null,
+        ssl_mode: 'strict',
+        ssl_mode_error: null,
+        warning: null,
+        hostnames: [
+          {
+            fqdn: 'example.com',
+            kind: 'zone',
+            project_slug: null,
+            project_name: null,
+          },
+        ],
+      },
+    ])
+
+    renderWithClient(<DomainsPage />)
+
+    await waitFor(() => {
+      expect(screen.queryByText('Loading domains…')).not.toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /add domain/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /add domain/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('DNS challenge failed')
+    expect(screen.queryByRole('heading', { name: /certificate issue log/i })).not.toBeInTheDocument()
   })
 })

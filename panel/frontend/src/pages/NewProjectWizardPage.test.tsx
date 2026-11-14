@@ -1,8 +1,13 @@
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Route, Routes } from 'react-router-dom'
 import { NewProjectWizardPage } from './NewProjectWizardPage'
 import { renderWithProviders } from '../test/renderWithProviders'
+
+function ProjectDeployLanding() {
+  return <h1>Deploy tab</h1>
+}
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -37,11 +42,13 @@ const readyProject = (deployMode: 'image' | 'build') => ({
 const deployCalls: { url: string; body: Record<string, unknown> }[] = []
 
 let projectMode: 'image' | 'build' = 'build'
+let deployPostBehavior: 'ok' | 'reject' | 'hang' = 'ok'
 
 describe('NewProjectWizardPage database step', () => {
   beforeEach(() => {
     deployCalls.length = 0
     projectMode = 'build'
+    deployPostBehavior = 'ok'
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -63,6 +70,12 @@ describe('NewProjectWizardPage database step', () => {
         }
         if (url.includes('/api/projects/test-app/deploy') && method === 'POST') {
           deployCalls.push({ url, body: JSON.parse(String(init?.body ?? '{}')) })
+          if (deployPostBehavior === 'reject') {
+            return Promise.resolve(jsonResponse({ detail: 'deploy already running' }, 409))
+          }
+          if (deployPostBehavior === 'hang') {
+            return new Promise(() => {})
+          }
           return Promise.resolve(jsonResponse({ id: 1, status: 'running' }))
         }
         if (url.includes('/api/projects/test-app/tags')) {
@@ -185,5 +198,68 @@ describe('NewProjectWizardPage database step', () => {
         },
       ])
     })
+  })
+
+  function renderWizardWithDeployRoute() {
+    return renderWithProviders(
+      <Routes>
+        <Route path="/projects/new" element={<NewProjectWizardPage />} />
+        <Route path="/projects/:slug" element={<ProjectDeployLanding />} />
+      </Routes>,
+      { routerProps: { initialEntries: ['/projects/new'] } },
+    )
+  }
+
+  async function createBuildProjectWithRoutes() {
+    const user = userEvent.setup()
+    renderWizardWithDeployRoute()
+
+    await screen.findByRole('link', { name: '← Projects' })
+
+    await user.type(screen.getByLabelText('Display name'), 'Test App')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await user.click(screen.getByLabelText('Build from repository'))
+    await user.type(screen.getByLabelText('Repository URL'), 'git@github.com:owner/name.git')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await user.selectOptions(screen.getByLabelText('Primary domain'), 'example.com')
+    await user.type(screen.getByLabelText('Port env var'), 'WEB_PORT')
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+
+    await user.click(screen.getByLabelText('Create new'))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await user.click(screen.getByRole('button', { name: 'Create project' }))
+    await screen.findByRole('button', { name: 'Deploy now' })
+    return user
+  }
+
+  it('shows a deploy start error and stays on the wizard when the deploy POST rejects quickly', async () => {
+    deployPostBehavior = 'reject'
+    const user = await createBuildProjectWithRoutes()
+
+    await user.click(screen.getByRole('button', { name: 'Deploy now' }))
+
+    expect(
+      await screen.findByRole('alert', { name: '' }),
+    ).toHaveTextContent('deploy already running')
+    expect(screen.queryByRole('heading', { name: 'Deploy tab' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deploy now' })).toBeInTheDocument()
+  })
+
+  it('navigates to the project deploy tab when the deploy POST is still pending after the start window', async () => {
+    deployPostBehavior = 'hang'
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = await createBuildProjectWithRoutes()
+
+    const clickPromise = user.click(screen.getByRole('button', { name: 'Deploy now' }))
+    await vi.advanceTimersByTimeAsync(1600)
+    await clickPromise
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Deploy tab' })).toBeInTheDocument()
+    })
+    vi.useRealTimers()
   })
 })
