@@ -1,4 +1,5 @@
 import { useId, useState } from 'react'
+import { Select } from '../ui'
 import { formatPushedAtRelative } from '../../lib/format'
 import type { RegistryTagOption } from '../../lib/projectDeployTypes'
 
@@ -30,9 +31,9 @@ export function TagPicker({ tags, selectedName, onSelectedNameChange, now }: Tag
       <label className="block text-sm font-medium" htmlFor={selectId}>
         Image tag
       </label>
-      <select
+      <Select
         id={selectId}
-        className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+        className="mt-1 font-mono"
         value={selected?.name ?? ''}
         onChange={(event) => onSelectedNameChange(event.target.value)}
       >
@@ -41,7 +42,7 @@ export function TagPicker({ tags, selectedName, onSelectedNameChange, now }: Tag
             {tag.name}
           </option>
         ))}
-      </select>
+      </Select>
       {selected ? (
         <p className="text-sm text-muted-foreground">
           <span className="font-mono text-foreground">{selected.sha || '—'}</span>

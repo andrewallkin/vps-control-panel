@@ -1,4 +1,5 @@
 import { Plus, Trash } from '@phosphor-icons/react'
+import { Button, Card, Input } from '../ui'
 import type { ServiceMappingRow } from '../../lib/serviceMappingUtils'
 import { prepareServiceMappingRows } from '../../lib/serviceMappingUtils'
 
@@ -39,18 +40,19 @@ export function ServiceMappingEditor({
         <p className="text-sm text-muted-foreground">No image services configured.</p>
       ) : null}
       {services.map((row, index) => (
-        <div
+        <Card
           key={index}
-          className="flex flex-col gap-3 rounded-md border border-border bg-card p-4 lg:flex-row lg:items-end"
+          className="flex flex-col gap-3 p-4 lg:flex-row lg:items-end"
         >
           <div className="min-w-0 flex-1 space-y-1">
             <label className="block text-sm font-medium" htmlFor={`svc-name-${index}`}>
               Service name
             </label>
-            <input
+            <Input
               id={`svc-name-${index}`}
               type="text"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+              mono
+              className="mt-1"
               value={row.service_name}
               onChange={(event) => updateRow(index, { service_name: event.target.value })}
             />
@@ -59,11 +61,12 @@ export function ServiceMappingEditor({
             <label className="block text-sm font-medium" htmlFor={`svc-env-${index}`}>
               Image env var
             </label>
-            <input
+            <Input
               id={`svc-env-${index}`}
               type="text"
               placeholder="DOCKER_IMAGE_WEB"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+              mono
+              className="mt-1"
               value={row.image_env_var}
               onChange={(event) => updateRow(index, { image_env_var: event.target.value })}
             />
@@ -72,32 +75,34 @@ export function ServiceMappingEditor({
             <label className="block text-sm font-medium" htmlFor={`svc-prefix-${index}`}>
               Tag prefix
             </label>
-            <input
+            <Input
               id={`svc-prefix-${index}`}
               type="text"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+              mono
+              className="mt-1"
               value={row.tag_prefix}
               onChange={(event) => updateRow(index, { tag_prefix: event.target.value })}
             />
           </div>
-          <button
+          <Button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            variant="danger"
+            size="sm"
+            leftIcon={<Trash weight="regular" aria-hidden className="size-4" />}
             onClick={() => removeRow(index)}
           >
-            <Trash weight="regular" aria-hidden className="size-4" />
             Remove
-          </button>
-        </div>
+          </Button>
+        </Card>
       ))}
-      <button
+      <Button
         type="button"
-        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        variant="secondary"
+        leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
         onClick={addRow}
       >
-        <Plus weight="regular" aria-hidden className="size-4" />
         Add service
-      </button>
+      </Button>
       {!validation.ok ? (
         <p className="text-sm text-destructive" role="alert">{validation.error}</p>
       ) : null}

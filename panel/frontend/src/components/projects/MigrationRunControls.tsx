@@ -1,3 +1,5 @@
+import { Alert, Button, Card, CardBody, Checkbox } from '../ui'
+
 export interface MigrationRunControlsProps {
   configured: boolean
   command: string | null
@@ -22,43 +24,41 @@ export function MigrationRunControls({
       return null
     }
     return (
-      <div className="rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-sm">
-        <p className="font-medium text-warning" role="status">
-          Migrations are not configured for this project.
-        </p>
-        <p className="mt-1 text-muted-foreground">
+      <Alert tone="warning" title="Migrations are not configured for this project.">
+        <>
           Set the migration service and command in Settings (for example{' '}
           <span className="font-mono">backend</span> +{' '}
-          <span className="font-mono">bash /app/run_migrations.sh</span>) so
-          deploys can run your Alembic migrations.
-        </p>
-      </div>
+          <span className="font-mono">bash /app/run_migrations.sh</span>) so deploys can run your
+          Alembic migrations.
+        </>
+      </Alert>
     )
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-border bg-card px-4 py-3">
-      <label className="flex items-center gap-2 text-sm font-medium">
-        <input
-          type="checkbox"
-          checked={runMigrations}
-          onChange={(event) => onToggle(event.target.checked)}
-        />
-        Run database migrations
-      </label>
-      {command ? (
-        <p className="text-xs text-muted-foreground">
-          Command: <span className="font-mono">{command}</span>
-        </p>
-      ) : null}
-      <button
-        type="button"
-        disabled={runNowDisabled}
-        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={onRunNow}
-      >
-        Run migrations
-      </button>
-    </div>
+    <Card>
+      <CardBody className="space-y-2">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <Checkbox
+            checked={runMigrations}
+            onChange={(event) => onToggle(event.target.checked)}
+          />
+          Run database migrations
+        </label>
+        {command ? (
+          <p className="text-xs text-muted-foreground">
+            Command: <span className="font-mono">{command}</span>
+          </p>
+        ) : null}
+        <Button
+          type="button"
+          variant="secondary"
+          disabled={runNowDisabled}
+          onClick={onRunNow}
+        >
+          Run migrations
+        </Button>
+      </CardBody>
+    </Card>
   )
 }

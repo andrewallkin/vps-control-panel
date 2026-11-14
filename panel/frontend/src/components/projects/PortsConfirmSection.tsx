@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { Button } from '../ui'
 import { ApiError } from '../../lib/api'
 import {
   confirmCreationPorts,
@@ -95,14 +96,14 @@ export function PortsConfirmSection({
           {submitError}
         </p>
       ) : null}
-      <button
+      <Button
         type="button"
         disabled={submitting}
-        className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        loading={submitting}
         onClick={handleSubmit}
       >
         {submitting ? 'Saving…' : 'Continue'}
-      </button>
+      </Button>
     </div>
   )
 }

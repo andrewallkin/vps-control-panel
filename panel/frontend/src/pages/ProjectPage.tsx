@@ -1,4 +1,3 @@
-import { Spinner } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -30,6 +29,25 @@ import {
 } from '../lib/projectEnv'
 import type { ComposePsService, RegistryTagOption } from '../lib/projectDeployTypes'
 import { ConfirmDialog } from '../components/ConfirmDialog'
+import {
+  Alert,
+  Button,
+  Card,
+  Input,
+  PageHeader,
+  Select,
+  Spinner,
+  Table,
+  TableContainer,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '../components/ui'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { MigrationRunControls } from '../components/projects/MigrationRunControls'
 import { LogViewer } from '../components/setup/LogViewer'
@@ -655,7 +673,7 @@ export function ProjectPage() {
   if (projectQuery.isPending) {
     return (
       <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-        <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+        <Spinner />
         Loading project…
       </p>
     )
@@ -679,58 +697,45 @@ export function ProjectPage() {
 
   return (
     <div className="flex w-full min-w-0 max-w-full flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">{project.display_name}</h1>
-        <p className="font-mono text-sm text-muted-foreground">{project.slug}</p>
-      </div>
+      <PageHeader
+        title={project.display_name}
+        description={<span className="font-mono">{project.slug}</span>}
+      />
 
-      <div
-        role="tablist"
-        aria-label="Project sections"
-        className="flex flex-wrap gap-1 border-b border-border"
-      >
-        {TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={activeTab === tab.id}
-            className={`rounded-t-md px-3 py-2 text-sm font-medium transition-colors duration-200 cursor-pointer ${
-              activeTab === tab.id
-                ? 'border border-b-0 border-border bg-card text-foreground'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-            onClick={() => selectTab(tab.id)}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs value={activeTab} onValueChange={(value) => selectTab(value as TabId)}>
+        <TabsList aria-label="Project sections" className="flex-wrap gap-1">
+          {TABS.map((tab) => (
+            <TabsTrigger key={tab.id} value={tab.id}>
+              {tab.label}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {activeTab === 'overview' ? (
         <div role="tabpanel" className="space-y-6">
           <section className="space-y-3">
             <h2 className="text-base font-semibold">Services</h2>
-            <div className="overflow-x-auto rounded-lg border border-border bg-card">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="px-3 py-2 font-medium">Service</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Status</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Image</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Ports</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Started</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">CPU</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Memory</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
+            <TableContainer>
+              <Table>
+                <THead className="border-b border-border bg-muted/40">
+                  <TR className="hover:bg-transparent">
+                    <TH scope="col" className="normal-case tracking-normal">Service</TH>
+                    <TH scope="col" className="normal-case tracking-normal">Status</TH>
+                    <TH scope="col" className="normal-case tracking-normal">Image</TH>
+                    <TH scope="col" className="normal-case tracking-normal">Ports</TH>
+                    <TH scope="col" className="normal-case tracking-normal">Started</TH>
+                    <TH scope="col" className="text-right normal-case tracking-normal">CPU</TH>
+                    <TH scope="col" className="text-right normal-case tracking-normal">Memory</TH>
+                  </TR>
+                </THead>
+                <TBody>
                   {(psQuery.data?.services ?? []).length === 0 && !psQuery.isPending ? (
-                    <tr>
-                      <td colSpan={7} className="px-3 py-6 text-sm text-muted-foreground">
+                    <TR>
+                      <TD colSpan={7} className="py-6 text-muted-foreground">
                         No services yet.
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   ) : null}
                   {(psQuery.data?.services ?? []).map((svc, index) => {
                     const serviceName = composeServiceLabel(svc)
@@ -742,30 +747,30 @@ export function ProjectPage() {
                     )
                     const variant = composeServiceStatusVariant(svc.state, svc.health)
                     return (
-                      <tr key={svc.container || serviceName || index}>
-                        <td className="px-3 py-2 font-mono">{serviceName}</td>
-                        <td className="px-3 py-2">
+                      <TR key={svc.container || serviceName || index}>
+                        <TD className="font-mono">{serviceName}</TD>
+                        <TD>
                           <StatusBadge variant={variant} label={svc.state || variant} />
-                        </td>
-                        <td className="min-w-0 px-3 py-2 font-mono text-xs break-all">{svc.image}</td>
-                        <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                        </TD>
+                        <TD className="min-w-0 font-mono text-xs break-all">{svc.image}</TD>
+                        <TD className="font-mono text-xs text-muted-foreground">
                           {(svc.ports ?? []).length > 0 ? svc.ports!.join(', ') : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">
+                        </TD>
+                        <TD className="text-muted-foreground">
                           {svc.started_at ? formatStartedAt(svc.started_at) : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono">
+                        </TD>
+                        <TD className="text-right font-mono">
                           {metrics ? `${metrics.cpu_percent.toFixed(1)}%` : '—'}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono">
+                        </TD>
+                        <TD className="text-right font-mono">
                           {metrics ? formatBytes(metrics.mem_used) : '—'}
-                        </td>
-                      </tr>
+                        </TD>
+                      </TR>
                     )
                   })}
-                </tbody>
-              </table>
-            </div>
+                </TBody>
+              </Table>
+            </TableContainer>
           </section>
           {publicUrls.length > 0 ? (
             <section className="space-y-3">
@@ -792,18 +797,24 @@ export function ProjectPage() {
       {activeTab === 'deploy' ? (
         <div role="tabpanel" className="space-y-6">
           {latestDeploy?.status === 'failed_after_switch' ? (
-            <div className="rounded-lg border border-warning/50 bg-warning/10 px-4 py-3 text-sm">
-              <p>This deploy failed after the new version was started.</p>
-              <button
-                type="button"
-                disabled={!latestSucceeded || redeployMutation.isPending}
-                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={() => latestSucceeded && redeployMutation.mutate(latestSucceeded.id)}
-              >
-                Roll back to last good deploy
-              </button>
+            <div className="space-y-2">
+              <Alert
+                tone="warning"
+                title="This deploy failed after the new version was started."
+                action={
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={!latestSucceeded || redeployMutation.isPending}
+                    onClick={() => latestSucceeded && redeployMutation.mutate(latestSucceeded.id)}
+                  >
+                    Roll back to last good deploy
+                  </Button>
+                }
+              />
               {redeployMutation.isError ? (
-                <p className="mt-2 text-sm text-destructive" role="alert">
+                <p className="text-sm text-destructive" role="alert">
                   {mutationErrorMessage(redeployMutation.error, 'Redeploy failed.')}
                 </p>
               ) : null}
@@ -847,7 +858,7 @@ export function ProjectPage() {
                 {(tagsQuery.data?.services ?? []).map((svc) => {
                   const options = normalizeRegistryTags(svc.tags)
                   return (
-                    <div key={svc.image_env_var} className="rounded-md border border-border p-4">
+                    <Card key={svc.image_env_var} className="p-4">
                       <p className="mb-2 text-sm font-semibold">{svc.service}</p>
                       <TagPicker
                         tags={options}
@@ -856,18 +867,18 @@ export function ProjectPage() {
                           setSelectedTags((prev) => ({ ...prev, [svc.image_env_var]: name }))
                         }
                       />
-                    </div>
+                    </Card>
                   )
                 })}
               </div>
-              <button
+              <Button
                 type="button"
                 disabled={deployMutation.isPending || Object.keys(selectedTags).length === 0}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={deployMutation.isPending}
                 onClick={() => deployMutation.mutate({ tags: selectedTags, run_migrations: runMigrations })}
               >
                 {deployMutation.isPending ? 'Deploying…' : 'Deploy'}
-              </button>
+              </Button>
               {deployMutation.isError ? (
                 <p className="text-sm text-destructive" role="alert">
                   {mutationErrorMessage(deployMutation.error, 'Deploy failed.')}
@@ -876,14 +887,14 @@ export function ProjectPage() {
             </div>
           ) : project.deploy_mode === 'build' ? (
             <>
-              <button
+              <Button
                 type="button"
                 disabled={deployMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={deployMutation.isPending}
                 onClick={() => deployMutation.mutate({ build: true, run_migrations: runMigrations })}
               >
                 {deployMutation.isPending ? 'Deploying…' : 'Build & deploy'}
-              </button>
+              </Button>
               {deployMutation.isError ? (
                 <p className="text-sm text-destructive" role="alert">
                   {mutationErrorMessage(deployMutation.error, 'Deploy failed.')}
@@ -926,9 +937,9 @@ export function ProjectPage() {
           <label className="block text-sm font-medium" htmlFor="log-service">
             Service
           </label>
-          <select
+          <Select
             id="log-service"
-            className="mt-1 w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+            className="mt-1 w-full max-w-xs"
             value={logService}
             onChange={(event) => setLogService(event.target.value)}
           >
@@ -946,7 +957,7 @@ export function ProjectPage() {
                 )
               })}
             </optgroup>
-          </select>
+          </Select>
           <ComposeLogsViewer key={`${slug}:${logService}`} slug={slug} service={logService} />
         </div>
       ) : null}
@@ -966,16 +977,16 @@ export function ProjectPage() {
                   setEnvDirty(true)
                 }}
               />
-              <button
+              <Button
                 type="button"
                 disabled={!envDirty || envSaveMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={envSaveMutation.isPending}
                 onClick={() =>
                   envSaveMutation.mutate({ rows: envRows, loadedKeys: loadedEnvKeys })
                 }
               >
                 {envSaveMutation.isPending ? 'Saving…' : 'Save'}
-              </button>
+              </Button>
               {envSaveMutation.isError ? (
                 <p className="text-sm text-destructive" role="alert">
                   {mutationErrorMessage(envSaveMutation.error, 'Could not save environment.')}
@@ -1006,14 +1017,14 @@ export function ProjectPage() {
             onChange={setRoutesDraft}
             portEnvVarOptions={portEnvVarOptions}
           />
-          <button
+          <Button
             type="button"
             disabled={routingMutation.isPending || !routesValidation.ok}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            loading={routingMutation.isPending}
             onClick={() => routingMutation.mutate()}
           >
             {routingMutation.isPending ? 'Saving…' : 'Save routing'}
-          </button>
+          </Button>
         </div>
       ) : null}
 
@@ -1042,14 +1053,14 @@ export function ProjectPage() {
             </div>
           </dl>
           {project.database_mode !== 'none' ? (
-            <button
+            <Button
               type="button"
+              variant="secondary"
               disabled={rotateMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => rotateMutation.mutate()}
             >
               Rotate password
-            </button>
+            </Button>
           ) : null}
           {rotateError ? (
             <p className="text-sm text-destructive" role="alert">
@@ -1072,7 +1083,7 @@ export function ProjectPage() {
           />
           <section className="space-y-3">
             <h2 className="text-base font-semibold">Dumps</h2>
-            <div className="overflow-x-auto rounded-lg border border-border bg-card">
+            <Card className="overflow-x-auto p-0">
               <ul className="w-full divide-y divide-border">
               {!dumpsQuery.isPending && (dumpsQuery.data ?? []).length === 0 ? (
                 <li className="px-3 py-3 text-sm text-muted-foreground">No dumps yet.</li>
@@ -1089,7 +1100,7 @@ export function ProjectPage() {
                 </li>
               ))}
               </ul>
-            </div>
+            </Card>
           </section>
         </div>
       ) : null}
@@ -1114,14 +1125,15 @@ export function ProjectPage() {
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-base font-semibold">Image services</h2>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
                   disabled={detectComposeBusy}
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  loading={detectComposeBusy}
                   onClick={() => void detectFromCompose()}
                 >
                   {detectComposeBusy ? 'Detecting…' : 'Detect from compose'}
-                </button>
+                </Button>
               </div>
               {detectComposeError ? (
                 <p className="text-sm text-destructive" role="alert">{detectComposeError}</p>
@@ -1131,14 +1143,14 @@ export function ProjectPage() {
                 onChange={setServicesDraft}
                 onValidationChange={(ok) => setServicesMappingValid(ok)}
               />
-              <button
+              <Button
                 type="button"
                 disabled={!servicesMappingValid || servicesSaveMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                loading={servicesSaveMutation.isPending}
                 onClick={() => servicesSaveMutation.mutate()}
               >
                 {servicesSaveMutation.isPending ? 'Saving…' : 'Save services'}
-              </button>
+              </Button>
               {servicesSaveMutation.isError ? (
                 <p className="text-sm text-destructive" role="alert">
                   {mutationErrorMessage(servicesSaveMutation.error, 'Could not save services.')}
@@ -1151,9 +1163,10 @@ export function ProjectPage() {
               <label className="block text-sm font-medium" htmlFor="migration-command">
                 Migration command
               </label>
-              <input
+              <Input
                 id="migration-command"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                mono
+                className="mt-1"
                 value={migrationCommand}
                 onChange={(event) => setMigrationCommand(event.target.value)}
               />
@@ -1162,9 +1175,10 @@ export function ProjectPage() {
               <label className="block text-sm font-medium" htmlFor="migration-service">
                 Migration service
               </label>
-              <input
+              <Input
                 id="migration-service"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                mono
+                className="mt-1"
                 value={migrationService}
                 onChange={(event) => setMigrationService(event.target.value)}
               />
@@ -1173,22 +1187,23 @@ export function ProjectPage() {
               <label className="block text-sm font-medium" htmlFor="health-check-url">
                 Health check URL
               </label>
-              <input
+              <Input
                 id="health-check-url"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                mono
+                className="mt-1"
                 value={healthCheckUrl}
                 onChange={(event) => setHealthCheckUrl(event.target.value)}
               />
             </div>
           </div>
-          <button
+          <Button
             type="button"
             disabled={settingsMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            loading={settingsMutation.isPending}
             onClick={() => settingsMutation.mutate()}
           >
             {settingsMutation.isPending ? 'Saving…' : 'Save settings'}
-          </button>
+          </Button>
           {settingsMutation.isError ? (
             <p className="text-sm text-destructive" role="alert">
               {mutationErrorMessage(settingsMutation.error, 'Could not save settings.')}

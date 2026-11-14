@@ -1,5 +1,6 @@
 import { CaretDown, CaretUp } from '@phosphor-icons/react'
 import { useState } from 'react'
+import { Button, Card } from '../ui'
 import type { DeployRow } from '../../lib/projectDeployTypes'
 
 export interface DeployHistoryProps {
@@ -36,7 +37,7 @@ export function DeployHistory({
       </button>
 
       {open ? (
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
+        <Card className="overflow-x-auto p-0">
           <ul className="w-full divide-y divide-border">
             {!isPending && deploys.length === 0 ? (
               <li className="px-3 py-3 text-sm text-muted-foreground">No deploys yet.</li>
@@ -61,20 +62,21 @@ export function DeployHistory({
                       )}
                     </button>
                     {row.status === 'succeeded' ? (
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         disabled={redeployPending}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                         onClick={() => onRedeploy(row.id)}
                       >
                         Redeploy
-                      </button>
+                      </Button>
                     ) : null}
                   </div>
                   {expanded && row.log ? (
                     <pre
                       aria-label={`Deploy log #${row.id}`}
-                      className="mt-2 max-h-64 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs"
+                      className="mt-2 max-h-64 overflow-auto rounded-lg border border-border-strong bg-background p-3 font-mono text-xs"
                     >
                       {row.log}
                     </pre>
@@ -83,7 +85,7 @@ export function DeployHistory({
               )
             })}
           </ul>
-        </div>
+        </Card>
       ) : null}
     </section>
   )

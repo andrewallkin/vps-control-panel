@@ -1,3 +1,4 @@
+import { Card, Input } from '../ui'
 import type { PortDraft, UsedPortRow } from '../../lib/portMappings'
 import { parsePortDraft } from '../../lib/portMappings'
 
@@ -62,9 +63,9 @@ export function PortsMappingEditor({
         {rows.map((row, index) => {
           const hint = rowHint(row, usedPorts, selfSlug)
           return (
-            <div
+            <Card
               key={row.env_var}
-              className="grid items-center gap-2 rounded-md border border-border bg-card p-3 sm:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,1fr)]"
+              className="grid items-center gap-2 p-3 sm:grid-cols-[minmax(10rem,1fr)_8rem_minmax(8rem,1fr)]"
             >
               <div className="min-w-0">
                 <p className="truncate font-mono text-sm text-foreground">{row.env_var}</p>
@@ -77,12 +78,12 @@ export function PortsMappingEditor({
                 <label className="sr-only" htmlFor={`port-${row.env_var}`}>
                   {row.env_var} host port
                 </label>
-                <input
+                <Input
                   id={`port-${row.env_var}`}
                   type="text"
                   inputMode="numeric"
                   placeholder="Host port"
-                  className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                  mono
                   value={row.host_port}
                   onChange={(event) => updateRow(index, { host_port: event.target.value })}
                 />
@@ -94,7 +95,7 @@ export function PortsMappingEditor({
                   </span>
                 ) : null}
               </div>
-            </div>
+            </Card>
           )
         })}
       </div>

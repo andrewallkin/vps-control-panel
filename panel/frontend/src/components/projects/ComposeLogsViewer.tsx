@@ -1,5 +1,6 @@
 import { DownloadSimple, MagnifyingGlass, Pause, Play } from '@phosphor-icons/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Button, Card, Input, Switch } from '../ui'
 import { isHealthCheckLog } from '../../lib/healthCheckLog'
 
 export interface ComposeLogsViewerProps {
@@ -115,65 +116,53 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-card">
+    <Card className="space-y-0 p-0">
       <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
         <div className="relative min-w-[12rem] flex-1">
           <MagnifyingGlass
             weight="regular"
             aria-hidden
-            className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            className="pointer-events-none absolute left-2 top-1/2 z-10 size-4 -translate-y-1/2 text-muted-foreground"
           />
-          <input
+          <Input
             type="search"
             placeholder="Search log…"
+            className="pl-8"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            className="w-full rounded-md border border-border bg-background py-2 pl-8 pr-3 text-sm text-foreground transition-colors duration-200"
           />
         </div>
-        <button
+        <Button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => setPaused((value) => !value)}
+          variant="secondary"
           aria-pressed={paused}
+          onClick={() => setPaused((value) => !value)}
+          leftIcon={
+            paused ? (
+              <Play weight="regular" aria-hidden className="size-4" />
+            ) : (
+              <Pause weight="regular" aria-hidden className="size-4" />
+            )
+          }
         >
-          {paused ? (
-            <Play weight="regular" aria-hidden className="size-4" />
-          ) : (
-            <Pause weight="regular" aria-hidden className="size-4" />
-          )}
           {paused ? 'Resume' : 'Pause'}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="secondary"
           onClick={downloadLog}
+          leftIcon={<DownloadSimple weight="regular" aria-hidden className="size-4" />}
         >
-          <DownloadSimple weight="regular" aria-hidden className="size-4" />
           Download
-        </button>
+        </Button>
         <label className="inline-flex cursor-pointer items-center gap-2 text-sm font-medium">
           <span id="show-health-checks-label">Health checks</span>
           <span className="text-muted-foreground">{showHealthChecks ? 'On' : 'Off'}</span>
-          <span className="relative inline-flex h-6 w-11 items-center">
-            <input
-              type="checkbox"
-              role="switch"
-              aria-checked={showHealthChecks}
-              aria-labelledby="show-health-checks-label"
-              className="peer sr-only"
-              checked={showHealthChecks}
-              onChange={(event) => setShowHealthChecks(event.target.checked)}
-            />
-            <span
-              aria-hidden
-              className="absolute inset-0 rounded-full border border-border bg-muted transition-colors duration-200 peer-checked:border-accent peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent"
-            />
-            <span
-              aria-hidden
-              className="pointer-events-none absolute left-0.5 size-5 rounded-full bg-background shadow-sm transition-transform duration-200 peer-checked:translate-x-5"
-            />
-          </span>
+          <Switch
+            checked={showHealthChecks}
+            onCheckedChange={setShowHealthChecks}
+            aria-labelledby="show-health-checks-label"
+          />
         </label>
       </div>
       <div
@@ -196,6 +185,6 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
           ))
         )}
       </div>
-    </div>
+    </Card>
   )
 }

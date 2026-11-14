@@ -1,4 +1,5 @@
 import { Plus, Trash } from '@phosphor-icons/react'
+import { Button, Card, Checkbox, Input } from '../ui'
 import type { RouteDraft, RoutesValidationResult } from '../../lib/routeValidation'
 import { validateRoutes } from '../../lib/routeValidation'
 
@@ -61,17 +62,18 @@ export function RouteEditor({
         <span className="font-mono text-foreground">API_PORT</span>.
       </p>
       {routes.map((route, index) => (
-        <div key={index} className="space-y-3 rounded-md border border-border bg-card p-4">
+        <Card key={index} className="space-y-3 p-4">
           <div className="grid gap-3 sm:grid-cols-[minmax(8rem,1fr)_minmax(12rem,1fr)_auto] sm:items-end">
             <div className="min-w-0 space-y-1">
               <label className="block text-sm font-medium" htmlFor={`route-path-${index}`}>
                 Path prefix
               </label>
-              <input
+              <Input
                 id={`route-path-${index}`}
                 type="text"
                 placeholder="/"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                mono
+                className="mt-1"
                 value={route.path_prefix}
                 onChange={(event) => updateRoute(index, { path_prefix: event.target.value })}
               />
@@ -80,12 +82,13 @@ export function RouteEditor({
               <label className="block text-sm font-medium" htmlFor={`route-port-${index}`}>
                 Port env var
               </label>
-              <input
+              <Input
                 id={`route-port-${index}`}
                 type="text"
                 placeholder="WEB_PORT"
                 list={portEnvVarOptions && portEnvVarOptions.length > 0 ? 'route-port-options' : undefined}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                mono
+                className="mt-1"
                 value={route.port_env_var}
                 onChange={(event) => updateRoute(index, { port_env_var: event.target.value })}
               />
@@ -97,22 +100,22 @@ export function RouteEditor({
                 </datalist>
               ) : null}
             </div>
-            <button
+            <Button
               type="button"
+              variant="danger"
+              size="sm"
               disabled={routes.length <= 1}
-              className="inline-flex items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              leftIcon={<Trash weight="regular" aria-hidden className="size-4" />}
               onClick={() => removeRoute(index)}
             >
-              <Trash weight="regular" aria-hidden className="size-4" />
               Remove
-            </button>
+            </Button>
           </div>
 
           <div className="flex flex-wrap items-center gap-4 border-t border-border pt-3">
             <label className="flex items-center gap-2 text-sm">
-              <input
+              <Checkbox
                 id={`route-streaming-${index}`}
-                type="checkbox"
                 checked={route.streaming ?? false}
                 onChange={(event) =>
                   updateRoute(index, { streaming: event.target.checked })
@@ -121,9 +124,8 @@ export function RouteEditor({
               Streaming
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input
+              <Checkbox
                 id={`route-websocket-${index}`}
-                type="checkbox"
                 checked={route.websocket ?? false}
                 onChange={(event) =>
                   updateRoute(index, { websocket: event.target.checked })
@@ -132,9 +134,8 @@ export function RouteEditor({
               WebSocket
             </label>
             <label className="flex items-center gap-2 text-sm">
-              <input
+              <Checkbox
                 id={`route-auth-${index}`}
-                type="checkbox"
                 checked={route.pass_authorization ?? false}
                 onChange={(event) =>
                   updateRoute(index, { pass_authorization: event.target.checked })
@@ -144,12 +145,12 @@ export function RouteEditor({
             </label>
             <label className="flex items-center gap-2 text-sm">
               Max body (MB)
-              <input
+              <Input
                 id={`route-body-${index}`}
                 type="number"
                 min={1}
                 max={10240}
-                className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground transition-colors duration-200"
+                className="w-20"
                 value={route.max_body_mb ?? 25}
                 onChange={(event) =>
                   updateRoute(index, { max_body_mb: Number(event.target.value) })
@@ -158,12 +159,12 @@ export function RouteEditor({
             </label>
             <label className="flex items-center gap-2 text-sm">
               Read timeout (s)
-              <input
+              <Input
                 id={`route-read-${index}`}
                 type="number"
                 min={1}
                 max={3600}
-                className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground transition-colors duration-200"
+                className="w-20"
                 value={route.read_timeout_s ?? 60}
                 onChange={(event) =>
                   updateRoute(index, { read_timeout_s: Number(event.target.value) })
@@ -172,12 +173,12 @@ export function RouteEditor({
             </label>
             <label className="flex items-center gap-2 text-sm">
               Send timeout (s)
-              <input
+              <Input
                 id={`route-send-${index}`}
                 type="number"
                 min={1}
                 max={3600}
-                className="w-20 rounded-md border border-border bg-background px-2 py-1 text-sm text-foreground transition-colors duration-200"
+                className="w-20"
                 value={route.send_timeout_s ?? 60}
                 onChange={(event) =>
                   updateRoute(index, { send_timeout_s: Number(event.target.value) })
@@ -185,17 +186,17 @@ export function RouteEditor({
               />
             </label>
           </div>
-        </div>
+        </Card>
       ))}
 
-      <button
+      <Button
         type="button"
-        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        variant="secondary"
+        leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
         onClick={addRoute}
       >
-        <Plus weight="regular" aria-hidden className="size-4" />
         Add route
-      </button>
+      </Button>
 
       {!validation.ok ? (
         <p className="text-sm text-destructive" role="alert">

@@ -1,5 +1,6 @@
 import { useId, useState } from 'react'
 import { StepUpDialog } from '../StepUpDialog'
+import { Button, Card, CardBody, Checkbox, Input } from '../ui'
 import type { DeleteProjectPayload } from '../../lib/projectDeployTypes'
 
 export interface ProjectDeleteSectionProps {
@@ -33,58 +34,59 @@ export function ProjectDeleteSection({
   }
 
   return (
-    <div className="space-y-4 rounded-lg border border-destructive/40 bg-card p-4">
-      <div className="space-y-1">
-        <h2 className="text-sm font-semibold text-destructive">Delete project</h2>
-        <p className="text-sm text-muted-foreground">
-          This removes the project from the panel and agent. Type{' '}
-          <span className="font-mono text-foreground">{slug}</span> to confirm.
-        </p>
-      </div>
-      <label className="block text-sm font-medium" htmlFor={inputId}>
-        Type slug to confirm
-      </label>
-      <input
-        id={inputId}
-        type="text"
-        autoComplete="off"
-        spellCheck={false}
-        disabled={busy}
-        value={confirmText}
-        onChange={(event) => setConfirmText(event.target.value)}
-        className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-      />
-      <div className="space-y-2">
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={dropDatabase}
-            disabled={busy}
-            onChange={(event) => setDropDatabase(event.target.checked)}
-          />
-          Drop database
+    <Card className="space-y-4 border-destructive/40 p-4">
+      <CardBody className="space-y-4 p-0">
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold text-destructive">Delete project</h2>
+          <p className="text-sm text-muted-foreground">
+            This removes the project from the panel and agent. Type{' '}
+            <span className="font-mono text-foreground">{slug}</span> to confirm.
+          </p>
+        </div>
+        <label className="block text-sm font-medium" htmlFor={inputId}>
+          Type slug to confirm
         </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={removeDns}
-            disabled={busy}
-            onChange={(event) => setRemoveDns(event.target.checked)}
-          />
-          Remove DNS records
-        </label>
-      </div>
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">{error}</p>
-      ) : null}
-      <button
-        type="button"
-        disabled={!canDelete}
-        className="inline-flex items-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-        onClick={() => setStepUpOpen(true)}
-      >
-        {busy ? 'Deleting…' : 'Delete project'}
-      </button>
+        <Input
+          id={inputId}
+          type="text"
+          autoComplete="off"
+          spellCheck={false}
+          disabled={busy}
+          mono
+          className="mt-1"
+          value={confirmText}
+          onChange={(event) => setConfirmText(event.target.value)}
+        />
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={dropDatabase}
+              disabled={busy}
+              onChange={(event) => setDropDatabase(event.target.checked)}
+            />
+            Drop database
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={removeDns}
+              disabled={busy}
+              onChange={(event) => setRemoveDns(event.target.checked)}
+            />
+            Remove DNS records
+          </label>
+        </div>
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">{error}</p>
+        ) : null}
+        <Button
+          type="button"
+          variant="danger"
+          disabled={!canDelete}
+          onClick={() => setStepUpOpen(true)}
+        >
+          {busy ? 'Deleting…' : 'Delete project'}
+        </Button>
+      </CardBody>
       <StepUpDialog
         open={stepUpOpen}
         title="Confirm project deletion"
@@ -93,6 +95,6 @@ export function ProjectDeleteSection({
         onVerified={performDelete}
         onCancel={() => setStepUpOpen(false)}
       />
-    </div>
+    </Card>
   )
 }
