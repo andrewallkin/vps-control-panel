@@ -10,6 +10,8 @@ import { formatSecondsAgo } from '../../lib/format'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { StaleBadge } from '../StatusBadge'
 import { Toast } from '../Toast'
+import { Alert, Button, Card, CardBody } from '../ui'
+import { cn } from '../../lib/cn'
 
 export interface DockerDiskCardProps {
   df: DockerDf | undefined
@@ -82,71 +84,67 @@ export function DockerDiskCard({
 
   return (
     <>
-      <section
-        className={`flex min-h-0 flex-col gap-3 rounded-lg border border-border bg-card p-4 ${className}`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">Docker disk</h2>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
-            {isStale ? <StaleBadge /> : null}
+      <Card className={cn('flex min-h-0 flex-col', className)}>
+        <CardBody className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">Docker disk</h2>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
+              {isStale ? <StaleBadge /> : null}
+            </div>
           </div>
-        </div>
-        {isLoading && !df ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <ul className="space-y-3 text-sm">
-            {rows.map(({ label, data }) => (
-              <li key={label} className="flex items-baseline justify-between gap-3">
-                <span className="text-muted-foreground">{label}</span>
-                <span className="text-right">
-                  <span className="font-mono whitespace-nowrap">
-                    {formatBytes(data.size_bytes)} ({data.count})
+          {isLoading && !df ? (
+            <p className="text-sm text-muted-foreground">Loading…</p>
+          ) : (
+            <ul className="space-y-3 text-sm">
+              {rows.map(({ label, data }) => (
+                <li key={label} className="flex items-baseline justify-between gap-3">
+                  <span className="text-muted-foreground">{label}</span>
+                  <span className="text-right">
+                    <span className="font-mono tabular whitespace-nowrap">
+                      {formatBytes(data.size_bytes)} ({data.count})
+                    </span>
+                    <span className="mt-0.5 block font-mono text-xs tabular whitespace-nowrap text-muted-foreground">
+                      {formatBytes(data.reclaimable_bytes)} reclaimable
+                    </span>
                   </span>
-                  <span className="mt-0.5 block font-mono text-xs whitespace-nowrap text-muted-foreground">
-                    {formatBytes(data.reclaimable_bytes)} reclaimable
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={anyPrunePending}
-            onClick={() => {
-              if (anyPrunePending) {
-                return
-              }
-              setInlineError(null)
-              setImagesConfirmOpen(true)
-            }}
-          >
-            Prune unused images
-          </button>
-          <button
-            type="button"
-            className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={anyPrunePending}
-            onClick={() => {
-              if (anyPrunePending) {
-                return
-              }
-              setInlineError(null)
-              setBuildCacheConfirmOpen(true)
-            }}
-          >
-            Prune build cache
-          </button>
-        </div>
-        {inlineError ? (
-          <p className="text-sm text-destructive" role="alert">
-            {inlineError}
-          </p>
-        ) : null}
-      </section>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={anyPrunePending}
+              onClick={() => {
+                if (anyPrunePending) {
+                  return
+                }
+                setInlineError(null)
+                setImagesConfirmOpen(true)
+              }}
+            >
+              Prune unused images
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={anyPrunePending}
+              onClick={() => {
+                if (anyPrunePending) {
+                  return
+                }
+                setInlineError(null)
+                setBuildCacheConfirmOpen(true)
+              }}
+            >
+              Prune build cache
+            </Button>
+          </div>
+          {inlineError ? <Alert tone="danger">{inlineError}</Alert> : null}
+        </CardBody>
+      </Card>
       <ConfirmDialog
         open={imagesConfirmOpen}
         title="Prune unused images"

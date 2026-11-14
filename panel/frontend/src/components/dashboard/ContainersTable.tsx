@@ -14,6 +14,7 @@ import {
 import { useQueryStale } from '../../hooks/useQueryStale'
 import { useTickingNow } from '../../hooks/useTickingNow'
 import { StaleBadge } from '../StatusBadge'
+import { Button, Card, CardBody, Table, TableContainer, TBody, TD, TH, THead, TR } from '../ui'
 
 export interface ContainersTableProps {
   containers: ContainerMetrics[] | undefined
@@ -34,14 +35,16 @@ function SortHeaderButton({
 }) {
   const suffix = active ? (direction === 'asc' ? ' ↑' : ' ↓') : ''
   return (
-    <button
+    <Button
       type="button"
-      className="inline-flex w-full items-center justify-end gap-1 rounded px-1 py-0.5 text-left text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      variant="ghost"
+      size="sm"
+      className="h-auto w-full justify-end px-1 py-0.5 text-xs font-medium"
       onClick={onClick}
     >
       {label}
       {suffix}
-    </button>
+    </Button>
   )
 }
 
@@ -73,80 +76,67 @@ export function ContainersTable({
   }
 
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Containers</h2>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
-          {isStale ? <StaleBadge /> : null}
+    <Card>
+      <CardBody className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Containers</h2>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
+            {isStale ? <StaleBadge /> : null}
+          </div>
         </div>
-      </div>
-      {isLoading && !containers ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
-      ) : !containers?.length ? (
-        <p className="text-sm text-muted-foreground">No containers yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-left text-sm">
-            <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-              <tr>
-                <th
-                  scope="col"
-                  className="w-[1%] whitespace-nowrap px-3 py-2 font-medium"
-                >
-                  Project
-                </th>
-                <th scope="col" className="px-3 py-2 font-medium">
-                  Name
-                </th>
-                <th
-                  scope="col"
-                  className="w-28 whitespace-nowrap px-4 py-2 text-right font-medium"
-                >
-                  <SortHeaderButton
-                    label="CPU"
-                    active={sortKey === 'cpu_percent'}
-                    direction={sortDirection}
-                    onClick={() => toggleSort('cpu_percent')}
-                  />
-                </th>
-                <th
-                  scope="col"
-                  className="w-72 whitespace-nowrap px-4 py-2 text-right font-medium"
-                >
-                  <SortHeaderButton
-                    label="Memory"
-                    active={sortKey === 'mem_percent'}
-                    direction={sortDirection}
-                    onClick={() => toggleSort('mem_percent')}
-                  />
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {grouped.map((group) =>
-                group.containers.map((row, index) => (
-                  <tr key={`${group.project}-${row.name}`}>
-                    <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">
-                      {index === 0 ? group.project : ''}
-                    </td>
-                    <td className="break-all px-3 py-2 font-mono sm:break-normal">
-                      {row.name}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-right font-mono tabular-nums">
-                      {formatPercent(row.cpu_percent)}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-2 text-right font-mono tabular-nums">
-                      {formatBytes(row.mem_used)} / {formatBytes(row.mem_limit)} (
-                      {formatPercent(row.mem_percent)})
-                    </td>
-                  </tr>
-                )),
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </section>
+        {isLoading && !containers ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : !containers?.length ? (
+          <p className="text-sm text-muted-foreground">No containers yet.</p>
+        ) : (
+          <TableContainer className="border-0">
+            <Table className="min-w-[40rem]">
+              <THead>
+                <TR className="hover:bg-transparent">
+                  <TH className="w-[1%] whitespace-nowrap">Project</TH>
+                  <TH>Name</TH>
+                  <TH className="w-28 whitespace-nowrap text-right">
+                    <SortHeaderButton
+                      label="CPU"
+                      active={sortKey === 'cpu_percent'}
+                      direction={sortDirection}
+                      onClick={() => toggleSort('cpu_percent')}
+                    />
+                  </TH>
+                  <TH className="w-72 whitespace-nowrap text-right">
+                    <SortHeaderButton
+                      label="Memory"
+                      active={sortKey === 'mem_percent'}
+                      direction={sortDirection}
+                      onClick={() => toggleSort('mem_percent')}
+                    />
+                  </TH>
+                </TR>
+              </THead>
+              <TBody>
+                {grouped.map((group) =>
+                  group.containers.map((row, index) => (
+                    <TR key={`${group.project}-${row.name}`} className="hover:bg-muted/50">
+                      <TD className="whitespace-nowrap text-muted-foreground">
+                        {index === 0 ? group.project : ''}
+                      </TD>
+                      <TD className="break-all font-mono sm:break-normal">{row.name}</TD>
+                      <TD className="whitespace-nowrap text-right font-mono tabular">
+                        {formatPercent(row.cpu_percent)}
+                      </TD>
+                      <TD className="whitespace-nowrap text-right font-mono tabular">
+                        {formatBytes(row.mem_used)} / {formatBytes(row.mem_limit)} (
+                        {formatPercent(row.mem_percent)})
+                      </TD>
+                    </TR>
+                  )),
+                )}
+              </TBody>
+            </Table>
+          </TableContainer>
+        )}
+      </CardBody>
+    </Card>
   )
 }

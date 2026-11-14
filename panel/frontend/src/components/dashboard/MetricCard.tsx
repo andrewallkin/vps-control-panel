@@ -8,6 +8,7 @@ import {
 import { useTickingNow } from '../../hooks/useTickingNow'
 import { formatSecondsAgo } from '../../lib/format'
 import { StaleBadge } from '../StatusBadge'
+import { Button, Card, CardBody } from '../ui'
 import { MetricChart, type ChartPoint } from './MetricChart'
 
 export interface MetricCardProps {
@@ -54,65 +55,65 @@ export function MetricCard({
       : isCurrentStale
 
   return (
-    <section className="flex h-full flex-col gap-3 rounded-lg border border-border bg-card p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>updated {formatSecondsAgo(displayUpdatedAt, now)}</span>
-          {isStale ? <StaleBadge /> : null}
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            aria-pressed={chartPaused}
-            onClick={() => setChartPaused((p) => !p)}
-          >
-            {chartPaused ? (
-              <>
-                <Play weight="regular" aria-hidden className="size-4" />
-                Resume chart
-              </>
-            ) : (
-              <>
-                <Pause weight="regular" aria-hidden className="size-4" />
-                Pause chart
-              </>
-            )}
-          </button>
+    <Card className="flex h-full flex-col">
+      <CardBody className="flex flex-1 flex-col gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <span>updated {formatSecondsAgo(displayUpdatedAt, now)}</span>
+            {isStale ? <StaleBadge /> : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              aria-pressed={chartPaused}
+              onClick={() => setChartPaused((p) => !p)}
+              leftIcon={
+                chartPaused ? (
+                  <Play weight="regular" aria-hidden className="size-4" />
+                ) : (
+                  <Pause weight="regular" aria-hidden className="size-4" />
+                )
+              }
+            >
+              {chartPaused ? 'Resume chart' : 'Pause chart'}
+            </Button>
+          </div>
         </div>
-      </div>
-      <div>{children}</div>
-      <div className="relative h-40 w-full shrink-0">
-        <MetricChart
-          data={chartData}
-          paused={chartPaused}
-          valueFormatter={chartValueFormatter}
-          color={chartColor}
-          yDomain={chartYDomain}
-        />
-      </div>
-      <details className="group">
-        <summary className="cursor-pointer text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground">
-          Data table
-        </summary>
-        <div className="mt-2 max-h-48 overflow-auto rounded-md border border-border">
-          <table className="w-full text-left text-xs">
-            <thead className="sticky top-0 border-b border-border bg-muted text-muted-foreground">
-              <tr>
-                <th scope="col" className="px-3 py-2 font-medium">{tableHeaders[0]}</th>
-                <th scope="col" className="px-3 py-2 font-medium">{tableHeaders[1]}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {tableRows.map((row) => (
-                <tr key={row.label}>
-                  <td className="px-3 py-2 font-mono">{row.label}</td>
-                  <td className="px-3 py-2 font-mono">{row.value}</td>
+        <div>{children}</div>
+        <div className="relative h-40 w-full shrink-0">
+          <MetricChart
+            data={chartData}
+            paused={chartPaused}
+            valueFormatter={chartValueFormatter}
+            color={chartColor}
+            yDomain={chartYDomain}
+          />
+        </div>
+        <details className="group">
+          <summary className="cursor-pointer text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground">
+            Data table
+          </summary>
+          <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-border">
+            <table className="w-full text-left text-xs">
+              <thead className="sticky top-0 border-b border-border bg-muted text-muted-foreground">
+                <tr>
+                  <th scope="col" className="px-3 py-2 font-medium">{tableHeaders[0]}</th>
+                  <th scope="col" className="px-3 py-2 font-medium">{tableHeaders[1]}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
-    </section>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {tableRows.map((row) => (
+                  <tr key={row.label}>
+                    <td className="px-3 py-2 font-mono tabular">{row.label}</td>
+                    <td className="px-3 py-2 font-mono tabular">{row.value}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </CardBody>
+    </Card>
   )
 }

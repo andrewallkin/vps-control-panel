@@ -1,9 +1,10 @@
-import { CheckCircle, Spinner } from '@phosphor-icons/react'
+import { CheckCircle } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { fetchDomains, setPanelHostname } from '../../lib/domainsApi'
 import { getPanelHostnameContinuePending, setPanelHostnameContinuePending } from '../../lib/setupSession'
 import { buildFqdn, validateSubdomain } from '../../lib/subdomainValidation'
+import { Alert, Button, Card, CardBody, Checkbox, Field, Input, Select } from '../ui'
 
 export interface PanelHostnameSetupStepProps {
   onSaved: () => void
@@ -75,99 +76,77 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
       </p>
 
       {savedHostname ? (
-        <div className="space-y-2 rounded-lg border border-border bg-card p-4">
-          <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
-            <CheckCircle weight="regular" aria-hidden className="size-4" />
-            Panel URL
-          </p>
-          <p className="font-mono text-sm break-all">
-            https://{savedHostname}
-          </p>
-          <p className="text-sm text-muted-foreground">
-            Add Cloudflare Access on this hostname to restrict who can reach the panel.
-          </p>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={onContinue}
-          >
-            Continue
-          </button>
-        </div>
+        <Card>
+          <CardBody className="space-y-2">
+            <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
+              <CheckCircle weight="regular" aria-hidden className="size-4" />
+              Panel URL
+            </p>
+            <p className="break-all font-mono text-sm">
+              https://{savedHostname}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Add Cloudflare Access on this hostname to restrict who can reach the panel.
+            </p>
+            <Button type="button" onClick={onContinue}>
+              Continue
+            </Button>
+          </CardBody>
+        </Card>
       ) : (
         <div className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="panel-hostname-domain" className="text-sm font-medium">
-              Domain
-            </label>
-            <select
-              id="panel-hostname-domain"
-              value={effectiveDomain}
-              disabled={domainOptions.length === 0}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onChange={(event) => setDomain(event.target.value)}
-            >
-              {domainOptions.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          </div>
+          <Field label="Domain">
+            {(control) => (
+              <Select
+                {...control}
+                id="panel-hostname-domain"
+                value={effectiveDomain}
+                disabled={domainOptions.length === 0}
+                onChange={(event) => setDomain(event.target.value)}
+              >
+                {domainOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={useRoot}
-                className="size-4 rounded border-border"
-                onChange={(event) => setUseRoot(event.target.checked)}
-              />
-              Root (apex)
-            </label>
-          </div>
+          <label className="inline-flex cursor-pointer items-center gap-2 text-sm">
+            <Checkbox checked={useRoot} onChange={(event) => setUseRoot(event.target.checked)} />
+            Root (apex)
+          </label>
 
           {!useRoot ? (
-            <div className="space-y-2">
-              <label htmlFor="panel-hostname-subdomain" className="text-sm font-medium">
-                Subdomain label
-              </label>
-              <input
-                id="panel-hostname-subdomain"
-                type="text"
-                value={subdomain}
-                autoComplete="off"
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                aria-invalid={fieldError ? true : undefined}
-                aria-describedby={fieldError ? 'panel-hostname-subdomain-error' : undefined}
-                onChange={(event) => {
-                  setSubdomain(event.target.value)
-                  setFieldError(null)
-                }}
-              />
-              {fieldError ? (
-                <p id="panel-hostname-subdomain-error" className="text-sm text-destructive" role="alert">
-                  {fieldError}
-                </p>
-              ) : null}
-            </div>
+            <Field label="Subdomain label" error={fieldError ?? undefined}>
+              {(control) => (
+                <Input
+                  {...control}
+                  id="panel-hostname-subdomain"
+                  type="text"
+                  value={subdomain}
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setSubdomain(event.target.value)
+                    setFieldError(null)
+                  }}
+                />
+              )}
+            </Field>
           ) : null}
 
           <p className="text-sm text-muted-foreground">
             Preview:{' '}
-            <span className="font-mono text-foreground break-all">{preview}</span>
+            <span className="break-all font-mono text-foreground">{preview}</span>
           </p>
 
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
+          {error ? <Alert tone="danger">{error}</Alert> : null}
 
-          <button
+          <Button
             type="button"
-            disabled={!effectiveDomain || mutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!effectiveDomain}
+            loading={mutation.isPending}
             onClick={() => {
               setFieldError(null)
               const check = validateSubdomain(normalizedSubdomain)
@@ -178,11 +157,8 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
               mutation.mutate()
             }}
           >
-            {mutation.isPending ? (
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-            ) : null}
             Save hostname
-          </button>
+          </Button>
         </div>
       )}
     </section>

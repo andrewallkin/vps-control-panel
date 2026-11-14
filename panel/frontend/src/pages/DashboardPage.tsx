@@ -5,6 +5,8 @@ import { MetricCard } from '../components/dashboard/MetricCard'
 import { StatusStrip } from '../components/dashboard/StatusStrip'
 import { UptimeCard } from '../components/dashboard/UptimeCard'
 import { WarningsList } from '../components/dashboard/WarningsList'
+import { Alert } from '../components/ui'
+import { PageHeader } from '../components/ui/PageHeader'
 import {
   useContainerMetricsQuery,
   useCurrentMetricsQuery,
@@ -51,12 +53,10 @@ export function DashboardPage() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Live host metrics, Docker disk usage, and container resource consumption.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        description="Live host metrics, Docker disk usage, and container resource consumption."
+      />
 
       <StatusStrip summary={summaryQuery.data} />
       <WarningsList warnings={summaryQuery.data?.warnings ?? []} />
@@ -75,25 +75,25 @@ export function DashboardPage() {
         >
           {current ? (
             <div className="space-y-3">
-              <p className="font-mono text-2xl tracking-tight">
+              <p className="font-mono text-2xl tabular tracking-tight">
                 {formatPercent(current.cpu_percent)}
               </p>
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
                 <div>
                   <dt className="text-xs text-muted-foreground">1 min</dt>
-                  <dd className="font-mono">{current.load1.toFixed(2)}</dd>
+                  <dd className="font-mono tabular">{current.load1.toFixed(2)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">5 min</dt>
-                  <dd className="font-mono">{current.load5.toFixed(2)}</dd>
+                  <dd className="font-mono tabular">{current.load5.toFixed(2)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">15 min</dt>
-                  <dd className="font-mono">{current.load15.toFixed(2)}</dd>
+                  <dd className="font-mono tabular">{current.load15.toFixed(2)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Cores</dt>
-                  <dd className="font-mono">{current.cpu_count}</dd>
+                  <dd className="font-mono tabular">{current.cpu_count}</dd>
                 </div>
               </dl>
             </div>
@@ -115,7 +115,7 @@ export function DashboardPage() {
         >
           {current ? (
             <div className="space-y-3">
-              <p className="font-mono text-2xl tracking-tight">
+              <p className="font-mono text-2xl tabular tracking-tight">
                 {formatBytes(current.mem_used)}
                 <span className="text-base text-muted-foreground">
                   {' '}
@@ -125,11 +125,11 @@ export function DashboardPage() {
               <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 <div>
                   <dt className="text-xs text-muted-foreground">Available</dt>
-                  <dd className="font-mono">{formatBytes(current.mem_available)}</dd>
+                  <dd className="font-mono tabular">{formatBytes(current.mem_available)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-muted-foreground">Swap</dt>
-                  <dd className="font-mono">
+                  <dd className="font-mono tabular">
                     {formatBytes(current.swap_used)} / {formatBytes(current.swap_total)}
                   </dd>
                 </div>
@@ -159,17 +159,17 @@ export function DashboardPage() {
                     {diskMountLabel(disk.path)}
                     <span className="sr-only"> ({disk.path})</span>
                   </p>
-                  <p className="font-mono text-2xl tracking-tight">
+                  <p className="font-mono text-2xl tabular tracking-tight">
                     {formatPercent(disk.percent)}
                   </p>
                   <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <div>
                       <dt className="text-xs text-muted-foreground">Used</dt>
-                      <dd className="font-mono">{formatBytes(disk.used)}</dd>
+                      <dd className="font-mono tabular">{formatBytes(disk.used)}</dd>
                     </div>
                     <div>
                       <dt className="text-xs text-muted-foreground">Free</dt>
-                      <dd className="font-mono">{formatBytes(disk.free)}</dd>
+                      <dd className="font-mono tabular">{formatBytes(disk.free)}</dd>
                     </div>
                   </dl>
                 </li>
@@ -206,9 +206,9 @@ export function DashboardPage() {
         containersQuery.isError ||
         dockerDfQuery.isError ||
         summaryQuery.isError) && (
-        <p className="text-sm text-destructive" role="alert">
+        <Alert tone="danger">
           Some dashboard data could not be loaded. Values may be outdated.
-        </p>
+        </Alert>
       )}
     </div>
   )

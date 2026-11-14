@@ -1,4 +1,4 @@
-import { CheckCircle, Spinner } from '@phosphor-icons/react'
+import { CheckCircle } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { BackupSettingsForm } from '../backups/BackupSettingsForm'
@@ -8,6 +8,7 @@ import { fetchBackupSettings } from '../../lib/backupsApi'
 import { authQueryKey } from '../../lib/auth'
 import { fetchRegistryStatus, setRegistryCredentials } from '../../lib/registryApi'
 import { completeSetup } from '../../lib/setupApi'
+import { Alert, Button, Card, CardBody, Field, Input } from '../ui'
 
 export interface OptionalSetupStepProps {
   onContinueToFinish: () => void
@@ -84,148 +85,141 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
       </div>
 
       {registryHidden ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-sm text-muted-foreground">Docker Hub skipped.</p>
-          <button
-            type="button"
-            className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
-            onClick={() => setRegistryHidden(false)}
-          >
-            Configure instead
-          </button>
-        </div>
+        <Card>
+          <CardBody className="flex flex-wrap items-center justify-between gap-2 py-3">
+            <p className="text-sm text-muted-foreground">Docker Hub skipped.</p>
+            <button
+              type="button"
+              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
+              onClick={() => setRegistryHidden(false)}
+            >
+              Configure instead
+            </button>
+          </CardBody>
+        </Card>
       ) : (
-      <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Docker Hub</h3>
-          <button
-            type="button"
-            className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
-            onClick={() => setRegistryHidden(true)}
-          >
-            Skip section
-          </button>
-        </div>
-        {registryConfigured ? (
-          <p className="inline-flex items-center gap-2 text-sm font-medium">
-            <CheckCircle weight="regular" aria-hidden className="size-4 text-accent" />
-            Configured as{' '}
-            <span className="font-mono">{registryQuery.data?.username ?? '—'}</span>
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">Not configured</p>
-        )}
-        {registryError ? (
-          <p className="text-sm text-destructive" role="alert">
-            {registryError}
-          </p>
-        ) : null}
-        {registrySuccess ? (
-          <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
-            <CheckCircle weight="regular" aria-hidden className="size-4" />
-            {registrySuccess}
-          </p>
-        ) : null}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <label htmlFor="setup-registry-username" className="text-sm font-medium">
-              Username
-            </label>
-            <input
-              id="setup-registry-username"
-              type="text"
-              autoComplete="username"
-              value={username}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onChange={(event) => setUsername(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <label htmlFor="setup-registry-token" className="text-sm font-medium">
-              Access token
-            </label>
-            <input
-              id="setup-registry-token"
-              type="password"
-              autoComplete="current-password"
-              value={token}
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              onChange={(event) => setToken(event.target.value)}
-            />
-          </div>
-        </div>
-        <button
-          type="button"
-          disabled={!username.trim() || !token.trim() || registryMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() =>
-            registryMutation.mutate({ username: username.trim(), token: token.trim() })
-          }
-        >
-          Save Docker Hub credentials
-        </button>
-      </div>
+        <Card>
+          <CardBody className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Docker Hub</h3>
+              <button
+                type="button"
+                className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
+                onClick={() => setRegistryHidden(true)}
+              >
+                Skip section
+              </button>
+            </div>
+            {registryConfigured ? (
+              <p className="inline-flex items-center gap-2 text-sm font-medium">
+                <CheckCircle weight="regular" aria-hidden className="size-4 text-accent" />
+                Configured as{' '}
+                <span className="font-mono">{registryQuery.data?.username ?? '—'}</span>
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Not configured</p>
+            )}
+            {registryError ? <Alert tone="danger">{registryError}</Alert> : null}
+            {registrySuccess ? (
+              <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
+                <CheckCircle weight="regular" aria-hidden className="size-4" />
+                {registrySuccess}
+              </p>
+            ) : null}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Username">
+                {(control) => (
+                  <Input
+                    {...control}
+                    id="setup-registry-username"
+                    type="text"
+                    autoComplete="username"
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                  />
+                )}
+              </Field>
+              <Field label="Access token">
+                {(control) => (
+                  <Input
+                    {...control}
+                    id="setup-registry-token"
+                    type="password"
+                    autoComplete="current-password"
+                    value={token}
+                    onChange={(event) => setToken(event.target.value)}
+                  />
+                )}
+              </Field>
+            </div>
+            <Button
+              type="button"
+              disabled={!username.trim() || !token.trim()}
+              loading={registryMutation.isPending}
+              onClick={() =>
+                registryMutation.mutate({ username: username.trim(), token: token.trim() })
+              }
+            >
+              Save Docker Hub credentials
+            </Button>
+          </CardBody>
+        </Card>
       )}
 
       {backupHidden ? (
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-3">
-          <p className="text-sm text-muted-foreground">Backups skipped.</p>
-          <button
-            type="button"
-            className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
-            onClick={() => setBackupHidden(false)}
-          >
-            Configure instead
-          </button>
-        </div>
+        <Card>
+          <CardBody className="flex flex-wrap items-center justify-between gap-2 py-3">
+            <p className="text-sm text-muted-foreground">Backups skipped.</p>
+            <button
+              type="button"
+              className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
+              onClick={() => setBackupHidden(false)}
+            >
+              Configure instead
+            </button>
+          </CardBody>
+        </Card>
       ) : (
-      <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold">Backups</h3>
-          <button
-            type="button"
-            className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
-            onClick={() => setBackupHidden(true)}
-          >
-            Skip section
-          </button>
-        </div>
-        {backupQuery.data ? (
-          <BackupSettingsForm
-            key={backupQuery.dataUpdatedAt}
-            settings={backupQuery.data}
-            idPrefix="setup-backup"
-            showHeading={false}
-          />
-        ) : backupQuery.isError ? (
-          <p className="text-sm text-destructive" role="alert">
-            Could not load backup settings.
-          </p>
-        ) : (
-          <p className="text-sm text-muted-foreground">Loading backup settings…</p>
-        )}
-      </div>
+        <Card>
+          <CardBody className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Backups</h3>
+              <button
+                type="button"
+                className="text-sm font-medium text-muted-foreground underline-offset-2 hover:underline cursor-pointer"
+                onClick={() => setBackupHidden(true)}
+              >
+                Skip section
+              </button>
+            </div>
+            {backupQuery.data ? (
+              <BackupSettingsForm
+                key={backupQuery.dataUpdatedAt}
+                settings={backupQuery.data}
+                idPrefix="setup-backup"
+                showHeading={false}
+              />
+            ) : backupQuery.isError ? (
+              <Alert tone="danger">Could not load backup settings.</Alert>
+            ) : (
+              <p className="text-sm text-muted-foreground">Loading backup settings…</p>
+            )}
+          </CardBody>
+        </Card>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
-        <button
+        <Button
           type="button"
-          disabled={skipMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="secondary"
+          loading={skipMutation.isPending}
           onClick={() => skipMutation.mutate()}
         >
-          {skipMutation.isPending ? (
-            <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : null}
           Skip
-        </button>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={onContinueToFinish}
-        >
+        </Button>
+        <Button type="button" onClick={onContinueToFinish}>
           Continue to finish
-        </button>
+        </Button>
       </div>
 
       <StepUpDialog

@@ -16,10 +16,12 @@ import { ProjectsListPage } from '../pages/ProjectsListPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { SetupPage } from '../pages/SetupPage'
 import { UiShowcasePage } from '../pages/UiShowcasePage'
+import { Spinner } from '../components/ui/Spinner'
 
 function AuthLoading() {
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background">
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background">
+      <Spinner className="size-6 text-muted-foreground" />
       <p className="text-sm text-muted-foreground">Loading…</p>
     </div>
   )
