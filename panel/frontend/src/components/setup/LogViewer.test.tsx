@@ -61,4 +61,16 @@ describe('LogViewer', () => {
 
     expect(scrollContainer.scrollTop).toBe(0)
   })
+
+  it('does not open a new EventSource when onEnd changes', () => {
+    const onEndA = vi.fn()
+    const { rerender } = render(<LogViewer jobId="job-1" onEnd={onEndA} />)
+
+    expect(MockEventSource.instances).toHaveLength(1)
+
+    const onEndB = vi.fn()
+    rerender(<LogViewer jobId="job-1" onEnd={onEndB} />)
+
+    expect(MockEventSource.instances).toHaveLength(1)
+  })
 })

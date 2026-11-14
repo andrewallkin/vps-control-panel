@@ -15,10 +15,15 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
   const [ended, setEnded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const pausedRef = useRef(paused)
+  const onEndRef = useRef(onEnd)
 
   useEffect(() => {
     pausedRef.current = paused
   }, [paused])
+
+  useEffect(() => {
+    onEndRef.current = onEnd
+  }, [onEnd])
 
   useEffect(() => {
     const source = new EventSource(`/api/jobs/${jobId}/events`)
@@ -40,7 +45,7 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
       const payload = parseJobEndData(messageEvent.data)
       setEnded(true)
       if (payload) {
-        onEnd?.(payload)
+        onEndRef.current?.(payload)
       }
       source.close()
     })
@@ -52,7 +57,7 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
     return () => {
       source.close()
     }
-  }, [jobId, onEnd])
+  }, [jobId])
 
   const displayLines = useMemo(() => {
     const compact = lines.filter((line) => line !== undefined)
