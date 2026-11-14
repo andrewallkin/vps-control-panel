@@ -51,7 +51,7 @@ describe('AuditPage', () => {
   })
 
   it('shows audit entry source and keeps params collapsed', async () => {
-    renderWithProviders(<AuditPage />)
+    const { container } = renderWithProviders(<AuditPage />)
 
     await waitFor(() => {
       expect(screen.getByText('container.restart')).toBeInTheDocument()
@@ -65,7 +65,7 @@ describe('AuditPage', () => {
     expect(details).toBeInTheDocument()
     expect(details).not.toHaveAttribute('open')
 
-    const page = screen.getByRole('heading', { name: 'Audit' }).parentElement?.parentElement
+    const page = container.firstElementChild
     expect(page).toHaveClass('w-full')
     expect(page).not.toHaveClass('max-w-6xl')
   })
