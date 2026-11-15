@@ -1,10 +1,14 @@
 import { useMemo } from 'react'
 import { ContainersTable } from '../components/dashboard/ContainersTable'
 import { DockerDiskCard } from '../components/dashboard/DockerDiskCard'
+import { KpiStatRow } from '../components/dashboard/KpiStatRow'
 import { MetricCard } from '../components/dashboard/MetricCard'
 import { StatusStrip } from '../components/dashboard/StatusStrip'
-import { UptimeCard } from '../components/dashboard/UptimeCard'
 import { WarningsList } from '../components/dashboard/WarningsList'
+import { CHART_PRIMARY, CHART_SECONDARY } from '../components/dashboard/chartColors'
+import { percentStressClass } from '../components/dashboard/metricThresholds'
+import { Alert } from '../components/ui'
+import { PageHeader } from '../components/ui/PageHeader'
 import {
   useContainerMetricsQuery,
   useCurrentMetricsQuery,
@@ -49,54 +53,61 @@ export function DashboardPage() {
     [historyPoints, primaryDisk],
   )
 
-  return (
-    <div className="flex w-full flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Live host metrics, Docker disk usage, and container resource consumption.
-        </p>
-      </div>
+  const memPercent =
+    current && current.mem_total > 0
+      ? (current.mem_used / current.mem_total) * 100
+      : Number.NaN
 
-      <StatusStrip summary={summaryQuery.data} />
+  return (
+    <div className="flex w-full flex-col gap-8">
+      <PageHeader
+        title="Dashboard"
+        description="Live host metrics, Docker disk usage, and container resource consumption."
+      />
+
+      <KpiStatRow current={current} loading={currentQuery.isPending} />
+
+      <StatusStrip
+        summary={summaryQuery.data}
+        loading={summaryQuery.isPending}
+      />
       <WarningsList warnings={summaryQuery.data?.warnings ?? []} />
 
-      <div className="grid items-stretch gap-4 lg:grid-cols-2">
+      <div className="grid items-stretch gap-6 lg:grid-cols-2">
         <MetricCard
           title="CPU"
           dataUpdatedAt={currentQuery.dataUpdatedAt}
           historyDataUpdatedAt={historyQuery.dataUpdatedAt}
           chartData={cpuChart}
           chartValueFormatter={percentChartFormatter}
-          chartColor="var(--color-accent)"
+          chartColor={CHART_PRIMARY}
           chartYDomain={[0, 100]}
           tableHeaders={['Time', 'CPU %']}
           tableRows={chartTableRows(cpuChart, percentChartFormatter)}
         >
           {current ? (
-            <div className="space-y-3">
-              <p className="font-mono text-2xl tracking-tight">
-                {formatPercent(current.cpu_percent)}
-              </p>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
-                <div>
-                  <dt className="text-xs text-muted-foreground">1 min</dt>
-                  <dd className="font-mono">{current.load1.toFixed(2)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">5 min</dt>
-                  <dd className="font-mono">{current.load5.toFixed(2)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">15 min</dt>
-                  <dd className="font-mono">{current.load15.toFixed(2)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Cores</dt>
-                  <dd className="font-mono">{current.cpu_count}</dd>
-                </div>
-              </dl>
-            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-4">
+              <div>
+                <dt className="text-sm text-muted-foreground">Load (1m)</dt>
+                <dd className="font-mono tabular-nums">{current.load1.toFixed(2)}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted-foreground">Load (5m)</dt>
+                <dd className="font-mono tabular-nums">{current.load5.toFixed(2)}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted-foreground">Load (15m)</dt>
+                <dd className="font-mono tabular-nums">{current.load15.toFixed(2)}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted-foreground">Usage</dt>
+                <dd
+                  className={`font-mono text-xl font-semibold tabular-nums ${percentStressClass(current.cpu_percent)}`}
+                >
+                  {formatPercent(current.cpu_percent)}
+                </dd>
+              </div>
+            </dl>
           ) : (
             '—'
           )}
@@ -108,33 +119,36 @@ export function DashboardPage() {
           historyDataUpdatedAt={historyQuery.dataUpdatedAt}
           chartData={memChart}
           chartValueFormatter={percentChartFormatter}
-          chartColor="var(--color-foreground)"
+          chartColor={CHART_SECONDARY}
           chartYDomain={[0, 100]}
           tableHeaders={['Time', 'Used %']}
           tableRows={chartTableRows(memChart, percentChartFormatter)}
         >
           {current ? (
-            <div className="space-y-3">
-              <p className="font-mono text-2xl tracking-tight">
-                {formatBytes(current.mem_used)}
-                <span className="text-base text-muted-foreground">
-                  {' '}
-                  / {formatBytes(current.mem_total)}
-                </span>
-              </p>
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
-                <div>
-                  <dt className="text-xs text-muted-foreground">Available</dt>
-                  <dd className="font-mono">{formatBytes(current.mem_available)}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">Swap</dt>
-                  <dd className="font-mono">
-                    {formatBytes(current.swap_used)} / {formatBytes(current.swap_total)}
-                  </dd>
-                </div>
-              </dl>
-            </div>
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <div>
+                <dt className="text-sm text-muted-foreground">Available</dt>
+                <dd className="font-mono tabular-nums">{formatBytes(current.mem_available)}</dd>
+              </div>
+              <div>
+                <dt className="text-sm text-muted-foreground">Swap</dt>
+                <dd className="font-mono tabular-nums">
+                  {formatBytes(current.swap_used)} / {formatBytes(current.swap_total)}
+                </dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-sm text-muted-foreground">Used</dt>
+                <dd
+                  className={`font-mono text-xl font-semibold tabular-nums ${percentStressClass(memPercent)}`}
+                >
+                  {formatBytes(current.mem_used)}
+                  <span className="text-base text-muted-foreground">
+                    {' '}
+                    / {formatBytes(current.mem_total)}
+                  </span>
+                </dd>
+              </div>
+            </dl>
           ) : (
             '—'
           )}
@@ -146,7 +160,7 @@ export function DashboardPage() {
           historyDataUpdatedAt={historyQuery.dataUpdatedAt}
           chartData={diskChart}
           chartValueFormatter={percentChartFormatter}
-          chartColor="var(--color-warning)"
+          chartColor={CHART_PRIMARY}
           chartYDomain={[0, 100]}
           tableHeaders={['Time', 'Used %']}
           tableRows={chartTableRows(diskChart, percentChartFormatter)}
@@ -154,22 +168,24 @@ export function DashboardPage() {
           {current?.disks.length ? (
             <ul className="space-y-3">
               {current.disks.map((disk) => (
-                <li key={disk.path} className="space-y-2">
+                <li key={disk.path} className="space-y-1.5">
                   <p className="text-sm text-muted-foreground">
                     {diskMountLabel(disk.path)}
                     <span className="sr-only"> ({disk.path})</span>
                   </p>
-                  <p className="font-mono text-2xl tracking-tight">
+                  <p
+                    className={`font-mono text-xl font-semibold tabular-nums ${percentStressClass(disk.percent)}`}
+                  >
                     {formatPercent(disk.percent)}
                   </p>
-                  <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                  <dl className="grid grid-cols-2 gap-x-4 text-sm">
                     <div>
-                      <dt className="text-xs text-muted-foreground">Used</dt>
-                      <dd className="font-mono">{formatBytes(disk.used)}</dd>
+                      <dt className="text-sm text-muted-foreground">Used</dt>
+                      <dd className="font-mono tabular-nums">{formatBytes(disk.used)}</dd>
                     </div>
                     <div>
-                      <dt className="text-xs text-muted-foreground">Free</dt>
-                      <dd className="font-mono">{formatBytes(disk.free)}</dd>
+                      <dt className="text-sm text-muted-foreground">Free</dt>
+                      <dd className="font-mono tabular-nums">{formatBytes(disk.free)}</dd>
                     </div>
                   </dl>
                 </li>
@@ -180,19 +196,12 @@ export function DashboardPage() {
           )}
         </MetricCard>
 
-        <div className="flex h-full flex-col gap-4">
-          <DockerDiskCard
-            df={dockerDfQuery.data}
-            dataUpdatedAt={dockerDfQuery.dataUpdatedAt}
-            isLoading={dockerDfQuery.isLoading}
-          />
-          <div className="mt-auto">
-            <UptimeCard
-              uptimeSeconds={current?.uptime_seconds}
-              dataUpdatedAt={currentQuery.dataUpdatedAt}
-            />
-          </div>
-        </div>
+        <DockerDiskCard
+          df={dockerDfQuery.data}
+          dataUpdatedAt={dockerDfQuery.dataUpdatedAt}
+          isLoading={dockerDfQuery.isLoading}
+          className="h-full"
+        />
       </div>
 
       <ContainersTable
@@ -206,9 +215,9 @@ export function DashboardPage() {
         containersQuery.isError ||
         dockerDfQuery.isError ||
         summaryQuery.isError) && (
-        <p className="text-sm text-destructive" role="alert">
+        <Alert tone="danger">
           Some dashboard data could not be loaded. Values may be outdated.
-        </p>
+        </Alert>
       )}
     </div>
   )

@@ -1,4 +1,4 @@
-import { Plus, Spinner } from '@phosphor-icons/react'
+import { Plus } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { AddDomainDialog } from '../domains/AddDomainDialog'
@@ -11,6 +11,7 @@ import {
   reissueDomain,
 } from '../../lib/domainsApi'
 import { useTickingNow } from '../../hooks/useTickingNow'
+import { Alert, Button, Card, CardBody, Spinner } from '../ui'
 
 export interface DomainsSetupStepProps {
   onCertReady: () => void
@@ -78,68 +79,62 @@ export function DomainsSetupStep({ onCertReady }: DomainsSetupStepProps) {
 
   return (
     <section className="space-y-4" aria-labelledby="domains-step-heading">
-      <h2 id="domains-step-heading" className="text-base font-semibold">
+      <h2 id="domains-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
         Domains
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Add at least one apex domain. Certificate issuance runs in the background; continue once a
         certificate shows as valid.
       </p>
 
-      {error ? (
-        <p className="text-sm text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
+      {error ? <Alert tone="danger">{error}</Alert> : null}
       {issueError ? (
-        <div className="space-y-1 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3">
-          <p className="text-sm font-medium text-destructive">Certificate issuance failed.</p>
-          <p className="text-sm text-destructive">{issueError}</p>
-          <p className="text-xs text-muted-foreground">
+        <Alert tone="danger" title="Certificate issuance failed.">
+          <p>{issueError}</p>
+          <p className="text-muted-foreground">
             The domain is registered — fix the issue and use Reissue certificate.
           </p>
-        </div>
+        </Alert>
       ) : null}
 
       <ul className="space-y-2">
         {(domainsQuery.data ?? []).map((row) => (
-          <li
-            key={row.name}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-4 py-3"
-          >
-            <span className="font-medium">{row.name}</span>
-            <span className="flex items-center gap-2">
-              <CertStatusBadge
-                certStatus={row.cert_status}
-                certExpiresAt={row.cert_expires_at}
-                nowMs={nowMs}
-              />
-              {row.cert_status !== 'valid' ? (
-                <button
-                  type="button"
-                  disabled={reissueMutation.isPending}
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => reissueMutation.mutate(row.name)}
-                >
-                  {reissueMutation.isPending ? (
-                    <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+          <li key={row.name}>
+            <Card>
+              <CardBody className="flex flex-wrap items-center justify-between gap-2 py-3">
+                <span className="font-medium">{row.name}</span>
+                <span className="flex items-center gap-2">
+                  <CertStatusBadge
+                    certStatus={row.cert_status}
+                    certExpiresAt={row.cert_expires_at}
+                    nowMs={nowMs}
+                  />
+                  {row.cert_status !== 'valid' ? (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      loading={reissueMutation.isPending}
+                      onClick={() => reissueMutation.mutate(row.name)}
+                    >
+                      Reissue certificate
+                    </Button>
                   ) : null}
-                  Reissue certificate
-                </button>
-              ) : null}
-            </span>
+                </span>
+              </CardBody>
+            </Card>
           </li>
         ))}
       </ul>
 
-      <button
+      <Button
         type="button"
-        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        variant="secondary"
+        leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
         onClick={() => setAddOpen(true)}
       >
-        <Plus weight="regular" aria-hidden className="size-4" />
         Add domain
-      </button>
+      </Button>
 
       {issueJobId ? (
         <LogViewer
@@ -154,7 +149,7 @@ export function DomainsSetupStep({ onCertReady }: DomainsSetupStepProps) {
 
       {!hasValidCert && (domainsQuery.data ?? []).length > 0 ? (
         <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+          <Spinner className="size-4" />
           Waiting for certificate…
         </p>
       ) : null}

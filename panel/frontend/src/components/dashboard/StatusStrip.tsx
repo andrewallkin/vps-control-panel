@@ -1,10 +1,21 @@
+import {
+  ArrowRight,
+  CloudArrowDown,
+  FolderOpen,
+  ShieldCheck,
+} from '@phosphor-icons/react'
+import type { ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import type { BackupLastRun } from '../../lib/backupsApi'
 import type { DashboardSummary } from '../../lib/dashboardTypes'
-import { formatDateTime } from '../../lib/format'
-import { StatusBadge } from '../StatusBadge'
+import { formatDateTime, formatRelativeTime } from '../../lib/format'
+import { useTickingNow } from '../../hooks/useTickingNow'
+import { Badge, Card, CardBody, Skeleton } from '../ui'
+import { cn } from '../../lib/cn'
 
 export interface StatusStripProps {
   summary: DashboardSummary | undefined
+  loading?: boolean
 }
 
 export function formatBackupLastRun(
@@ -16,77 +27,177 @@ export function formatBackupLastRun(
   return formatDateTime(lastRun.finished_at)
 }
 
-function formatCertExpiry(iso: string | null | undefined): string {
-  if (!iso) {
-    return 'None'
-  }
-  return formatDateTime(iso)
+function StatusTile({
+  title,
+  href,
+  icon,
+  iconClassName,
+  children,
+}: {
+  title: string
+  href: string
+  icon: ReactNode
+  iconClassName: string
+  children: ReactNode
+}) {
+  return (
+    <Card className="shadow-[var(--shadow-card,0_1px_2px_rgba(24,24,27,0.04),0_8px_24px_rgba(24,24,27,0.06))]">
+      <CardBody className="p-5">
+        <Link
+          to={href}
+          className="group flex items-center gap-4 transition-colors duration-150"
+        >
+          <div
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
+              iconClassName,
+            )}
+          >
+            {icon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">{title}</p>
+              <ArrowRight
+                weight="regular"
+                aria-hidden
+                className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              />
+            </div>
+            <div className="mt-1">{children}</div>
+          </div>
+        </Link>
+      </CardBody>
+    </Card>
+  )
 }
 
-export function StatusStrip({ summary }: StatusStripProps) {
-  if (!summary) {
+function projectsBadge(summary: DashboardSummary) {
+  if (summary.projects.unhealthy > 0) {
     return (
-      <section
+      <Badge tone="warning" dot>
+        {summary.projects.unhealthy} unhealthy
+      </Badge>
+    )
+  }
+  return (
+    <Badge tone="success" dot>
+      All up
+    </Badge>
+  )
+}
+
+function backupBadge(summary: DashboardSummary) {
+  const backup = summary.backup
+  if (!backup) {
+    return null
+  }
+  if (backup.failed) {
+    return (
+      <Badge tone="danger" dot>
+        Last run failed
+      </Badge>
+    )
+  }
+  if (backup.overdue) {
+    return (
+      <Badge tone="warning" dot>
+        Overdue
+      </Badge>
+    )
+  }
+  return (
+    <Badge tone="success" dot>
+      On schedule
+    </Badge>
+  )
+}
+
+export function StatusStrip({ summary, loading }: StatusStripProps) {
+  const now = useTickingNow(60_000)
+
+  if (loading && !summary) {
+    return (
+      <div
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
         aria-label="System status"
-        className="rounded-lg border border-border bg-card p-4 text-sm text-muted-foreground"
       >
-        Loading status…
-      </section>
+        {Array.from({ length: 3 }, (_, index) => (
+          <Card key={index}>
+            <CardBody className="p-5">
+              <Skeleton className="h-14 w-full" />
+            </CardBody>
+          </Card>
+        ))}
+      </div>
     )
   }
 
-  const { projects, backup, nearest_cert_expiry } = summary
-  const projectHealthy = projects.unhealthy === 0
+  if (!summary) {
+    return null
+  }
 
-  const cellClass =
-    'flex min-w-0 flex-col gap-2 xl:px-6 xl:first:pl-0 xl:[&:not(:first-child)]:border-l xl:[&:not(:first-child)]:border-border'
+  const { projects, backup, nearest_cert_expiry } = summary
 
   return (
     <section
       aria-label="System status"
-      className="grid gap-4 rounded-lg border border-border bg-card p-4 sm:grid-cols-2 sm:p-5 xl:grid-cols-3 xl:gap-0"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
     >
-      <div className={cellClass}>
-        <p className="text-xs font-medium text-muted-foreground">Projects</p>
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <p className="text-sm">
-            <span className="font-mono">{projects.up}</span> up /{' '}
-            <span className="font-mono">{projects.unhealthy}</span> unhealthy
+      <StatusTile
+        title="Projects"
+        href="/projects"
+        icon={<FolderOpen weight="regular" className="size-6" aria-hidden />}
+        iconClassName="bg-accent-soft text-accent"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-lg font-semibold">
+            <span className="tabular-nums">{projects.up}</span>
+            <span className="font-normal text-muted-foreground"> up</span>
+            {projects.unhealthy > 0 ? (
+              <>
+                <span className="font-normal text-muted-foreground"> · </span>
+                <span className="text-warning">{projects.unhealthy} degraded</span>
+              </>
+            ) : null}
           </p>
-          {!projectHealthy ? (
-            <StatusBadge variant="warning" label="Unhealthy projects" />
-          ) : (
-            <StatusBadge variant="healthy" label="All projects up" />
-          )}
+          {projectsBadge(summary)}
         </div>
-      </div>
-      <div className={cellClass}>
-        <p className="text-xs font-medium text-muted-foreground">Backup</p>
+      </StatusTile>
+      <StatusTile
+        title="Last backup"
+        href="/backups"
+        icon={<CloudArrowDown weight="regular" className="size-6" aria-hidden />}
+        iconClassName="bg-[#ECFDF5] text-[#047857]"
+      >
         {backup === null ? (
-          <p className="text-sm text-muted-foreground">Not configured</p>
+          <p className="text-lg font-semibold text-muted-foreground">Not configured</p>
         ) : (
-          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <p className="text-sm font-mono">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-lg font-semibold tabular-nums">
               {formatBackupLastRun(backup.last_run)}
             </p>
-            {backup.failed ? (
-              <StatusBadge variant="critical" label="Last backup failed" />
-            ) : backup.overdue ? (
-              <StatusBadge variant="warning" label="Backup overdue" />
-            ) : (
-              <StatusBadge variant="healthy" label="Backup OK" />
-            )}
+            {backupBadge(summary)}
           </div>
         )}
-      </div>
-      <div className={cellClass}>
-        <p className="text-xs font-medium text-muted-foreground">
-          Nearest cert expiry
-        </p>
-        <p className="text-sm font-mono">
-          {formatCertExpiry(nearest_cert_expiry)}
-        </p>
-      </div>
+      </StatusTile>
+      <StatusTile
+        title="Nearest cert expiry"
+        href="/domains"
+        icon={<ShieldCheck weight="regular" className="size-6" aria-hidden />}
+        iconClassName="bg-muted text-muted-foreground"
+      >
+        {nearest_cert_expiry ? (
+          <p
+            className="text-lg font-semibold tabular-nums"
+            title={formatDateTime(nearest_cert_expiry)}
+          >
+            {formatRelativeTime(nearest_cert_expiry, now)}
+          </p>
+        ) : (
+          <p className="text-lg font-semibold text-muted-foreground">None</p>
+        )}
+      </StatusTile>
     </section>
   )
 }

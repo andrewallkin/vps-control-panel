@@ -1,8 +1,8 @@
-import { Spinner } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { BackupSettingsForm } from '../components/backups/BackupSettingsForm'
 import { BackupStatusCard } from '../components/backups/BackupStatusCard'
+import { Button, Card, CardBody, PageHeader, Skeleton, useToast } from '../components/ui'
 import {
   fetchBackupSettings,
   fetchBackupStatus,
@@ -13,6 +13,7 @@ const RUN_POLL_MS = 2000
 const RUN_POLL_TIMEOUT_MS = 30000
 
 export function BackupsPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [runMessage, setRunMessage] = useState<{ text: string; error: boolean } | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -44,6 +45,7 @@ export function BackupsPage() {
   const runMutation = useMutation({
     mutationFn: runBackupNow,
     onSuccess: async () => {
+      toast({ title: 'Backup run started.', description: 'Waiting for status…' })
       setRunMessage({ text: 'Backup triggered. Waiting for status…', error: false })
       const baseline = statusQuery.data?.last_run?.finished_at ?? null
       clearRunPolling()
@@ -65,6 +67,7 @@ export function BackupsPage() {
           clearRunPolling()
           unsubscribe()
           setRunMessage({ text: 'Backup run finished.', error: false })
+          toast({ title: 'Backup run finished.' })
           void queryClient.invalidateQueries({ queryKey: ['backups', 'status'] })
         }
       })
@@ -76,17 +79,13 @@ export function BackupsPage() {
 
   const runAction = (
     <div className="flex flex-col items-start gap-2 sm:items-end">
-      <button
-        type="button"
-        disabled={runMutation.isPending}
-        className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+      <Button
+        variant="secondary"
+        loading={runMutation.isPending}
         onClick={() => runMutation.mutate()}
       >
-        {runMutation.isPending ? (
-          <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-        ) : null}
         Run backup now
-      </button>
+      </Button>
       {runMessage ? (
         runMessage.error ? (
           <p className="text-sm text-destructive" role="alert">
@@ -101,13 +100,10 @@ export function BackupsPage() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Backups</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Schedule PostgreSQL dumps to Google Cloud Storage. A passphrase encrypts each dump and
-          adds a second encrypted config file.
-        </p>
-      </div>
+      <PageHeader
+        title="Backups"
+        description="Schedule PostgreSQL dumps to Google Cloud Storage. A passphrase encrypts each dump and adds a second encrypted config file."
+      />
 
       <BackupStatusCard
         status={statusQuery.data}
@@ -120,14 +116,23 @@ export function BackupsPage() {
           Could not load backup settings.
         </p>
       ) : settingsQuery.data ? (
-        <div className="rounded-lg border border-border bg-card p-4 sm:p-6">
-          <BackupSettingsForm
-            key={settingsQuery.dataUpdatedAt}
-            settings={settingsQuery.data}
-          />
-        </div>
+        <Card>
+          <CardBody className="sm:p-6">
+            <BackupSettingsForm
+              key={settingsQuery.dataUpdatedAt}
+              settings={settingsQuery.data}
+              onSaved={() => toast({ title: 'Backup settings saved.' })}
+            />
+          </CardBody>
+        </Card>
       ) : (
-        <p className="text-sm text-muted-foreground">Loading settings…</p>
+        <Card>
+          <CardBody className="space-y-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-32 w-full" />
+            <span className="sr-only">Loading settings…</span>
+          </CardBody>
+        </Card>
       )}
     </div>
   )

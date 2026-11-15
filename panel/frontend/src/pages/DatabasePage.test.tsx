@@ -4,15 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DatabasePage } from './DatabasePage'
 import { renderWithProviders } from '../test/renderWithProviders'
 
-vi.mock('../components/StepUpDialog', () => ({
-  StepUpDialog: ({
-    open,
-    onVerified,
-  }: {
-    open: boolean
-    onVerified: () => void
-  }) => (open ? <button type="button" onClick={onVerified}>mock verify</button> : null),
-}))
+vi.mock('../components/StepUpDialog', async () => {
+  const { Dialog, DialogContent, DialogTitle } = await import('../components/ui')
+  return {
+    StepUpDialog: ({
+      open,
+      onVerified,
+    }: {
+      open: boolean
+      onVerified: () => void
+    }) => (
+      <Dialog open={open}>
+        <DialogContent>
+          <DialogTitle>Step up</DialogTitle>
+          <button type="button" onClick={onVerified}>
+            mock verify
+          </button>
+        </DialogContent>
+      </Dialog>
+    ),
+  }
+})
 
 vi.mock('../lib/chunkedUpload', async () => {
   const actual = await vi.importActual<typeof import('../lib/chunkedUpload')>('../lib/chunkedUpload')
@@ -283,7 +295,7 @@ describe('DatabasePage', () => {
     await user.click(await screen.findByRole('button', { name: /restore from dump/i }))
     await user.type(screen.getByLabelText(/confirmation/i), 'RESTORE')
     await user.click(screen.getByRole('button', { name: /restore cluster/i }))
-    await user.click(screen.getByRole('button', { name: /mock verify/i }))
+    await user.click(await screen.findByRole('button', { name: /mock verify/i }))
 
     expect(await screen.findByText(/would be replaced/i)).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /overwrite existing data/i })).toBeInTheDocument()
@@ -292,7 +304,7 @@ describe('DatabasePage', () => {
     await user.click(screen.getByLabelText(/overwrite existing data/i))
     await user.type(screen.getByLabelText(/confirmation/i), 'RESTORE')
     await user.click(screen.getByRole('button', { name: /restore cluster/i }))
-    await user.click(screen.getByRole('button', { name: /mock verify/i }))
+    await user.click(await screen.findByRole('button', { name: /mock verify/i }))
 
     await waitFor(() => {
       expect(restoreBodies).toHaveLength(2)

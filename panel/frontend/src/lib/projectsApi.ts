@@ -63,6 +63,15 @@ export interface ProjectServiceRow extends ProjectServiceInput {
   current_tag: string | null
 }
 
+export type ProjectRuntimeStatus = 'running' | 'degraded' | 'stopped' | 'not_deployed'
+
+export interface ProjectLastDeploy {
+  id: number
+  status: string
+  started_at: string
+  finished_at: string | null
+}
+
 export interface ProjectSummary {
   slug: string
   display_name: string
@@ -80,6 +89,9 @@ export interface ProjectSummary {
   health_check_url: string | null
   creation_state: CreationState
   created_at: string
+  runtime_status?: ProjectRuntimeStatus | null
+  primary_url?: string | null
+  last_deploy?: ProjectLastDeploy | null
 }
 
 export interface ProjectDetail extends ProjectSummary {

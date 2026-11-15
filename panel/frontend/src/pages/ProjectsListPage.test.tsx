@@ -27,6 +27,14 @@ const projectSummary = {
   health_check_url: null,
   creation_state: { status: 'ready', steps: [] },
   created_at: '2026-01-01T00:00:00+00:00',
+  runtime_status: 'running',
+  primary_url: 'https://app.example.com/',
+  last_deploy: {
+    id: 9,
+    status: 'succeeded',
+    started_at: '2026-01-01T12:00:00+00:00',
+    finished_at: '2026-01-01T12:01:00+00:00',
+  },
 }
 
 describe('ProjectsListPage', () => {
@@ -127,6 +135,74 @@ describe('ProjectsListPage', () => {
     })
 
     expect(screen.queryByText('There are no projects yet.')).not.toBeInTheDocument()
+  })
+
+  it('loads the latest deploy when the project list omits last_deploy', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.endsWith('/api/projects')) {
+          const withoutLastDeploy = JSON.parse(
+            JSON.stringify(projectSummary, (key, value) =>
+              key === 'last_deploy' ? undefined : value,
+            ),
+          ) as Omit<typeof projectSummary, 'last_deploy'>
+          return Promise.resolve(jsonResponse([withoutLastDeploy]))
+        }
+        if (url.includes('/api/projects/demo-app/deploys')) {
+          return Promise.resolve(
+            jsonResponse([
+              {
+                id: 34,
+                status: 'succeeded',
+                trigger: 'deploy',
+                tags: {},
+                commit: 'abc',
+                started_at: '2026-11-13T15:20:44+00:00',
+                finished_at: '2026-11-13T15:21:34+00:00',
+                log: '',
+                job_id: null,
+              },
+            ]),
+          )
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+
+    renderWithProviders(<ProjectsListPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Succeeded')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('No deploys yet')).not.toBeInTheDocument()
+  })
+
+  it('shows runtime, deploy summary, and a separate public URL link', async () => {
+    renderWithProviders(<ProjectsListPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Demo App')).toBeInTheDocument()
+    })
+
+    const publicLink = screen.getByRole('link', { name: /https:\/\/app\.example\.com\//i })
+    expect(publicLink).toHaveAttribute('target', '_blank')
+
+    const nameLink = screen.getByRole('link', { name: 'Demo App' })
+    expect(nameLink).not.toBe(publicLink)
+    expect(screen.getByText('Running')).toBeInTheDocument()
+    expect(screen.getByText('Succeeded')).toBeInTheDocument()
   })
 
   it('lists projects and uses full-width page layout', async () => {

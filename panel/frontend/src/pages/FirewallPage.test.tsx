@@ -98,14 +98,13 @@ describe('FirewallPage', () => {
   })
 
   it('shows a locked delete control for HTTPS allow rules when Cloudflare-only is off', async () => {
-    renderWithProviders(<FirewallPage />)
+    const { container } = renderWithProviders(<FirewallPage />)
 
     await waitFor(() => {
       expect(screen.getByText('443')).toBeInTheDocument()
     })
 
-    const page = screen.getByRole('heading', { name: 'Firewall' }).parentElement?.parentElement
-      ?.parentElement
+    const page = container.firstElementChild
     expect(page).toHaveClass('w-full')
     expect(page).not.toHaveClass('max-w-6xl')
 

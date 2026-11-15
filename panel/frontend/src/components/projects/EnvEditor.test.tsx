@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it } from 'vitest'
@@ -70,7 +70,9 @@ describe('EnvEditor', () => {
     )
 
     await user.click(screen.getByRole('button', { name: /^ENVIRONMENT$/i }))
-    expect(await screen.findByRole('textbox', { name: 'Full value' })).toHaveValue('production')
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByRole('textbox', { name: 'Full value' })).toHaveValue('production')
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }))
     expect(screen.getByRole('button', { name: /^ENVIRONMENT$/i })).toHaveTextContent('••••on')
   })
 
@@ -83,9 +85,11 @@ describe('EnvEditor', () => {
     )
 
     await user.click(screen.getByRole('button', { name: 'FOO key' }))
-    fireEvent.change(screen.getByRole('textbox', { name: 'Full key' }), {
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'Full key' }), {
       target: { value: 'POSTGRES_PASSWORD' },
     })
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }))
 
     expect(screen.queryByRole('button', { name: 'POSTGRES_PASSWORD key' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'FOO key' })).toBeInTheDocument()

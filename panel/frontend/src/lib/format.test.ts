@@ -3,6 +3,8 @@ import {
   formatBytes,
   formatDateTime,
   formatPercent,
+  formatIsoRelative,
+  formatRelativeTime,
   formatSecondsAgo,
   formatStartedAt,
   formatUptime,
@@ -21,15 +23,11 @@ describe('formatDateTime', () => {
 
 describe('formatStartedAt', () => {
   it('converts a UTC docker timestamp to SAST', () => {
-    expect(formatStartedAt('2026-10-14 16:00:00 +0000 UTC')).toBe(
-      '14-10-2026 18:00:00 SAST',
-    )
+    expect(formatStartedAt('2026-10-14 16:00:00 +0000 UTC')).toBe('14-10-2026 18:00:00 SAST')
   })
 
   it('keeps an already-SAST docker timestamp unchanged', () => {
-    expect(formatStartedAt('2026-10-14 16:00:00 +0200 SAST')).toBe(
-      '14-10-2026 16:00:00 SAST',
-    )
+    expect(formatStartedAt('2026-10-14 16:00:00 +0200 SAST')).toBe('14-10-2026 16:00:00 SAST')
   })
 
   it('returns the original string when not parseable', () => {
@@ -72,5 +70,75 @@ describe('formatUptime', () => {
 
   it('formats sub-day uptime', () => {
     expect(formatUptime(3660)).toBe('1h 1m')
+  })
+})
+
+
+describe('formatRelativeTime', () => {
+  const now = Date.UTC(2026, 0, 15, 12, 0, 0)
+
+  it('returns just now for sub-minute deltas', () => {
+    const iso = new Date(now - 30_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe('just now')
+  })
+
+  it('returns minutes ago within an hour', () => {
+    const iso = new Date(now - 5 * 60_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe('5m ago')
+  })
+
+  it('returns hours ago within two days', () => {
+    const iso = new Date(now - 3 * 3_600_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe('3h ago')
+  })
+
+  it('falls back to absolute datetime for older timestamps', () => {
+    const iso = new Date(now - 20 * 86_400_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe(formatDateTime(iso))
+  })
+
+  it('returns the original string when parsing fails', () => {
+    expect(formatRelativeTime('not-a-date', now)).toBe('not-a-date')
+  })
+
+  it('returns just now for sub-minute future deltas', () => {
+    const iso = new Date(now + 30_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe('just now')
+  })
+
+  it('returns in minutes for near-future timestamps', () => {
+    const iso = new Date(now + 5 * 60_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe('in 5m')
+  })
+
+  it('returns in hours for future timestamps within two days', () => {
+    const iso = new Date(now + 3 * 3_600_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe('in 3h')
+  })
+
+  it('returns in days for future timestamps within two weeks', () => {
+    const iso = new Date(now + 10 * 86_400_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe('in 10d')
+  })
+
+  it('falls back to absolute datetime for far-future timestamps', () => {
+    const iso = new Date(now + 57 * 86_400_000).toISOString()
+    expect(formatRelativeTime(iso, now)).toBe(formatDateTime(iso))
+  })
+})
+
+describe('formatIsoRelative', () => {
+  const now = Date.UTC(2026, 0, 15, 12, 0, 0)
+
+  it('formats future deltas like formatRelativeTime', () => {
+    const iso = new Date(now + 57 * 86_400_000).toISOString()
+    expect(formatIsoRelative(iso, now)).toBe(formatDateTime(iso))
+    expect(formatIsoRelative(new Date(now + 5 * 60_000).toISOString(), now)).toBe(
+      'in 5m',
+    )
+  })
+
+  it('returns em dash when parsing fails', () => {
+    expect(formatIsoRelative('not-a-date', now)).toBe('—')
   })
 })

@@ -1,4 +1,4 @@
-import { CheckCircle, Spinner } from '@phosphor-icons/react'
+import { CheckCircle } from '@phosphor-icons/react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
@@ -7,6 +7,7 @@ import {
   updateServerSettings,
   type CloudflareZone,
 } from '../../lib/domainsApi'
+import { Alert, Button, Card, CardBody, Field, Input, Spinner } from '../ui'
 
 export interface CloudflareSetupStepProps {
   configured: boolean
@@ -80,110 +81,95 @@ export function CloudflareSetupStep({
 
   return (
     <section className="space-y-4" aria-labelledby="cloudflare-step-heading">
-      <h2 id="cloudflare-step-heading" className="text-base font-semibold">
+      <h2 id="cloudflare-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
         Cloudflare
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Paste an API token with Zone:Read, DNS:Edit, and Zone WAF Edit for the zones you will
         use. Zone Settings:Read is optional and enables SSL mode warnings on the Domains page.
       </p>
 
-      <div className="space-y-2">
-        <label htmlFor="setup-acme-email" className="text-sm font-medium">
-          ACME email
-        </label>
-        <p id="setup-acme-email-helper" className="text-sm text-muted-foreground">
-          Let's Encrypt expiry and account notices for certificate issuance.
-        </p>
-        <input
-          id="setup-acme-email"
-          type="email"
-          autoComplete="email"
-          value={acmeEmailValue}
-          placeholder="ops@example.com"
-          className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-          aria-invalid={emailInvalid ? true : undefined}
-          aria-describedby={
-            emailInvalid
-              ? 'setup-acme-email-helper setup-acme-email-error'
-              : 'setup-acme-email-helper'
-          }
-          onChange={(event) => setAcmeEmailValue(event.target.value)}
-        />
-        {emailInvalid ? (
-          <p id="setup-acme-email-error" className="text-sm text-destructive" role="alert">
-            Enter a valid email address.
-          </p>
-        ) : null}
-        {error ? (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
+      <Field
+        label="ACME email"
+        hint="Let's Encrypt expiry and account notices for certificate issuance."
+        error={emailInvalid ? 'Enter a valid email address.' : undefined}
+      >
+        {(control) => (
+          <Input
+            {...control}
+            type="email"
+            autoComplete="email"
+            value={acmeEmailValue}
+            placeholder="ops@example.com"
+            onChange={(event) => setAcmeEmailValue(event.target.value)}
+          />
+        )}
+      </Field>
+
+      {error ? <Alert tone="danger">{error}</Alert> : null}
 
       {showConfigured ? (
         <div className="space-y-3">
-          <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
-            <CheckCircle weight="regular" aria-hidden className="size-4" />
-            Token saved
-          </p>
+          <BadgeRow label="Token saved" />
           {zonesLoading ? (
             <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+              <Spinner className="size-4" />
               Loading zones…
             </p>
           ) : zones.length > 0 ? (
-            <ul className="rounded-lg border border-border bg-card divide-y divide-border">
-              {zones.map((zone) => (
-                <li key={zone.id} className="px-4 py-2 text-sm">
-                  <span className="font-medium">{zone.name}</span>
-                  <span className="ml-2 text-xs text-muted-foreground">{zone.status}</span>
-                </li>
-              ))}
-            </ul>
+            <Card>
+              <CardBody className="divide-y divide-border p-0">
+                <ul>
+                  {zones.map((zone) => (
+                    <li key={zone.id} className="px-4 py-2 text-sm">
+                      <span className="font-medium">{zone.name}</span>
+                      <span className="ml-2 text-sm text-muted-foreground">{zone.status}</span>
+                    </li>
+                  ))}
+                </ul>
+              </CardBody>
+            </Card>
           ) : zonesError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {zonesError}
-            </p>
+            <Alert tone="danger">{zonesError}</Alert>
           ) : (
             <p className="text-sm text-muted-foreground">No zones returned for this token.</p>
           )}
-          <button
-            type="button"
-            disabled={continueDisabled}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleContinue}
-          >
+          <Button type="button" disabled={continueDisabled} onClick={handleContinue}>
             Continue
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="space-y-3">
-          <label htmlFor="setup-cf-token" className="text-sm font-medium">
-            API token
-          </label>
-          <input
-            id="setup-cf-token"
-            type="password"
-            autoComplete="off"
-            value={token}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            onChange={(event) => setToken(event.target.value)}
-          />
-          <button
+          <Field label="API token">
+            {(control) => (
+              <Input
+                {...control}
+                type="password"
+                autoComplete="off"
+                value={token}
+                onChange={(event) => setToken(event.target.value)}
+              />
+            )}
+          </Field>
+          <Button
             type="button"
-            disabled={!token.trim() || mutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!token.trim()}
+            loading={mutation.isPending}
             onClick={() => mutation.mutate()}
           >
-            {mutation.isPending ? (
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-            ) : null}
             Save token
-          </button>
+          </Button>
         </div>
       )}
     </section>
+  )
+}
+
+function BadgeRow({ label }: { label: string }) {
+  return (
+    <p className="inline-flex items-center gap-2 text-sm font-medium text-accent">
+      <CheckCircle weight="regular" aria-hidden className="size-4" />
+      {label}
+    </p>
   )
 }

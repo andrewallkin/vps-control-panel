@@ -51,13 +51,13 @@ describe('AuditPage', () => {
   })
 
   it('shows audit entry source and keeps params collapsed', async () => {
-    renderWithProviders(<AuditPage />)
+    const { container } = renderWithProviders(<AuditPage />)
 
     await waitFor(() => {
       expect(screen.getByText('container.restart')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('agent')).toBeInTheDocument()
+    expect(screen.getByText('Agent')).toBeInTheDocument()
 
     const row = screen.getByText('container.restart').closest('tr')
     expect(row).toBeTruthy()
@@ -65,7 +65,7 @@ describe('AuditPage', () => {
     expect(details).toBeInTheDocument()
     expect(details).not.toHaveAttribute('open')
 
-    const page = screen.getByRole('heading', { name: 'Audit' }).parentElement?.parentElement
+    const page = container.firstElementChild
     expect(page).toHaveClass('w-full')
     expect(page).not.toHaveClass('max-w-6xl')
   })

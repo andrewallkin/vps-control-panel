@@ -88,7 +88,7 @@ describe('DomainsPage panel hostname', () => {
     ])
     vi.mocked(fetchPanelHostname).mockResolvedValue({ panel_hostname: 'panel.example.com' })
 
-    renderWithClient(<DomainsPage />)
+    const { container } = renderWithClient(<DomainsPage />)
 
     await waitFor(() => {
       expect(screen.queryByText('Loading domains…')).not.toBeInTheDocument()
@@ -116,8 +116,7 @@ describe('DomainsPage panel hostname', () => {
     expect(project.getByText('Subdomain')).toBeInTheDocument()
     expect(project.getByText('Blog')).toBeInTheDocument()
 
-    const page = screen.getByRole('heading', { name: 'Domains' }).parentElement?.parentElement
-      ?.parentElement
+    const page = container.firstElementChild
     expect(page).toHaveClass('w-full')
     expect(page).not.toHaveClass('max-w-6xl')
   })

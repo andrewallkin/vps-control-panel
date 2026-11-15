@@ -77,13 +77,13 @@ describe('SettingsPage', () => {
   })
 
   it('uses the full content width', async () => {
-    renderWithProviders(<SettingsPage />)
+    const { container } = renderWithProviders(<SettingsPage />)
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
     })
 
-    const page = screen.getByRole('heading', { name: 'Settings' }).parentElement?.parentElement
+    const page = container.firstElementChild
     expect(page).toHaveClass('w-full')
     expect(page).not.toHaveClass('max-w-6xl')
   })

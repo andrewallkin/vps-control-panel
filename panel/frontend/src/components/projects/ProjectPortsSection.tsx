@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Button } from '../ui'
 import { ApiError } from '../../lib/api'
 import {
   fetchProjectPorts,
@@ -97,13 +98,9 @@ export function ProjectPortsSection({ slug }: ProjectPortsSectionProps) {
           <p className="text-sm text-destructive" role="alert">
             {errorText(portsQuery.error)}
           </p>
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer"
-            onClick={() => portsQuery.refetch()}
-          >
+          <Button type="button" variant="secondary" onClick={() => portsQuery.refetch()}>
             Retry
-          </button>
+          </Button>
         </div>
       ) : (
         <>
@@ -127,14 +124,14 @@ export function ProjectPortsSection({ slug }: ProjectPortsSectionProps) {
             </p>
           ) : null}
           <div className="flex items-center gap-3">
-            <button
+            <Button
               type="button"
               disabled={!dirty || saveMutation.isPending || !validation.ok}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={saveMutation.isPending}
               onClick={() => saveMutation.mutate()}
             >
               {saveMutation.isPending ? 'Saving…' : 'Save'}
-            </button>
+            </Button>
             {savedMessage ? (
               <p className="text-sm text-muted-foreground" role="status">
                 {savedMessage}

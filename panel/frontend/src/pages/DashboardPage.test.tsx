@@ -92,14 +92,13 @@ describe('DashboardPage', () => {
   })
 
   it('uses full-width page layout', async () => {
-    renderWithProviders(<DashboardPage />)
+    const { container } = renderWithProviders(<DashboardPage />)
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument()
     })
 
-    const page = screen.getByRole('heading', { name: 'Dashboard' }).parentElement
-      ?.parentElement
+    const page = container.firstElementChild
     expect(page).toHaveClass('w-full')
     expect(page).not.toHaveClass('max-w-6xl')
   })

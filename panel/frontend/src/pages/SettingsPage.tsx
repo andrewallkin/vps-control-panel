@@ -1,8 +1,18 @@
-import { CheckCircle, Spinner, Trash } from '@phosphor-icons/react'
+import { CheckCircle, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { OtpQrCode } from '../components/account/OtpQrCode'
 import { StepUpDialog } from '../components/StepUpDialog'
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  Input,
+  PageHeader,
+  Skeleton,
+  useToast,
+} from '../components/ui'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import {
   changeAccountPassword,
@@ -29,9 +39,6 @@ type PendingAction =
   | { kind: 'totp-reset' }
   | null
 
-const secondaryButtonClass =
-  'inline-flex shrink-0 items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-
 function ConfiguredRow({
   label,
   detail,
@@ -42,7 +49,7 @@ function ConfiguredRow({
   action: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-background/40 px-3 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3">
       <div className="flex min-w-0 items-center gap-3">
         <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />
         <div className="min-w-0">
@@ -56,6 +63,7 @@ function ConfiguredRow({
 }
 
 export function SettingsPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [tokenDraft, setTokenDraft] = useState('')
   const [replaceOpen, setReplaceOpen] = useState(false)
@@ -64,13 +72,11 @@ export function SettingsPage() {
   const [acmeOverride, setAcmeOverride] = useState<string | null>(null)
   const [ipv4Override, setIpv4Override] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
-  const [formSuccess, setFormSuccess] = useState<string | null>(null)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [passwordCode, setPasswordCode] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
 
   const [totpPending, setTotpPending] = useState<{ secret: string; otpauth_uri: string } | null>(
     null,
@@ -83,8 +89,6 @@ export function SettingsPage() {
   const [registryToken, setRegistryToken] = useState('')
   const [registryFormOpen, setRegistryFormOpen] = useState(false)
   const [registryError, setRegistryError] = useState<string | null>(null)
-  const [registrySuccess, setRegistrySuccess] = useState<string | null>(null)
-
   const zonesQuery = useQuery({
     queryKey: ['cloudflare', 'zones'],
     queryFn: fetchCloudflareZones,
@@ -129,7 +133,6 @@ export function SettingsPage() {
       return
     }
     setFormError(null)
-    setFormSuccess(null)
     setRegistryError(null)
     setTotpError(null)
     try {
@@ -137,17 +140,17 @@ export function SettingsPage() {
         await postCloudflareToken(action.token)
         setTokenDraft('')
         setReplaceOpen(false)
-        setFormSuccess('Cloudflare token updated.')
+        toast({ title: 'Cloudflare token updated.' })
         await queryClient.invalidateQueries({ queryKey: ['cloudflare', 'zones'] })
       } else if (action.kind === 'server-settings') {
         await updateServerSettings(action.payload)
-        setFormSuccess('Server settings saved.')
+        toast({ title: 'Server settings saved.' })
         setAcmeOverride(null)
         setIpv4Override(null)
         await queryClient.invalidateQueries({ queryKey: ['server-settings'] })
       } else if (action.kind === 'registry') {
         await setRegistryCredentials(action.body)
-        setRegistrySuccess('Docker Hub credentials saved.')
+        toast({ title: 'Docker Hub credentials saved.' })
         setRegistryUsername('')
         setRegistryToken('')
         setRegistryFormOpen(false)
@@ -157,6 +160,7 @@ export function SettingsPage() {
         setTotpPending(result)
         setTotpConfirmCode('')
         setTotpSuccess('Scan the QR code and confirm with a code from your authenticator.')
+        toast({ title: 'Scan the new authenticator QR code.' })
       }
       await queryClient.invalidateQueries({ queryKey: authQueryKey })
     } catch (error) {
@@ -197,14 +201,13 @@ export function SettingsPage() {
         code: passwordCode,
       }),
     onSuccess: () => {
-      setPasswordSuccess('Password updated.')
+      toast({ title: 'Password updated.' })
       setPasswordError(null)
       setCurrentPassword('')
       setNewPassword('')
       setPasswordCode('')
     },
     onError: (error) => {
-      setPasswordSuccess(null)
       if (error instanceof ApiError && error.status === 401) {
         setPasswordError('Current password or authenticator code is incorrect.')
         return
@@ -216,7 +219,7 @@ export function SettingsPage() {
   const totpConfirmMutation = useMutation({
     mutationFn: () => confirmAccountTotp({ code: totpConfirmCode.trim() }),
     onSuccess: async () => {
-      setTotpSuccess('Authenticator updated.')
+      toast({ title: 'Authenticator updated.' })
       setTotpError(null)
       setTotpPending(null)
       setTotpConfirmCode('')
@@ -252,32 +255,24 @@ export function SettingsPage() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          Account security, integrations, and server configuration.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        description="Account security, integrations, and server configuration."
+      />
 
       {formError ? (
         <p className="text-sm text-destructive" role="alert">
           {formError}
         </p>
       ) : null}
-      {formSuccess ? (
-        <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
-          <CheckCircle weight="regular" aria-hidden className="size-4" />
-          {formSuccess}
-        </p>
-      ) : null}
-
-      <section
-        className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6"
-        aria-labelledby="account-settings-heading"
-      >
-        <h2 id="account-settings-heading" className="text-base font-semibold">
+      <Card aria-labelledby="account-settings-heading">
+        <CardBody className="space-y-4 sm:p-6">
+        <h2 id="account-settings-heading" className="text-xl font-semibold">
           Account
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Password, two-factor authentication, and active sessions for this user.
+        </p>
 
         <div className="space-y-3">
           <h3 className="text-sm font-semibold">Password</h3>
@@ -286,23 +281,17 @@ export function SettingsPage() {
               {passwordError}
             </p>
           ) : null}
-          {passwordSuccess ? (
-            <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
-              <CheckCircle weight="regular" aria-hidden className="size-4" />
-              {passwordSuccess}
-            </p>
-          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <label htmlFor="settings-current-password" className="block text-sm font-medium">
                 Current password
               </label>
-              <input
+              <Input
                 id="settings-current-password"
                 type="password"
                 autoComplete="current-password"
                 value={currentPassword}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-1"
                 onChange={(event) => setCurrentPassword(event.target.value)}
               />
             </div>
@@ -310,12 +299,12 @@ export function SettingsPage() {
               <label htmlFor="settings-new-password" className="block text-sm font-medium">
                 New password
               </label>
-              <input
+              <Input
                 id="settings-new-password"
                 type="password"
                 autoComplete="new-password"
                 value={newPassword}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="mt-1"
                 onChange={(event) => setNewPassword(event.target.value)}
               />
             </div>
@@ -324,27 +313,20 @@ export function SettingsPage() {
             <label htmlFor="settings-password-code" className="block text-sm font-medium">
               Authenticator code
             </label>
-            <input
+            <Input
               id="settings-password-code"
               type="text"
               inputMode="numeric"
               autoComplete="one-time-code"
               value={passwordCode}
-              className="mt-1 w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              mono
+              className="mt-1 max-w-xs"
               onChange={(event) => setPasswordCode(event.target.value)}
             />
           </div>
-          <button
-            type="button"
-            disabled={!passwordValid || passwordMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => passwordMutation.mutate()}
-          >
-            {passwordMutation.isPending ? (
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-            ) : null}
+          <Button loading={passwordMutation.isPending} disabled={!passwordValid} onClick={() => passwordMutation.mutate()}>
             Change password
-          </button>
+          </Button>
         </div>
 
         <div className="space-y-3 border-t border-border pt-4">
@@ -361,24 +343,15 @@ export function SettingsPage() {
             </p>
           ) : null}
           {!totpPending ? (
-            <button
-              type="button"
-              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => {
-                setTotpError(null)
-                setTotpSuccess(null)
-                setPendingAction({ kind: 'totp-reset' })
-                setStepUpOpen(true)
-              }}
-            >
-              Reset authenticator
-            </button>
+            <p className="text-sm text-muted-foreground">
+              Use the danger zone below to replace your authenticator device.
+            </p>
           ) : (
             <div className="space-y-3">
               {totpSuccess ? <p className="text-sm text-muted-foreground">{totpSuccess}</p> : null}
               <p className="text-sm">
                 Secret:{' '}
-                <code className="rounded bg-muted/40 px-1.5 py-0.5 font-mono text-xs">
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">
                   {totpPending.secret}
                 </code>
               </p>
@@ -387,27 +360,24 @@ export function SettingsPage() {
                 <label htmlFor="settings-totp-confirm" className="block text-sm font-medium">
                   Confirmation code
                 </label>
-                <input
+                <Input
                   id="settings-totp-confirm"
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   value={totpConfirmCode}
-                  className="mt-1 w-full max-w-xs rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  mono
+                  className="mt-1 max-w-xs"
                   onChange={(event) => setTotpConfirmCode(event.target.value)}
                 />
               </div>
-              <button
-                type="button"
-                disabled={!totpConfirmCode.trim() || totpConfirmMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              <Button
+                loading={totpConfirmMutation.isPending}
+                disabled={!totpConfirmCode.trim()}
                 onClick={() => totpConfirmMutation.mutate()}
               >
-                {totpConfirmMutation.isPending ? (
-                  <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-                ) : null}
                 Confirm new authenticator
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -419,7 +389,11 @@ export function SettingsPage() {
               Could not load sessions.
             </p>
           ) : sessionsQuery.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading sessions…</p>
+            <div className="space-y-2" aria-busy>
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <span className="sr-only">Loading sessions…</span>
+            </div>
           ) : (
             <ul className="divide-y divide-border rounded-md border border-border">
               {(sessionsQuery.data ?? []).length === 0 ? (
@@ -434,55 +408,57 @@ export function SettingsPage() {
                     <p className="font-medium">
                       {row.ip ?? 'Unknown IP'}
                       {row.current ? (
-                        <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-xs font-normal text-muted-foreground">
+                        <Badge tone="neutral" className="ml-2 font-normal">
                           Current
-                        </span>
+                        </Badge>
                       ) : null}
                     </p>
                     <p className="truncate text-muted-foreground">{row.user_agent ?? '—'}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Last seen {formatDateTime(row.last_seen_at)}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     disabled={revokeSessionMutation.isPending}
+                    leftIcon={<Trash weight="regular" aria-hidden className="size-3.5" />}
                     onClick={() => revokeSessionMutation.mutate(row.id)}
                   >
-                    <Trash weight="regular" aria-hidden className="size-3.5" />
                     Revoke
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>
           )}
         </div>
-      </section>
+        </CardBody>
+      </Card>
 
-      <section
-        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
-        aria-labelledby="cf-settings-heading"
-      >
-        <h2 id="cf-settings-heading" className="text-base font-semibold">
+      <Card aria-labelledby="cf-settings-heading">
+        <CardBody className="space-y-3 sm:p-6">
+        <h2 id="cf-settings-heading" className="text-xl font-semibold">
           Cloudflare API token
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Required for DNS, certificates, and WAF rules across your zones.
+        </p>
         {cloudflareConfigured ? (
           <ConfiguredRow
             label="Configured"
             detail="API token stored"
             action={
               !replaceOpen ? (
-                <button
-                  type="button"
-                  className={secondaryButtonClass}
+                <Button
+                  variant="secondary"
+                  className="shrink-0"
                   onClick={() => {
                     setReplaceOpen(true)
                     setFormError(null)
                   }}
                 >
                   Replace token
-                </button>
+                </Button>
               ) : null
             }
           />
@@ -490,16 +466,15 @@ export function SettingsPage() {
           <p className="text-sm text-muted-foreground">Not configured</p>
         )}
         {!cloudflareConfigured && !replaceOpen ? (
-          <button
-            type="button"
-            className={secondaryButtonClass}
+          <Button
+            variant="secondary"
             onClick={() => {
               setReplaceOpen(true)
               setFormError(null)
             }}
           >
             Add token
-          </button>
+          </Button>
         ) : null}
         {replaceOpen ? (
           <div className="space-y-3">
@@ -510,29 +485,27 @@ export function SettingsPage() {
             <label htmlFor="settings-cf-token" className="block text-sm font-medium">
               API token
             </label>
-            <input
+            <Input
               id="settings-cf-token"
               type="password"
               autoComplete="off"
               value={tokenDraft}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-1"
               onChange={(event) => setTokenDraft(event.target.value)}
             />
             <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={secondaryButtonClass}
+              <Button
+                variant="secondary"
                 onClick={() => {
                   setReplaceOpen(false)
                   setTokenDraft('')
                 }}
               >
                 Cancel
-              </button>
-              <button
-                type="button"
-                disabled={!tokenDraft.trim() || tokenMutation.isPending}
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              </Button>
+              <Button
+                loading={tokenMutation.isPending}
+                disabled={!tokenDraft.trim()}
                 onClick={() => {
                   const token = tokenDraft.trim()
                   if (cloudflareConfigured) {
@@ -543,23 +516,22 @@ export function SettingsPage() {
                   tokenMutation.mutate(token)
                 }}
               >
-                {tokenMutation.isPending ? (
-                  <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-                ) : null}
                 Save token
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
-      </section>
+        </CardBody>
+      </Card>
 
-      <section
-        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
-        aria-labelledby="registry-settings-heading"
-      >
-        <h2 id="registry-settings-heading" className="text-base font-semibold">
+      <Card aria-labelledby="registry-settings-heading">
+        <CardBody className="space-y-3 sm:p-6">
+        <h2 id="registry-settings-heading" className="text-xl font-semibold">
           Docker Hub
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Registry credentials used when projects pull private images.
+        </p>
         {registryConfigured ? (
           <ConfiguredRow
             label="Configured"
@@ -568,17 +540,16 @@ export function SettingsPage() {
             }
             action={
               !registryFormOpen ? (
-                <button
-                  type="button"
-                  className={secondaryButtonClass}
+                <Button
+                  variant="secondary"
+                  className="shrink-0"
                   onClick={() => {
                     setRegistryFormOpen(true)
                     setRegistryError(null)
-                    setRegistrySuccess(null)
                   }}
                 >
                   Replace credentials
-                </button>
+                </Button>
               ) : null
             }
           />
@@ -590,12 +561,6 @@ export function SettingsPage() {
             {registryError}
           </p>
         ) : null}
-        {registrySuccess ? (
-          <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
-            <CheckCircle weight="regular" aria-hidden className="size-4" />
-            {registrySuccess}
-          </p>
-        ) : null}
         {!registryConfigured || registryFormOpen ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -603,12 +568,12 @@ export function SettingsPage() {
                 <label htmlFor="settings-registry-username" className="block text-sm font-medium">
                   Username
                 </label>
-                <input
+                <Input
                   id="settings-registry-username"
                   type="text"
                   autoComplete="username"
                   value={registryUsername}
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="mt-1"
                   onChange={(event) => setRegistryUsername(event.target.value)}
                 />
               </div>
@@ -616,21 +581,20 @@ export function SettingsPage() {
                 <label htmlFor="settings-registry-token" className="block text-sm font-medium">
                   Access token
                 </label>
-                <input
+                <Input
                   id="settings-registry-token"
                   type="password"
                   autoComplete="new-password"
                   value={registryToken}
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="mt-1"
                   onChange={(event) => setRegistryToken(event.target.value)}
                 />
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {registryConfigured ? (
-                <button
-                  type="button"
-                  className={secondaryButtonClass}
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     setRegistryFormOpen(false)
                     setRegistryUsername('')
@@ -638,48 +602,44 @@ export function SettingsPage() {
                   }}
                 >
                   Cancel
-                </button>
+                </Button>
               ) : null}
-              <button
-                type="button"
-                disabled={
-                  !registryUsername.trim() || !registryToken.trim() || registryMutation.isPending
-                }
-                className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              <Button
+                loading={registryMutation.isPending}
+                disabled={!registryUsername.trim() || !registryToken.trim()}
                 onClick={() => {
                   const body = { username: registryUsername.trim(), token: registryToken.trim() }
                   setPendingAction({ kind: 'registry', body })
                   setStepUpOpen(true)
                 }}
               >
-                {registryMutation.isPending ? (
-                  <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-                ) : null}
                 Save Docker Hub credentials
-              </button>
+              </Button>
             </div>
           </>
         ) : null}
-      </section>
+        </CardBody>
+      </Card>
 
-      <section
-        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
-        aria-labelledby="server-settings-heading"
-      >
-        <h2 id="server-settings-heading" className="text-base font-semibold">
+      <Card aria-labelledby="server-settings-heading">
+        <CardBody className="space-y-3 sm:p-6">
+        <h2 id="server-settings-heading" className="text-xl font-semibold">
           Server settings
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Contact email for ACME and the public IPv4 published to DNS records.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label htmlFor="settings-acme-email" className="block text-sm font-medium">
               ACME email
             </label>
-            <input
+            <Input
               id="settings-acme-email"
               type="email"
               value={acmeEmail}
               disabled={settingsQuery.isPending}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="mt-1"
               onChange={(event) => setAcmeOverride(event.target.value)}
             />
           </div>
@@ -687,21 +647,20 @@ export function SettingsPage() {
             <label htmlFor="settings-public-ipv4" className="block text-sm font-medium">
               Server public IPv4
             </label>
-            <input
+            <Input
               id="settings-public-ipv4"
               type="text"
               inputMode="decimal"
               value={publicIpv4}
               disabled={settingsQuery.isPending}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              mono
+              className="mt-1"
               onChange={(event) => setIpv4Override(event.target.value)}
             />
           </div>
         </div>
-        <button
-          type="button"
-          disabled={settingsMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+        <Button
+          loading={settingsMutation.isPending}
           onClick={() =>
             settingsMutation.mutate({
               acme_email: acmeEmail.trim(),
@@ -709,20 +668,17 @@ export function SettingsPage() {
             })
           }
         >
-          {settingsMutation.isPending ? (
-            <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : null}
           Save server settings
-        </button>
-      </section>
+        </Button>
+        </CardBody>
+      </Card>
 
-      <section
-        className="space-y-3 rounded-lg border border-border bg-card p-4 sm:p-6"
-        aria-labelledby="about-settings-heading"
-      >
-        <h2 id="about-settings-heading" className="text-base font-semibold">
+      <Card aria-labelledby="about-settings-heading">
+        <CardBody className="space-y-3 sm:p-6">
+        <h2 id="about-settings-heading" className="text-xl font-semibold">
           About
         </h2>
+        <p className="text-sm text-muted-foreground">Versions running on this host.</p>
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Panel version</dt>
@@ -739,7 +695,32 @@ export function SettingsPage() {
             </dd>
           </div>
         </dl>
-      </section>
+        </CardBody>
+      </Card>
+
+      <Card aria-labelledby="danger-zone-heading" className="border-destructive/30">
+        <CardBody className="space-y-3 sm:p-6">
+          <h2 id="danger-zone-heading" className="text-xl font-semibold text-destructive">
+            Danger zone
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Replacing your authenticator or revoking sessions signs you out of other devices.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="danger"
+              onClick={() => {
+                setTotpError(null)
+                setTotpSuccess(null)
+                setPendingAction({ kind: 'totp-reset' })
+                setStepUpOpen(true)
+              }}
+            >
+              Reset authenticator
+            </Button>
+          </div>
+        </CardBody>
+      </Card>
 
       <StepUpDialog
         key={stepUpOpen ? 'step-up-open' : 'step-up-closed'}

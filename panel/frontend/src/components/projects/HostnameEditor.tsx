@@ -1,4 +1,5 @@
 import { Plus, Trash } from '@phosphor-icons/react'
+import { Button, IconButton, Input, Select } from '../ui'
 import type { ProjectHostname } from '../../lib/projectsApi'
 
 export interface HostnameEditorProps {
@@ -54,9 +55,9 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
             <label className="block text-sm font-medium" htmlFor="primary-domain">
               Primary domain
             </label>
-            <select
+            <Select
               id="primary-domain"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+              className="mt-1"
               value={primary.domain}
               onChange={(event) => updatePrimary({ domain: event.target.value })}
             >
@@ -65,15 +66,15 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
                   {domain}
                 </option>
               ))}
-            </select>
+            </Select>
           </div>
           <div className="space-y-1">
             <label className="block text-sm font-medium" htmlFor="primary-subdomain">
               Subdomain
             </label>
-            <input
+            <Input
               id="primary-subdomain"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+              className="mt-1"
               value={primary.subdomain}
               onChange={(event) => updatePrimary({ subdomain: event.target.value })}
             />
@@ -84,9 +85,9 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
         <p className="text-sm font-medium">Extra hostnames</p>
         {extras.map((row, index) => (
           <div key={`${row.domain}-${index}`} className="grid gap-2 sm:grid-cols-4">
-            <select
+            <Select
               aria-label={`Extra domain ${index + 1}`}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 sm:col-span-2"
+              className="sm:col-span-2"
               value={row.domain}
               onChange={(event) => updateExtra(index, { domain: event.target.value })}
             >
@@ -95,17 +96,16 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
                   {domain}
                 </option>
               ))}
-            </select>
-            <input
+            </Select>
+            <Input
               aria-label={`Extra subdomain ${index + 1}`}
-              className="rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
               value={row.subdomain}
               onChange={(event) => updateExtra(index, { subdomain: event.target.value })}
             />
             <div className="flex gap-2">
-              <select
+              <Select
                 aria-label={`Extra kind ${index + 1}`}
-                className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                className="min-w-0 flex-1"
                 value={row.kind}
                 onChange={(event) =>
                   updateExtra(index, {
@@ -115,26 +115,21 @@ export function HostnameEditor({ hostnames, domains, onChange }: HostnameEditorP
               >
                 <option value="alias">Alias</option>
                 <option value="redirect">Redirect</option>
-              </select>
-              <button
+              </Select>
+              <IconButton
                 type="button"
-                className="rounded-md p-2 transition-colors duration-200 hover:bg-muted cursor-pointer"
+                label="Remove hostname"
+                size="sm"
                 onClick={() => removeExtra(index)}
               >
                 <Trash weight="regular" aria-hidden className="size-4" />
-                <span className="sr-only">Remove hostname</span>
-              </button>
+              </IconButton>
             </div>
           </div>
         ))}
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={addExtra}
-        >
-          <Plus weight="regular" aria-hidden className="size-4" />
+        <Button type="button" variant="secondary" onClick={addExtra} leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}>
           Add hostname
-        </button>
+        </Button>
       </div>
     </div>
   )

@@ -1,16 +1,28 @@
 :root {
-  --color-background: #0F172A;
-  --color-card: #1B2336;
-  --color-muted: #272F42;
-  --color-muted-foreground: #94A3B8;
-  --color-foreground: #F8FAFC;
-  --color-primary: #1E293B;
-  --color-secondary: #334155;
-  --color-border: #475569;
-  --color-accent: #22C55E;
-  --color-destructive: #EF4444;
-  --color-ring: #FFFFFF;
-  --color-warning: #F59E0B;
+  --color-background: #f7f6f4;
+  --color-card: #ffffff;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-foreground: #18181b;
+  --color-primary: #ffffff;
+  --color-secondary: #f4f4f5;
+  --color-border: rgba(24, 24, 27, 0.06);
+  --color-border-strong: rgba(24, 24, 27, 0.12);
+  --color-accent: #4338ca;
+  --color-accent-hover: #3730a3;
+  --color-accent-foreground: #ffffff;
+  --color-accent-soft: #eef2ff;
+  --color-destructive: #b91c1c;
+  --color-destructive-soft: #fef2f2;
+  --color-warning: #b45309;
+  --color-warning-soft: #fffbeb;
+  --color-info: #3730a3;
+  --color-info-soft: #eef2ff;
+  --color-ring: #818cf8;
+  --radius-control: 12px;
+  --radius-card: 16px;
+  --shadow-popover: 0 1px 2px rgba(24, 24, 27, 0.04), 0 8px 24px rgba(24, 24, 27, 0.06);
+  --font-size-base: 17px;
 }
 
 @media (prefers-reduced-motion: reduce) {

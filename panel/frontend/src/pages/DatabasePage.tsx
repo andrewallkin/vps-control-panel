@@ -1,4 +1,4 @@
-import { FileArrowUp, Info, Trash, Warning } from '@phosphor-icons/react'
+import { Database, FileArrowUp, Info, Trash } from '@phosphor-icons/react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
@@ -12,7 +12,7 @@ import {
 } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { StatusBadge } from '../components/StatusBadge'
+import { TableSkeletonRows } from '../components/dashboard/TableSkeletonRows'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { LogViewer } from '../components/setup/LogViewer'
 import { ProgressBar } from '../components/setup/ProgressBar'
@@ -22,6 +22,25 @@ import {
 } from '../components/setup/RestoreConfirmDialog'
 import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Checkbox,
+  EmptyState,
+  Input,
+  PageHeader,
+  Select,
+  Table,
+  TableContainer,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  useToast,
+} from '../components/ui'
 import { ApiError, apiErrorDetail, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
 import { uploadDumpFile, uploadFailureMessage, type UploadProgress } from '../lib/chunkedUpload'
@@ -34,10 +53,11 @@ import {
   fetchDatabases,
   rotateDatabasePassword,
   type AdoptDatabasePayload,
+  type DatabaseDumpRow,
   type DatabaseRow,
   type DropDatabasePayload,
 } from '../lib/databaseApi'
-import { formatBytes } from '../lib/format'
+import { formatBytes, formatDateTime } from '../lib/format'
 import { deployToApplyEnv, fetchProjects, type ProjectSummary } from '../lib/projectsApi'
 import {
   startSetupRestore,
@@ -54,18 +74,6 @@ type PendingStepUp =
   | { kind: 'rotate'; slug: string }
   | { kind: 'drop'; payload: DropDatabasePayload }
   | null
-
-const secondaryButtonClass =
-  'inline-flex min-h-11 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-
-const dangerButtonClass =
-  'inline-flex min-h-11 items-center gap-2 rounded-md border border-destructive/50 px-3 text-sm font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-
-const primaryButtonClass =
-  'inline-flex min-h-11 items-center gap-2 rounded-md bg-accent px-3 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed'
-
-const fieldClass =
-  'mt-1.5 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed'
 
 const RESTORE_STEPS = [
   'The file is checked as a gzip-compressed pg_dumpall archive.',
@@ -86,6 +94,16 @@ function databaseSummary(rows: DatabaseRow[]): string {
   return `${rows.length} ${noun}, ${unattached} not attached to a project`
 }
 
+function sortDatabaseDumps(dumps: DatabaseDumpRow[]): DatabaseDumpRow[] {
+  return [...dumps].sort((a, b) => {
+    const byTime = b.created_at.localeCompare(a.created_at)
+    if (byTime !== 0) {
+      return byTime
+    }
+    return b.name.localeCompare(a.name)
+  })
+}
+
 function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
   if (!(error instanceof ApiError) || !error.body || typeof error.body !== 'object') {
     return null
@@ -102,6 +120,7 @@ function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
 }
 
 export function DatabasePage() {
+  const { toast } = useToast()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const dropConfirmInputId = useId()
@@ -139,11 +158,19 @@ export function DatabasePage() {
 
   const dumpQueries = useQueries({
     queries: attachedSlugs.map((slug) => ({
-      queryKey: ['database', 'dumps', slug],
+      queryKey: ['database', 'dumps', slug] as const,
       queryFn: () => fetchDatabaseDumps(slug),
       refetchIntervalInBackground: false,
     })),
   })
+
+  const projectLabelBySlug = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const project of projectsQuery.data ?? []) {
+      map.set(project.slug, project.display_name)
+    }
+    return map
+  }, [projectsQuery.data])
 
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -233,6 +260,7 @@ export function DatabasePage() {
       })
       setUploadId(result.uploadId)
       setUploadInfo(result.info)
+      toast({ title: 'Dump uploaded.' })
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setUploadError('Upload cancelled.')
@@ -247,7 +275,7 @@ export function DatabasePage() {
       setUploadProgress(null)
       uploadAbortRef.current = null
     }
-  }, [])
+  }, [toast])
 
   const queueUpload = (file: File) => {
     setPendingStepUp({ kind: 'upload', file })
@@ -290,7 +318,10 @@ export function DatabasePage() {
         const result = await adoptDatabase(payload)
         if (result.restart_required) {
           setActionMessage('Database adopted. Restart project containers to apply the new password.')
+        } else {
+          setActionMessage(null)
         }
+        toast({ title: 'Database adopted.' })
         setAdoptTarget(null)
         setAdoptSlug('')
         setPasswordMode('rotate')
@@ -307,6 +338,7 @@ export function DatabasePage() {
           setDeployError(null)
           setDeployPromptSlug(slug)
         }
+        toast({ title: 'Database password rotated.' })
       }),
   })
 
@@ -317,7 +349,8 @@ export function DatabasePage() {
         setDropTarget(null)
         setDropConfirmText('')
         setDropRole(false)
-        setActionMessage('Database dropped.')
+        setActionMessage(null)
+        toast({ title: 'Database dropped.' })
       }),
   })
 
@@ -328,6 +361,7 @@ export function DatabasePage() {
         setRestoreJobId(result.job_id)
         setConfirmOpen(false)
         setRestoreConflict(null)
+        toast({ title: 'Cluster restore started.' })
       }),
     onError: (err) => {
       const conflict = clusterNotEmptyDetail(err)
@@ -401,13 +435,11 @@ export function DatabasePage() {
   const rows = databasesQuery.data ?? []
 
   return (
-    <div className="flex w-full flex-col gap-8">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">Database</h1>
-        <p className="max-w-3xl text-sm text-muted-foreground">
-          PostgreSQL databases on the central cluster, and dumps for each attached project.
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-6">
+      <PageHeader
+        title="Database"
+        description="PostgreSQL databases on the central cluster."
+      />
 
       {actionError ? (
         <p className="text-sm text-destructive" role="alert">
@@ -421,13 +453,10 @@ export function DatabasePage() {
       ) : null}
 
       {adoptTarget ? (
-        <section
-          ref={adoptPanelRef}
-          className="space-y-4 rounded-lg border border-border bg-card p-4 sm:p-6"
-          aria-labelledby="adopt-heading"
-        >
+        <section ref={adoptPanelRef} aria-labelledby="adopt-heading">
+          <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-1">
-            <h2 id="adopt-heading" className="text-base font-semibold">
+            <h2 id="adopt-heading" className="text-xl font-semibold">
               Adopt <span className="font-mono">{adoptTarget.name}</span>
             </h2>
             <p className="text-sm text-muted-foreground">
@@ -439,9 +468,9 @@ export function DatabasePage() {
               <label htmlFor="adopt-project" className="block text-sm font-medium">
                 Project
               </label>
-              <select
+              <Select
                 id="adopt-project"
-                className={fieldClass}
+                className="mt-1.5"
                 value={adoptSlug}
                 onChange={(event) => setAdoptSlug(event.target.value)}
               >
@@ -451,7 +480,7 @@ export function DatabasePage() {
                     {project.display_name} ({project.slug})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">Password</legend>
@@ -480,20 +509,19 @@ export function DatabasePage() {
               <label htmlFor="adopt-keep-password" className="block text-sm font-medium">
                 Current database password
               </label>
-              <input
+              <Input
                 id="adopt-keep-password"
                 type="password"
                 autoComplete="off"
                 value={keepPassword}
+                className="mt-1.5"
                 onChange={(event) => setKeepPassword(event.target.value)}
-                className={fieldClass}
               />
             </div>
           ) : null}
           <div className="flex items-center gap-2 text-sm">
             <label className="flex min-h-11 items-center gap-2 text-sm">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={writeDatabaseUrl}
                 onChange={(event) => setWriteDatabaseUrl(event.target.checked)}
               />
@@ -510,33 +538,30 @@ export function DatabasePage() {
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <Button
+              className="min-h-11"
               disabled={
                 !adoptSlug ||
                 adoptMutation.isPending ||
                 (passwordMode === 'keep' && keepPassword.trim() === '')
               }
-              className={primaryButtonClass}
               onClick={submitAdopt}
             >
               Adopt database
-            </button>
-            <button type="button" className={secondaryButtonClass} onClick={() => setAdoptTarget(null)}>
+            </Button>
+            <Button type="button" variant="secondary" className="min-h-11" onClick={() => setAdoptTarget(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
+          </Card>
         </section>
       ) : null}
 
       {dropTarget ? (
-        <section
-          ref={dropPanelRef}
-          className="space-y-4 rounded-lg border border-destructive/40 bg-card p-4 sm:p-6"
-          aria-labelledby="drop-heading"
-        >
+        <section ref={dropPanelRef} aria-labelledby="drop-heading">
+          <Card className="space-y-4 border-destructive/40 p-4 sm:p-6">
           <div className="space-y-1">
-            <h2 id="drop-heading" className="text-base font-semibold text-destructive">
+            <h2 id="drop-heading" className="text-xl font-semibold text-destructive">
               Drop <span className="font-mono">{dropTarget.name}</span>
             </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
@@ -548,20 +573,20 @@ export function DatabasePage() {
             <label className="block text-sm font-medium" htmlFor={dropConfirmInputId}>
               Type database name to confirm
             </label>
-            <input
+            <Input
               id={dropConfirmInputId}
               type="text"
               autoComplete="off"
               spellCheck={false}
               disabled={dropMutation.isPending}
               value={dropConfirmText}
+              mono
+              className="mt-1.5"
               onChange={(event) => setDropConfirmText(event.target.value)}
-              className={`${fieldClass} font-mono`}
             />
           </div>
           <label className="flex min-h-11 items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={dropRole}
               disabled={dropMutation.isPending}
               onChange={(event) => setDropRole(event.target.checked)}
@@ -569,10 +594,10 @@ export function DatabasePage() {
             Also drop the database role
           </label>
           <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="danger"
+              className="min-h-11 bg-destructive text-foreground hover:bg-destructive/90"
               disabled={!canDrop}
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-destructive px-3 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => {
                 if (!dropTarget) {
                   return
@@ -589,10 +614,11 @@ export function DatabasePage() {
               }}
             >
               Drop database
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={secondaryButtonClass}
+              variant="secondary"
+              className="min-h-11"
               onClick={() => {
                 setDropTarget(null)
                 setDropConfirmText('')
@@ -600,8 +626,9 @@ export function DatabasePage() {
               }}
             >
               Cancel
-            </button>
+            </Button>
           </div>
+          </Card>
         </section>
       ) : null}
 
@@ -612,48 +639,53 @@ export function DatabasePage() {
       ) : (
         <section className="space-y-3" aria-labelledby="databases-heading">
           <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 id="databases-heading" className="text-base font-semibold">
+            <h2 id="databases-heading" className="text-xl font-semibold">
               Databases
             </h2>
             {rows.length > 0 ? (
               <p className="text-sm text-muted-foreground">{databaseSummary(rows)}</p>
             ) : null}
           </div>
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                <tr>
-                  <th scope="col" className="px-4 py-3 font-medium">
+          <TableContainer>
+            <Table className="min-w-[720px]">
+              <THead>
+                <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Name
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Owner
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Size
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-medium">
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
                     Project
-                  </th>
-                  <th scope="col" className="px-4 py-3 text-right font-medium">
+                  </TH>
+                  <TH scope="col" className="text-right font-medium normal-case tracking-normal">
                     Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {rows.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-8 text-sm text-muted-foreground">
-                      {databasesQuery.isPending ? 'Loading…' : 'No databases yet.'}
-                    </td>
-                  </tr>
+                  </TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-border">
+                {databasesQuery.isPending ? (
+                  <TableSkeletonRows columns={5} rows={4} />
+                ) : rows.length === 0 ? (
+                  <TR className="hover:bg-transparent">
+                    <TD colSpan={5}>
+                      <EmptyState
+                        icon={<Database weight="regular" className="size-8" aria-hidden />}
+                        title="No databases yet."
+                      />
+                    </TD>
+                  </TR>
                 ) : (
                   rows.map((row) => (
-                    <tr key={row.name} className="hover:bg-muted/30">
-                      <td className="px-4 py-3 font-mono font-medium">{row.name}</td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">{row.owner}</td>
-                      <td className="px-4 py-3 tabular-nums">{formatBytes(row.size_bytes)}</td>
-                      <td className="px-4 py-3">
+                    <TR key={row.name}>
+                      <TD className="font-mono font-medium">{row.name}</TD>
+                      <TD className="font-mono text-muted-foreground">{row.owner}</TD>
+                      <TD className="text-right tabular-nums">{formatBytes(row.size_bytes)}</TD>
+                      <TD>
                         {row.attached_slug ? (
                           <Link
                             to={`/projects/${encodeURIComponent(row.attached_slug)}`}
@@ -662,15 +694,17 @@ export function DatabasePage() {
                             {row.attached_slug}
                           </Link>
                         ) : (
-                          <StatusBadge variant="warning" label="Unattached" />
+                          <Badge tone="warning" dot>
+                            Unattached
+                          </Badge>
                         )}
-                      </td>
-                      <td className="px-4 py-2">
+                      </TD>
+                      <TD>
                         <div className="flex flex-wrap items-center justify-end gap-2">
                           {!row.attached_slug ? (
-                            <button
-                              type="button"
-                              className={secondaryButtonClass}
+                            <Button
+                              variant="secondary"
+                              className="min-h-11"
                               onClick={() => {
                                 setAdoptTarget(row)
                                 setAdoptSlug('')
@@ -680,21 +714,21 @@ export function DatabasePage() {
                               }}
                             >
                               Adopt
-                            </button>
+                            </Button>
                           ) : null}
                           {row.attached_slug ? (
-                            <button
-                              type="button"
+                            <Button
+                              variant="secondary"
+                              className="min-h-11"
                               disabled={rotateMutation.isPending}
-                              className={secondaryButtonClass}
                               onClick={() => rotateMutation.mutate(row.attached_slug!)}
                             >
                               Rotate password
-                            </button>
+                            </Button>
                           ) : null}
-                          <button
-                            type="button"
-                            className={dangerButtonClass}
+                          <Button
+                            variant="danger"
+                            className="min-h-11"
                             onClick={() => {
                               setDropTarget(row)
                               setDropConfirmText('')
@@ -702,74 +736,155 @@ export function DatabasePage() {
                             }}
                           >
                             Drop
-                          </button>
+                          </Button>
                         </div>
-                      </td>
-                    </tr>
+                      </TD>
+                    </TR>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
+              </TBody>
+            </Table>
+          </TableContainer>
         </section>
       )}
 
       {attachedSlugs.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="dumps-heading">
-          <div className="space-y-1">
-            <h2 id="dumps-heading" className="text-base font-semibold">
-              Dumps
-            </h2>
-            <p className="text-sm text-muted-foreground">Saved dumps for attached projects.</p>
-          </div>
-          {attachedSlugs.map((slug, index) => {
-            const dumpQuery = dumpQueries[index]
-            const dumps = dumpQuery?.data ?? []
-            return (
-              <div key={slug} className="overflow-hidden rounded-lg border border-border bg-card">
-                <h3 className="border-b border-border px-4 py-3 text-sm font-semibold">
-                  <Link
-                    to={`/projects/${encodeURIComponent(slug)}`}
-                    className="text-accent hover:underline"
-                  >
-                    {slug}
-                  </Link>
-                </h3>
-                <ul className="divide-y divide-border">
-                  {dumps.length === 0 ? (
-                    <li className="px-4 py-4 text-sm text-muted-foreground">No dumps yet.</li>
-                  ) : (
-                    dumps.map((dump) => (
-                      <li
-                        key={dump.name}
-                        className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-sm"
-                      >
-                        <span className="font-mono">{dump.name}</span>
-                        <span className="text-muted-foreground tabular-nums">
-                          {formatBytes(dump.size_bytes)} · {dump.created_at}
-                        </span>
+        <section className="space-y-3" aria-labelledby="predeploy-dumps-heading">
+          <h2 id="predeploy-dumps-heading" className="text-xl font-semibold">
+            Saved before a deploy
+          </h2>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            When you deploy a project that uses a database, the panel saves that database first and
+            keeps the five newest copies. Download a copy if you need the data from before a deploy.
+            The same copies are on that project&apos;s Database tab.
+          </p>
+          <TableContainer>
+            <Table className="min-w-[720px]">
+              <THead>
+                <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
+                    Project
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
+                    Saved
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
+                    Size
+                  </TH>
+                  <TH scope="col" className="text-right font-medium normal-case tracking-normal">
+                    Download
+                  </TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-border">
+                {attachedSlugs.map((slug, index) => {
+                  const dumpQuery = dumpQueries[index]
+                  const sorted = sortDatabaseDumps(dumpQuery?.data ?? [])
+                  const newest = sorted[0]
+                  const older = sorted.slice(1)
+                  const projectLabel = projectLabelBySlug.get(slug) ?? slug
+                  const isPending = dumpQuery?.isPending ?? false
+
+                  if (!isPending && sorted.length === 0) {
+                    return (
+                      <TR key={slug}>
+                        <TD>
+                          <Link
+                            to={`/projects/${encodeURIComponent(slug)}`}
+                            className="font-medium text-accent hover:underline"
+                          >
+                            {projectLabel}
+                          </Link>
+                        </TD>
+                        <TD colSpan={3} className="text-muted-foreground">
+                          None yet
+                        </TD>
+                      </TR>
+                    )
+                  }
+
+                  if (isPending || !newest) {
+                    return (
+                      <TR key={slug}>
+                        <TD>
+                          <Link
+                            to={`/projects/${encodeURIComponent(slug)}`}
+                            className="font-medium text-accent hover:underline"
+                          >
+                            {projectLabel}
+                          </Link>
+                        </TD>
+                        <TD colSpan={3} className="text-muted-foreground">
+                          …
+                        </TD>
+                      </TR>
+                    )
+                  }
+
+                  return (
+                    <TR key={slug}>
+                      <TD>
+                        <Link
+                          to={`/projects/${encodeURIComponent(slug)}`}
+                          className="font-medium text-accent hover:underline"
+                        >
+                          {projectLabel}
+                        </Link>
+                      </TD>
+                      <TD>
+                        <div className="space-y-1">
+                          <time dateTime={newest.created_at}>{formatDateTime(newest.created_at)}</time>
+                          {older.length > 0 ? (
+                            <details className="text-sm">
+                              <summary className="cursor-pointer text-muted-foreground">
+                                {older.length} older
+                              </summary>
+                              <ul className="mt-2 space-y-2 border-l border-border pl-3">
+                                {older.map((dump) => (
+                                  <li
+                                    key={dump.name}
+                                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
+                                  >
+                                    <time dateTime={dump.created_at} className="text-foreground">
+                                      {formatDateTime(dump.created_at)}
+                                    </time>
+                                    <span className="tabular-nums text-muted-foreground">
+                                      {formatBytes(dump.size_bytes)}
+                                    </span>
+                                    <a
+                                      href={databaseDumpDownloadUrl(slug, dump.name)}
+                                      className="font-medium text-accent hover:underline"
+                                    >
+                                      Download
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          ) : null}
+                        </div>
+                      </TD>
+                      <TD className="tabular-nums">{formatBytes(newest.size_bytes)}</TD>
+                      <TD className="text-right">
                         <a
-                          href={databaseDumpDownloadUrl(slug, dump.name)}
+                          href={databaseDumpDownloadUrl(slug, newest.name)}
                           className="font-medium text-accent hover:underline"
                         >
                           Download
                         </a>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </div>
-            )
-          })}
+                      </TD>
+                    </TR>
+                  )
+                })}
+              </TBody>
+            </Table>
+          </TableContainer>
         </section>
       ) : null}
 
-      <section
-        className="overflow-hidden rounded-lg border border-border bg-card"
-        aria-labelledby="restore-heading"
-      >
+      <Card className="overflow-hidden p-0" aria-labelledby="restore-heading">
         <div className="border-b border-border px-4 py-4 sm:px-6">
-          <h2 id="restore-heading" className="text-base font-semibold">
+          <h2 id="restore-heading" className="text-xl font-semibold">
             Cluster restore
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -781,17 +896,11 @@ export function DatabasePage() {
         {!restoreJobId ? (
           <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
             <div>
-              <div className="flex gap-3 rounded-md border border-warning/50 bg-warning/10 px-4 py-3">
-                <Warning weight="regular" aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-                <div className="space-y-1 text-sm">
-                  <p className="font-medium text-foreground">Before you restore</p>
-                  <p className="text-muted-foreground">
-                    If the cluster already has data, project containers that use it are stopped and
-                    a safety dump is taken first. Nothing is overwritten until you confirm.
-                  </p>
-                </div>
-              </div>
-              <h3 className="mt-5 text-sm font-semibold">What the restore does</h3>
+              <Alert tone="warning" title="Before you restore">
+                If the cluster already has data, project containers that use it are stopped and
+                a safety dump is taken first. Nothing is overwritten until you confirm.
+              </Alert>
+              <h3 className="mt-5 text-base font-semibold">What the restore does</h3>
               <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
                 {RESTORE_STEPS.map((step) => (
                   <li key={step}>{step}</li>
@@ -817,14 +926,15 @@ export function DatabasePage() {
                   Drag a .sql or .sql.gz file here, or choose a file. You confirm your password
                   before the upload starts.
                 </p>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  className="mt-4 min-h-11"
                   disabled={uploading}
-                  className={`${secondaryButtonClass} mt-4`}
                   onClick={() => fileInputRef.current?.click()}
                 >
                   Choose file
-                </button>
+                </Button>
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -843,10 +953,10 @@ export function DatabasePage() {
                     bytesPerSec={uploadProgress.bytesPerSec}
                     etaSec={uploadProgress.etaSec}
                   />
-                  <button type="button" className={secondaryButtonClass} onClick={cancelUpload}>
+                  <Button type="button" variant="secondary" className="min-h-11" onClick={cancelUpload}>
                     <Trash weight="regular" aria-hidden className="size-4" />
                     Cancel upload
-                  </button>
+                  </Button>
                 </div>
               ) : null}
 
@@ -866,16 +976,16 @@ export function DatabasePage() {
         {!restoreJobId && uploadInfo ? (
           <div className="space-y-3 border-t border-border px-4 py-4 sm:px-6">
             <UploadInfoPanel info={uploadInfo} />
-            <button
-              type="button"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-destructive px-4 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            <Button
+              variant="danger"
+              className="min-h-11 bg-destructive text-foreground hover:bg-destructive/90"
               onClick={() => {
                 setConfirmDialogKey((value) => value + 1)
                 setConfirmOpen(true)
               }}
             >
               Restore from dump
-            </button>
+            </Button>
           </div>
         ) : null}
 
@@ -895,7 +1005,7 @@ export function DatabasePage() {
             />
           </div>
         ) : null}
-      </section>
+      </Card>
 
       <RestoreConfirmDialog
         key={confirmDialogKey}

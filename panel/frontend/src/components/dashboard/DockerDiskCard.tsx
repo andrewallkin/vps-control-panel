@@ -9,7 +9,8 @@ import { useTickingNow } from '../../hooks/useTickingNow'
 import { formatSecondsAgo } from '../../lib/format'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { StaleBadge } from '../StatusBadge'
-import { Toast } from '../Toast'
+import { Alert, Button, Card, CardBody, Skeleton, useToast } from '../ui'
+import { cn } from '../../lib/cn'
 
 export interface DockerDiskCardProps {
   df: DockerDf | undefined
@@ -26,8 +27,8 @@ export function DockerDiskCard({
 }: DockerDiskCardProps) {
   const [imagesConfirmOpen, setImagesConfirmOpen] = useState(false)
   const [buildCacheConfirmOpen, setBuildCacheConfirmOpen] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [inlineError, setInlineError] = useState<string | null>(null)
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const now = useTickingNow()
   const isStale = useQueryStale(dataUpdatedAt, SLOW_POLL_STALE_MS)
@@ -37,7 +38,10 @@ export function DockerDiskCard({
     onSuccess: (result) => {
       setImagesConfirmOpen(false)
       setInlineError(null)
-      setToast(`Reclaimed ${formatBytes(result.reclaimed_bytes)}`)
+      toast({
+        title: 'Docker images pruned',
+        description: `Reclaimed ${formatBytes(result.reclaimed_bytes)}`,
+      })
       void queryClient.invalidateQueries({ queryKey: ['docker', 'df'] })
     },
     onError: (error: unknown) => {
@@ -55,7 +59,10 @@ export function DockerDiskCard({
     onSuccess: (result) => {
       setBuildCacheConfirmOpen(false)
       setInlineError(null)
-      setToast(`Reclaimed ${formatBytes(result.reclaimed_bytes)}`)
+      toast({
+        title: 'Build cache pruned',
+        description: `Reclaimed ${formatBytes(result.reclaimed_bytes)}`,
+      })
       void queryClient.invalidateQueries({ queryKey: ['docker', 'df'] })
     },
     onError: (error: unknown) => {
@@ -82,71 +89,84 @@ export function DockerDiskCard({
 
   return (
     <>
-      <section
-        className={`flex min-h-0 flex-col gap-3 rounded-lg border border-border bg-card p-4 ${className}`}
-      >
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">Docker disk</h2>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-            <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
-            {isStale ? <StaleBadge /> : null}
+      <Card className={cn('flex h-full min-h-0 flex-col', className)}>
+        <CardBody className="flex min-h-0 flex-1 flex-col gap-4">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="text-xl font-semibold text-foreground">Docker disk</h2>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
+              {isStale ? <StaleBadge /> : null}
+            </div>
           </div>
-        </div>
-        {isLoading && !df ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : (
-          <ul className="space-y-3 text-sm">
-            {rows.map(({ label, data }) => (
-              <li key={label} className="flex items-baseline justify-between gap-3">
-                <span className="text-muted-foreground">{label}</span>
-                <span className="text-right">
-                  <span className="font-mono whitespace-nowrap">
-                    {formatBytes(data.size_bytes)} ({data.count})
-                  </span>
-                  <span className="mt-0.5 block font-mono text-xs whitespace-nowrap text-muted-foreground">
-                    {formatBytes(data.reclaimable_bytes)} reclaimable
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={anyPrunePending}
-            onClick={() => {
-              if (anyPrunePending) {
-                return
-              }
-              setInlineError(null)
-              setImagesConfirmOpen(true)
-            }}
-          >
-            Prune unused images
-          </button>
-          <button
-            type="button"
-            className="inline-flex w-fit items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={anyPrunePending}
-            onClick={() => {
-              if (anyPrunePending) {
-                return
-              }
-              setInlineError(null)
-              setBuildCacheConfirmOpen(true)
-            }}
-          >
-            Prune build cache
-          </button>
-        </div>
-        {inlineError ? (
-          <p className="text-sm text-destructive" role="alert">
-            {inlineError}
-          </p>
-        ) : null}
-      </section>
+          {isLoading && !df ? (
+            <div className="grid flex-1 grid-cols-2 grid-rows-2 gap-3" aria-busy>
+              {Array.from({ length: 4 }, (_, index) => (
+                <Skeleton key={index} className="h-full min-h-24 w-full" />
+              ))}
+              <span className="sr-only">Loading…</span>
+            </div>
+          ) : (
+            <ul className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3">
+              {rows.map(({ label, data }) => {
+                const reclaimable = data.reclaimable_bytes > 0
+                return (
+                  <li
+                    key={label}
+                    className="flex flex-col justify-center rounded-xl bg-muted/50 px-4 py-3"
+                  >
+                    <span className="text-sm text-muted-foreground">{label}</span>
+                    <span className="mt-1 font-mono text-xl font-semibold tabular-nums whitespace-nowrap">
+                      {formatBytes(data.size_bytes)}
+                      <span className="ml-1 text-base font-medium text-muted-foreground">
+                        ({data.count})
+                      </span>
+                    </span>
+                    <span
+                      className={cn(
+                        'mt-1 font-mono text-sm tabular-nums whitespace-nowrap',
+                        reclaimable ? 'font-medium text-warning' : 'text-muted-foreground',
+                      )}
+                    >
+                      {formatBytes(data.reclaimable_bytes)} reclaimable
+                    </span>
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <div className="mt-auto flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={anyPrunePending}
+              onClick={() => {
+                if (anyPrunePending) {
+                  return
+                }
+                setInlineError(null)
+                setImagesConfirmOpen(true)
+              }}
+            >
+              Prune unused images
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={anyPrunePending}
+              onClick={() => {
+                if (anyPrunePending) {
+                  return
+                }
+                setInlineError(null)
+                setBuildCacheConfirmOpen(true)
+              }}
+            >
+              Prune build cache
+            </Button>
+          </div>
+          {inlineError ? <Alert tone="danger">{inlineError}</Alert> : null}
+        </CardBody>
+      </Card>
       <ConfirmDialog
         open={imagesConfirmOpen}
         title="Prune unused images"
@@ -173,7 +193,6 @@ export function DockerDiskCard({
         }}
         onConfirm={() => pruneBuildCacheMutation.mutate()}
       />
-      {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </>
   )
 }

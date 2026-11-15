@@ -1,19 +1,17 @@
-import { Plus, Spinner } from '@phosphor-icons/react'
-import { useQuery } from '@tanstack/react-query'
+import { Plus } from '@phosphor-icons/react'
+import { useQueries, useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { StatusBadge } from '../components/StatusBadge'
-import { fetchProjects, projectCreationStatusLabel } from '../lib/projectsApi'
+import { ProjectListRow } from '../components/projects/ProjectListRow'
+import { buttonClasses, Card, EmptyState, PageHeader, Spinner } from '../components/ui'
+import {
+  fetchProjectDeploys,
+  fetchProjects,
+  type ProjectSummary,
+} from '../lib/projectsApi'
 
-function statusVariant(
-  status: string,
-): 'healthy' | 'warning' | 'critical' {
-  if (status === 'ready') {
-    return 'healthy'
-  }
-  if (status === 'failed') {
-    return 'critical'
-  }
-  return 'warning'
+function listIncludesLastDeploy(project: ProjectSummary): boolean {
+  return Object.prototype.hasOwnProperty.call(project, 'last_deploy')
 }
 
 export function ProjectsListPage() {
@@ -24,28 +22,57 @@ export function ProjectsListPage() {
   })
 
   const projects = projectsQuery.data ?? []
+  const projectsMissingLastDeploy = projects.filter(
+    (project) =>
+      project.creation_state.status === 'ready' && !listIncludesLastDeploy(project),
+  )
+  const deployQueries = useQueries({
+    queries: projectsMissingLastDeploy.map((project) => ({
+      queryKey: ['projects', project.slug, 'deploys'],
+      queryFn: () => fetchProjectDeploys(project.slug),
+    })),
+  })
+  const projectsWithDeploys = projects.map((project) => {
+    if (listIncludesLastDeploy(project)) {
+      return project
+    }
+    const index = projectsMissingLastDeploy.findIndex((row) => row.slug === project.slug)
+    const deployQuery = index >= 0 ? deployQueries[index] : undefined
+    if (!deployQuery || deployQuery.isPending || deployQuery.isError || !deployQuery.data) {
+      return project
+    }
+    const latest = deployQuery.data[0]
+    return {
+      ...project,
+      last_deploy: latest
+        ? {
+            id: latest.id,
+            status: latest.status,
+            started_at: latest.started_at,
+            finished_at: latest.finished_at,
+          }
+        : null,
+    }
+  })
+  const [nowMs] = useState(() => Date.now())
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Projects</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Deploy and manage application stacks on this server.
-          </p>
-        </div>
-        <Link
-          to="/projects/new"
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
-        >
-          <Plus weight="regular" aria-hidden className="size-4" />
-          New project
-        </Link>
-      </div>
+      <PageHeader
+        className="w-full"
+        title="Projects"
+        description="Deploy and manage application stacks on this server."
+        actions={
+          <Link to="/projects/new" className={buttonClasses()}>
+            <Plus weight="regular" aria-hidden className="size-4" />
+            New project
+          </Link>
+        }
+      />
 
       {projectsQuery.isPending ? (
         <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+          <Spinner />
           Loading projects…
         </p>
       ) : null}
@@ -55,48 +82,28 @@ export function ProjectsListPage() {
       ) : null}
 
       {!projectsQuery.isPending && !projectsQuery.isError && projects.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card p-4 text-center">
-          <p className="text-sm text-muted-foreground">There are no projects yet.</p>
-          <Link
-            to="/projects/new"
-            className="mt-3 inline-block text-sm font-medium underline-offset-2 hover:underline cursor-pointer text-accent"
-          >
-            Create your first project
-          </Link>
-        </div>
+        <Card>
+          <EmptyState
+            title="There are no projects yet."
+            action={
+              <Link
+                to="/projects/new"
+                className="text-sm font-medium underline-offset-2 hover:underline cursor-pointer text-accent"
+              >
+                Create your first project
+              </Link>
+            }
+          />
+        </Card>
       ) : null}
 
       {projects.length > 0 ? (
-        <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
-          {projects.map((project) => {
-            const status = project.creation_state.status
-            const href =
-              status === 'failed' ||
-              status === 'awaiting_deploy_key' ||
-              status === 'awaiting_ports' ||
-              status === 'running'
-                ? `/projects/new?slug=${encodeURIComponent(project.slug)}`
-                : `/projects/${encodeURIComponent(project.slug)}`
-            return (
-              <li key={project.slug}>
-                <Link
-                  to={href}
-                  className="flex cursor-pointer flex-col gap-2 px-4 py-4 transition-colors duration-200 hover:bg-muted sm:flex-row sm:items-center sm:justify-between lg:gap-4 lg:px-6"
-                >
-                  <div className="min-w-0 flex-1 lg:grid lg:grid-cols-[12rem_1fr] lg:items-baseline lg:gap-4">
-                    <p className="font-medium text-foreground">{project.display_name}</p>
-                    <p className="font-mono text-sm text-muted-foreground">{project.slug}</p>
-                  </div>
-                  <div className="shrink-0">
-                    <StatusBadge
-                      variant={statusVariant(status)}
-                      label={projectCreationStatusLabel(status)}
-                    />
-                  </div>
-                </Link>
-              </li>
-            )
-          })}
+        <ul className="grid w-full gap-4 sm:grid-cols-1 lg:grid-cols-2">
+          {projectsWithDeploys.map((project) => (
+            <li key={project.slug}>
+              <ProjectListRow project={project} nowMs={nowMs} />
+            </li>
+          ))}
         </ul>
       ) : null}
     </div>

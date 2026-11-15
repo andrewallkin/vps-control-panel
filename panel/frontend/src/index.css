@@ -10,20 +10,77 @@
   --color-primary: var(--color-primary);
   --color-secondary: var(--color-secondary);
   --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
   --color-accent: var(--color-accent);
+  --color-accent-hover: var(--color-accent-hover);
+  --color-accent-foreground: var(--color-accent-foreground);
+  --color-accent-soft: var(--color-accent-soft);
   --color-destructive: var(--color-destructive);
-  --color-ring: var(--color-ring);
+  --color-destructive-soft: var(--color-destructive-soft);
   --color-warning: var(--color-warning);
-  --font-sans: 'Fira Sans', ui-sans-serif, system-ui, sans-serif;
-  --font-mono: 'Fira Code', ui-monospace, monospace;
+  --color-warning-soft: var(--color-warning-soft);
+  --color-info: var(--color-info);
+  --color-info-soft: var(--color-info-soft);
+  --color-ring: var(--color-ring);
+  --radius-lg: var(--radius-control);
+  --radius-xl: var(--radius-card);
+  --shadow-popover: var(--shadow-popover);
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, monospace;
+  --text-base: var(--font-size-base);
 }
 
 @layer base {
   html {
+    color-scheme: light;
+    font-size: 17px;
     @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: 'cv11', 'ss01';
   }
 
   *:focus-visible {
     @apply outline-2 outline-offset-2 outline-ring;
+  }
+
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-foreground);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #c4c2be var(--color-background);
+  }
+
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--color-background);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background-color: #c4c2be;
+    border-radius: 4px;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .shadow-popover {
+    box-shadow: var(--shadow-popover);
+  }
+
+  .shadow-card {
+    box-shadow: var(--shadow-popover);
   }
 }

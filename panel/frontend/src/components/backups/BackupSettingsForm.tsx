@@ -1,16 +1,25 @@
-import { CheckCircle, FileArrowUp, Spinner } from '@phosphor-icons/react'
+import { CheckCircle, FileArrowUp } from '@phosphor-icons/react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
-  useEffect,
   useId,
   useMemo,
-  useRef,
   useState,
   type ChangeEvent,
   type DragEvent,
 } from 'react'
 import { StepUpDialog } from '../StepUpDialog'
+import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogTitle,
+  Input,
+  Textarea,
+  buttonClasses,
+} from '../ui'
 import { apiErrorDetail, isStepUpRequired } from '../../lib/api'
 import {
   formatScheduleHours,
@@ -50,54 +59,26 @@ export interface BackupSettingsFormProps {
 
 function PassphraseHelpDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const titleId = useId()
-  const closeRef = useRef<HTMLButtonElement>(null)
-
-  useEffect(() => {
-    if (!open) {
-      return
-    }
-    closeRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
-
-  if (!open) {
-    return null
-  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-background/80 cursor-pointer"
-        aria-label="Dismiss dialog"
-        onClick={onClose}
-      />
-      <div
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        className="max-h-[min(40rem,calc(100dvh-2rem))] max-w-lg overflow-y-auto"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 max-h-[min(40rem,calc(100dvh-2rem))] w-full max-w-lg overflow-y-auto rounded-lg border border-border bg-card p-4 shadow-lg"
       >
-        <h2 id={titleId} className="text-base font-semibold">
-          What the archive passphrase does
-        </h2>
+        <DialogTitle id={titleId}>What the archive passphrase does</DialogTitle>
         <div className="mt-3 space-y-4 text-sm text-muted-foreground">
           <p>
             When this is set, each backup uploads two age-encrypted files. Keep a copy of the
-            passphrase off this server. The stack <span className="font-mono text-xs">.env</span>{' '}
+            passphrase off this server. The stack <span className="font-mono text-sm">.env</span>{' '}
             inside the config archive contains the passphrase, so that file cannot be your only
             copy. Losing the passphrase makes both files unreadable.
           </p>
           <div className="space-y-2">
             <p className="font-medium text-foreground">
               Database dump{' '}
-              <span className="font-mono text-xs font-normal text-muted-foreground">
+              <span className="font-mono text-sm font-normal text-muted-foreground">
                 backup_….sql.gz.age
               </span>
             </p>
@@ -110,20 +91,20 @@ function PassphraseHelpDialog({ open, onClose }: { open: boolean; onClose: () =>
           <div className="space-y-2">
             <p className="font-medium text-foreground">
               Config archive{' '}
-              <span className="font-mono text-xs font-normal text-muted-foreground">
+              <span className="font-mono text-sm font-normal text-muted-foreground">
                 config_….tar.gz.age
               </span>
             </p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                Each app’s <span className="font-mono text-xs">.env</span>, including its secrets.
+                Each app’s <span className="font-mono text-sm">.env</span>, including its secrets.
               </li>
               <li>
-                Every file under each app’s <span className="font-mono text-xs">data</span>{' '}
+                Every file under each app’s <span className="font-mono text-sm">data</span>{' '}
                 directory, such as uploaded files and local databases.
               </li>
               <li>
-                The stack <span className="font-mono text-xs">.env</span>: database password, bucket
+                The stack <span className="font-mono text-sm">.env</span>: database password, bucket
                 settings, and this passphrase.
               </li>
             </ul>
@@ -141,24 +122,19 @@ function PassphraseHelpDialog({ open, onClose }: { open: boolean; onClose: () =>
             <ul className="list-disc space-y-1 pl-5">
               <li>
                 The dump is uploaded as a plain{' '}
-                <span className="font-mono text-xs">backup_….sql.gz</span>.
+                <span className="font-mono text-sm">backup_….sql.gz</span>.
               </li>
               <li>The config archive is not created.</li>
             </ul>
           </div>
         </div>
-        <div className="mt-4 flex justify-end">
-          <button
-            ref={closeRef}
-            type="button"
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
-            onClick={onClose}
-          >
+        <DialogFooter>
+          <Button variant="secondary" onClick={onClose}>
             Close
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -247,7 +223,7 @@ export function BackupSettingsForm({
     setFormSuccess(null)
     try {
       await updateBackupSettings(payload)
-      setFormSuccess('Backup settings saved. The backup container will be recreated.')
+      setFormSuccess(null)
       setServiceAccountDraft('')
       setPassphraseDraft('')
       setPassphraseAction('keep')
@@ -399,13 +375,9 @@ export function BackupSettingsForm({
               <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0 text-accent" />
               <span className="min-w-0 break-all font-mono">{settings.client_email}</span>
             </p>
-            <button
-              type="button"
-              className="inline-flex shrink-0 items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              onClick={() => setReplaceKeyOpen(true)}
-            >
+            <Button variant="secondary" className="shrink-0" onClick={() => setReplaceKeyOpen(true)}>
               Replace key
-            </button>
+            </Button>
           </div>
         ) : (
           <div
@@ -426,13 +398,14 @@ export function BackupSettingsForm({
             <label htmlFor={serviceAccountFieldId} className="sr-only">
               Service account JSON or base64
             </label>
-            <textarea
+            <Textarea
               id={serviceAccountFieldId}
               rows={4}
               value={serviceAccountDraft}
               autoComplete="off"
               spellCheck={false}
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              mono
+              className="mt-1 text-sm"
               onChange={(event) => setServiceAccountDraft(event.target.value)}
             />
             <input
@@ -445,40 +418,39 @@ export function BackupSettingsForm({
             <div className="flex flex-wrap gap-2">
               <label
                 htmlFor={`${idPrefix}-service-account-file`}
-                className="inline-block cursor-pointer rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted"
+                className={buttonClasses({ variant: 'secondary', className: 'inline-block cursor-pointer' })}
               >
                 Choose .json file
               </label>
               {settings.credentials_configured ? (
-                <button
-                  type="button"
-                  className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     setReplaceKeyOpen(false)
                     setServiceAccountDraft('')
                   }}
                 >
                   Cancel replace
-                </button>
+                </Button>
               ) : null}
             </div>
           </div>
         )}
         {serviceAccountDraft.trim() && !isJsonServiceAccount(serviceAccountDraft) ? (
-          <p className="text-xs text-muted-foreground">Pasted value will be sent as base64.</p>
+          <p className="text-sm text-muted-foreground">Pasted value will be sent as base64.</p>
         ) : null}
       </div>
 
-      <div className="grid gap-4 @min-[40rem]:grid-cols-2 @min-[64rem]:grid-cols-[minmax(0,1.6fr)_9rem_7rem_minmax(0,1.2fr)]">
+      <div className="grid gap-4 @min-[40rem]:grid-cols-2 @min-[64rem]:grid-cols-[minmax(0,1.6fr)_9rem_11rem_minmax(0,1.2fr)]">
         <div>
           <label htmlFor={bucketFieldId} className="block text-sm font-medium">
             GCS bucket
           </label>
-          <input
+          <Input
             id={bucketFieldId}
             type="text"
             value={bucket}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-1"
             onChange={(event) => setBucket(event.target.value)}
           />
         </div>
@@ -486,27 +458,27 @@ export function BackupSettingsForm({
           <label htmlFor={`${idPrefix}-retention`} className="block text-sm font-medium">
             Retention (days)
           </label>
-          <input
+          <Input
             id={`${idPrefix}-retention`}
             type="number"
             min={1}
             max={3650}
             value={retentionDays}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-1"
             onChange={(event) => setRetentionDays(Number.parseInt(event.target.value, 10) || 1)}
           />
         </div>
         <div>
           <label htmlFor={`${idPrefix}-minute`} className="block text-sm font-medium">
-            Minute
+            Minute past the hour
           </label>
-          <input
+          <Input
             id={`${idPrefix}-minute`}
             type="number"
             min={0}
             max={59}
             value={scheduleMinute}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-1"
             onChange={(event) => setScheduleMinute(Number.parseInt(event.target.value, 10) || 0)}
           />
         </div>
@@ -514,12 +486,12 @@ export function BackupSettingsForm({
           <label htmlFor={`${idPrefix}-timezone`} className="block text-sm font-medium">
             Timezone
           </label>
-          <input
+          <Input
             id={`${idPrefix}-timezone`}
             type="text"
             list={listId}
             value={timezoneQuery}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-1"
             onChange={(event) => {
               setTimezoneQuery(event.target.value)
               setTimezone(event.target.value)
@@ -567,33 +539,29 @@ export function BackupSettingsForm({
             )
           })}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Backups run at the selected hours in the timezone above. Backup filenames in the bucket
-          use UTC.
+        <p className="text-sm text-muted-foreground">
+          Backups run at the selected hours, at the minute above, in the timezone above. Filenames
+          in the bucket use UTC.
         </p>
       </div>
 
-      <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
+      <Card className="space-y-3 bg-muted/30 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm font-medium">Archive passphrase</span>
-          <button
-            type="button"
-            className="rounded-md border border-border px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-muted cursor-pointer"
+          <Button
+            variant="secondary"
             aria-haspopup="dialog"
             aria-expanded={passphraseHelpOpen}
             onClick={() => setPassphraseHelpOpen(true)}
           >
             What does this do?
-          </button>
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground">
           Encrypts the database dump and a config archive of app secrets and data files.
         </p>
         {settings.archive_passphrase_set ? (
-          <p className="text-sm">
-            Passphrase is set.{' '}
-            <span className="font-mono text-muted-foreground">••••••••</span>
-          </p>
+          <p className="text-sm">Passphrase is set.</p>
         ) : (
           <p className="text-sm text-muted-foreground">No archive passphrase configured.</p>
         )}
@@ -622,13 +590,13 @@ export function BackupSettingsForm({
           ) : null}
         </div>
         {passphraseAction === 'set' ? (
-          <input
+          <Input
             type="password"
             autoComplete="new-password"
             value={passphraseDraft}
             placeholder="New archive passphrase"
             aria-label="New archive passphrase"
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-1"
             onChange={(event) => setPassphraseDraft(event.target.value)}
           />
         ) : null}
@@ -638,7 +606,7 @@ export function BackupSettingsForm({
             stop.
           </p>
         ) : null}
-      </div>
+      </Card>
 
       {testResult ? (
         <p
@@ -661,28 +629,12 @@ export function BackupSettingsForm({
       ) : null}
 
       <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-        <button
-          type="button"
-          disabled={testMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={handleTest}
-        >
-          {testMutation.isPending ? (
-            <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : null}
+        <Button variant="secondary" loading={testMutation.isPending} onClick={handleTest}>
           Test credentials
-        </button>
-        <button
-          type="button"
-          disabled={saveMutation.isPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={handleSave}
-        >
-          {saveMutation.isPending ? (
-            <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-          ) : null}
+        </Button>
+        <Button loading={saveMutation.isPending} onClick={handleSave}>
           Save
-        </button>
+        </Button>
       </div>
 
       <PassphraseHelpDialog

@@ -309,8 +309,9 @@ describe('ProjectPage overview, logs, and migrations', () => {
     renderProject()
 
     expect(await screen.findByRole('heading', { name: 'Demo' })).toBeInTheDocument()
-    expect(await screen.findByText('backend')).toBeInTheDocument()
-    expect(screen.getByText('frontend')).toBeInTheDocument()
+    expect(await screen.findAllByText('backend')).not.toHaveLength(0)
+    expect(screen.getAllByText('frontend')).not.toHaveLength(0)
+    expect(screen.getAllByText('andrewallkin/spliteasy')).toHaveLength(2)
     expect(screen.getByText('14-10-2026 18:00:00 SAST')).toBeInTheDocument()
     expect(screen.getByText('1.5%')).toBeInTheDocument()
     expect(screen.getByText('0.4%')).toBeInTheDocument()
@@ -321,7 +322,8 @@ describe('ProjectPage overview, logs, and migrations', () => {
   it('opens project URLs in a new tab', async () => {
     renderProject()
 
-    const link = await screen.findByRole('link', { name: 'https://spliteasy.andrewallkin.com/' })
+    const links = await screen.findAllByRole('link', { name: 'https://spliteasy.andrewallkin.com/' })
+    const link = links[0]!
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
@@ -332,7 +334,7 @@ describe('ProjectPage overview, logs, and migrations', () => {
 
     const filter = await screen.findByLabelText('Service')
     expect(within(filter).getByRole('option', { name: 'All services' })).toBeInTheDocument()
-    expect(within(filter).getByRole('option', { name: 'backend' })).toBeInTheDocument()
+    expect(await within(filter).findByRole('option', { name: 'backend' })).toBeInTheDocument()
     expect(within(filter).getByRole('option', { name: 'frontend' })).toBeInTheDocument()
 
     const initial = MockEventSource.instances[0]

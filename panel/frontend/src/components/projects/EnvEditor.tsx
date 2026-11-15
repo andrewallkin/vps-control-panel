@@ -1,6 +1,16 @@
 import { Plus, Trash } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
 import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogTitle,
+  IconButton,
+  Textarea,
+} from '../ui'
+import {
   applyEnvPaste,
   type EnvRow,
   envRowsToUserEnv,
@@ -81,34 +91,29 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
   return (
     <div className="min-w-0 space-y-4">
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => setPasteOpen((open) => !open)}
-        >
+        <Button type="button" variant="secondary" onClick={() => setPasteOpen((open) => !open)}>
           Paste .env
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="secondary"
+          leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
           onClick={() => emit([...rows, { key: '', value: '', locked: false }])}
         >
-          <span className="inline-flex items-center gap-2">
-            <Plus weight="regular" aria-hidden className="size-4" />
-            Add variable
-          </span>
-        </button>
+          Add variable
+        </Button>
       </div>
 
       {pasteOpen ? (
-        <div className="space-y-2 rounded-md border border-border bg-card p-4">
+        <Card className="space-y-2 p-4">
           <label className="block text-sm font-medium" htmlFor="env-paste">
             Paste .env
           </label>
-          <textarea
+          <Textarea
             id="env-paste"
             rows={5}
-            className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+            mono
+            className="mt-1"
             value={pasteText}
             onChange={(event) => setPasteText(event.target.value)}
           />
@@ -119,27 +124,21 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
               ))}
             </ul>
           ) : null}
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={applyPaste}
-          >
+          <Button type="button" onClick={applyPaste}>
             Apply paste
-          </button>
-        </div>
+          </Button>
+        </Card>
       ) : null}
 
       <ul className="min-w-0 space-y-3">
         {rows.map((row, index) => {
           return (
-            <li
-              key={index}
-              className="flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-border bg-card p-3"
-            >
+            <li key={index} className="min-w-0">
+              <Card className="flex min-w-0 flex-wrap items-center gap-2 p-3">
               <button
                 type="button"
                 aria-label={row.key ? `${row.key} key` : 'New key'}
-                className="h-10 w-full min-w-0 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer sm:w-52 sm:shrink-0"
+                className="h-10 w-full min-w-0 truncate rounded-lg border border-border-strong bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-150 hover:border-accent cursor-pointer sm:w-52 sm:shrink-0"
                 onClick={() => setExpanded({ index, field: 'key' })}
               >
                 {row.key || <span className="text-muted-foreground">KEY</span>}
@@ -147,7 +146,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
               <button
                 type="button"
                 aria-label={row.key || 'Value'}
-                className="h-10 min-w-0 flex-1 basis-40 truncate rounded-md border border-border bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-200 hover:border-accent cursor-pointer"
+                className="h-10 min-w-0 flex-1 basis-40 truncate rounded-lg border border-border-strong bg-background px-3 text-left font-mono text-sm text-foreground transition-colors duration-150 hover:border-accent cursor-pointer"
                 onClick={() => setExpanded({ index, field: 'value' })}
               >
                 {row.value || <span className="text-muted-foreground">Value</span>}
@@ -155,41 +154,53 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
               <div className="flex h-10 min-w-0 items-center justify-end gap-2">
                 {!row.locked ? (
                   <>
-                    <button
+                    <Button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      variant="secondary"
+                      size="sm"
                       onClick={() => updateRow(index, { value: generateSecret() })}
                     >
                       Generate secret
-                    </button>
-                    <button
+                    </Button>
+                    <IconButton
                       type="button"
-                      className="rounded-md p-2 transition-colors duration-200 hover:bg-muted cursor-pointer"
+                      label={`Remove ${row.key}`}
+                      size="sm"
                       onClick={() => removeRow(index)}
                     >
                       <Trash weight="regular" aria-hidden className="size-4" />
-                      <span className="sr-only">Remove {row.key}</span>
-                    </button>
+                    </IconButton>
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Managed</span>
+                  <span className="text-sm text-muted-foreground">Managed</span>
                 )}
               </div>
+              </Card>
             </li>
           )
         })}
       </ul>
 
-      {expanded !== null && rows[expanded.index] ? (
-        <EnvValueDialog
-          row={rows[expanded.index]!}
-          field={expanded.field}
-          onChangeKey={(value) => updateRow(expanded.index, { key: value.toUpperCase() })}
-          onChangeValue={(value) => updateRow(expanded.index, { value })}
-          onRevealValue={onRevealValue}
-          onClose={() => setExpanded(null)}
-        />
-      ) : null}
+      <EnvValueDialog
+        key={expanded ? `${expanded.index}-${expanded.field}` : 'closed'}
+        open={expanded !== null && rows[expanded?.index ?? -1] !== undefined}
+        row={expanded !== null ? rows[expanded.index] : null}
+        field={expanded?.field ?? 'value'}
+        onChangeKey={(value) => {
+          if (expanded === null) {
+            return
+          }
+          updateRow(expanded.index, { key: value.toUpperCase() })
+        }}
+        onChangeValue={(value) => {
+          if (expanded === null) {
+            return
+          }
+          updateRow(expanded.index, { value })
+        }}
+        onRevealValue={onRevealValue}
+        onClose={() => setExpanded(null)}
+      />
 
       {rows.length === 0 ? (
         <button
@@ -205,6 +216,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
 }
 
 function EnvValueDialog({
+  open,
   row,
   field,
   onChangeKey,
@@ -212,7 +224,8 @@ function EnvValueDialog({
   onRevealValue,
   onClose,
 }: {
-  row: EnvRow
+  open: boolean
+  row: EnvRow | null
   field: 'key' | 'value'
   onChangeKey: (value: string) => void
   onChangeValue: (value: string) => void
@@ -220,22 +233,19 @@ function EnvValueDialog({
   onClose: () => void
 }) {
   const fieldRef = useRef<HTMLTextAreaElement>(null)
-  const [draft, setDraft] = useState(field === 'key' ? row.key : row.value)
+  const [draft, setDraft] = useState(() => (field === 'key' ? row?.key ?? '' : row?.value ?? ''))
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fieldRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
+    if (!open) {
+      return
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+    const id = window.requestAnimationFrame(() => fieldRef.current?.focus())
+    return () => window.cancelAnimationFrame(id)
+  }, [open, field])
 
   useEffect(() => {
-    if (field !== 'value' || !onRevealValue || !isMaskedEnvPlaceholder(row.value)) {
+    if (!open || !row || field !== 'value' || !onRevealValue || !isMaskedEnvPlaceholder(row.value)) {
       return
     }
     // After a rename the backend still stores the value under the original
@@ -256,34 +266,26 @@ function EnvValueDialog({
     return () => {
       cancelled = true
     }
-  }, [field, onRevealValue, row.renamedFrom, row.key, row.value])
+  }, [open, field, onRevealValue, row])
+
+  if (!row) {
+    return null
+  }
 
   const label = field === 'key' ? 'Full key' : 'Full value'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-background/80 cursor-pointer"
-        aria-label="Dismiss dialog"
-        onClick={onClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className="relative z-10 w-full max-w-3xl rounded-lg border border-border bg-card p-4 shadow-lg"
-      >
-        <label className="block text-sm font-medium" htmlFor="env-full-field">
-          {row.key || 'New variable'}
-        </label>
-        <textarea
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-w-3xl" aria-label={label}>
+        <DialogTitle>{row.key || 'New variable'}</DialogTitle>
+        <Textarea
           id="env-full-field"
           ref={fieldRef}
           aria-label={label}
           readOnly={row.locked}
           rows={field === 'value' ? 8 : 3}
-          className="mt-2 w-full resize-y rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200 read-only:opacity-80"
+          mono
+          className="mt-2 resize-y read-only:opacity-80"
           value={draft}
           onChange={(event) => {
             const next = field === 'key' ? event.target.value.toUpperCase() : event.target.value
@@ -300,17 +302,13 @@ function EnvValueDialog({
             {error}
           </p>
         ) : null}
-        <div className="mt-4 flex justify-end">
-          <button
-            type="button"
-            className="inline-flex items-center rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer"
-            onClick={onClose}
-          >
+        <DialogFooter>
+          <Button type="button" onClick={onClose}>
             Done
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

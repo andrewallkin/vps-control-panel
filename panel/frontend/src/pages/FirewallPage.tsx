@@ -1,16 +1,27 @@
-import {
-  CheckCircle,
-  Lock,
-  Plus,
-  Spinner,
-  Trash,
-  XCircle,
-} from '@phosphor-icons/react'
+import { CheckCircle, Lock, Plus, Trash, XCircle } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { AddFirewallRuleDialog } from '../components/firewall/AddFirewallRuleDialog'
 import { StepUpDialog } from '../components/StepUpDialog'
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  PageHeader,
+  Spinner,
+  Switch,
+  Table,
+  TableContainer,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+  useToast,
+} from '../components/ui'
+import { TableSkeletonRows } from '../components/dashboard/TableSkeletonRows'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import {
   addFirewallRule,
@@ -76,24 +87,25 @@ function serviceAndProcess(process: string): { service: string; program: string 
 function PublicStatus({ expected, port }: { expected: boolean; port: number }) {
   if (expected) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-accent">
+      <Badge tone="success">
         <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0" />
-        <span>Public</span>
-      </span>
+        Public
+      </Badge>
     )
   }
   return (
-    <span
-      className="inline-flex items-center gap-1.5 text-sm font-medium text-destructive"
+    <Badge
+      tone="danger"
       aria-label={`Problem: port ${port} is reachable from the internet`}
     >
       <XCircle weight="regular" aria-hidden className="size-4 shrink-0" />
-      <span>Problem</span>
-    </span>
+      Problem
+    </Badge>
   )
 }
 
 export function FirewallPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<FirewallRule | null>(null)
@@ -133,6 +145,7 @@ export function FirewallPage() {
       if (mutation.kind === 'add') {
         await addFirewallRule(mutation.payload)
         setAddOpen(false)
+        toast({ title: 'Firewall rule added.' })
       } else if (mutation.kind === 'delete') {
         const rule = mutation.rule
         await deleteFirewallRule(rule.number, {
@@ -144,6 +157,7 @@ export function FirewallPage() {
           comment: rule.comment,
         })
         setDeleteTarget(null)
+        toast({ title: 'Firewall rule deleted.' })
       } else {
         await setCloudflareOnly(mutation.on)
       }
@@ -179,65 +193,46 @@ export function FirewallPage() {
 
   return (
     <div className="flex w-full flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0 space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Firewall</h1>
-          <p className="max-w-3xl text-sm text-muted-foreground">
-            Who can reach this server, and which programs are listening.
-          </p>
-        </div>
-        <button
-          type="button"
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus weight="regular" aria-hidden className="size-4" />
-          Add rule
-        </button>
-      </div>
+      <PageHeader
+        title="Firewall"
+        description="Who can reach this server, and which programs are listening."
+        actions={
+          <Button
+            leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
+            onClick={() => setAddOpen(true)}
+          >
+            Add rule
+          </Button>
+        }
+      />
 
-      <section
-        className="space-y-3 rounded-lg border border-border bg-card p-4"
-        aria-labelledby="cf-only-heading"
-      >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
-          <div className="min-w-0 flex-1 space-y-1">
-            <h2 id="cf-only-heading" className="text-base font-semibold">
-              Cloudflare-only mode
-            </h2>
-            <p className="max-w-3xl text-sm text-muted-foreground">{CF_ONLY_SUMMARY}</p>
-          </div>
-          <label className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-3 self-start rounded-md">
-            <span className="text-sm font-medium">{cfOnly ? 'On' : 'Off'}</span>
-            <span className="relative inline-flex h-6 w-11 items-center">
-              <input
-                type="checkbox"
-                role="switch"
-                aria-checked={cfOnly}
-                aria-labelledby="cf-only-heading"
-                className="peer sr-only"
+      <Card aria-labelledby="cf-only-heading">
+        <CardBody className="space-y-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
+            <div className="min-w-0 flex-1 space-y-1">
+              <h2 id="cf-only-heading" className="text-xl font-semibold">
+                Cloudflare-only mode
+              </h2>
+              <p className="max-w-3xl text-sm text-muted-foreground">{CF_ONLY_SUMMARY}</p>
+            </div>
+            <label className="inline-flex min-h-11 shrink-0 cursor-pointer items-center gap-3 self-start">
+              <span className="text-sm font-medium">{cfOnly ? 'On' : 'Off'}</span>
+              <Switch
                 checked={cfOnly}
+                aria-labelledby="cf-only-heading"
                 disabled={cfMutation.isPending || rulesQuery.isPending}
-                onChange={(event) => {
-                  if (event.target.checked) {
+                onCheckedChange={(checked) => {
+                  if (checked) {
                     setCfConfirmOn(true)
                     return
                   }
                   cfMutation.mutate(false)
                 }}
               />
-              <span
-                aria-hidden
-                className="absolute inset-0 rounded-full border border-border bg-muted transition-colors duration-200 peer-checked:border-accent peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-disabled:opacity-50"
-              />
-              <span
-                aria-hidden
-                className="pointer-events-none absolute left-0.5 size-5 rounded-full bg-background shadow-sm transition-transform duration-200 peer-checked:translate-x-5 peer-disabled:opacity-50"
-              />
-            </span>
-          </label>
-        </div>
-      </section>
+            </label>
+          </div>
+        </CardBody>
+      </Card>
 
       {actionError ? (
         <p className="text-sm text-destructive" role="alert">
@@ -246,7 +241,7 @@ export function FirewallPage() {
       ) : null}
 
       <section className="space-y-3" aria-labelledby="fw-rules-heading">
-        <h2 id="fw-rules-heading" className="text-base font-semibold">
+        <h2 id="fw-rules-heading" className="text-xl font-semibold">
           Rules
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">{SSH_DELETE_HELPER}</p>
@@ -259,70 +254,64 @@ export function FirewallPage() {
           </p>
         ) : null}
 
-        <div className="overflow-x-auto rounded-lg border border-border bg-card">
-          <table className="w-full min-w-[800px] text-left text-sm">
-            <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-              <tr>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+        <TableContainer>
+          <Table className="min-w-[800px]">
+            <THead>
+              <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Port / range
-                </th>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Family
-                </th>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Proto
-                </th>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                   Action
-                </th>
-                <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="min-w-[8rem] px-3 font-medium normal-case tracking-normal">
                   Source
-                </th>
-                <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
+                </TH>
+                <TH scope="col" className="min-w-[8rem] px-3 font-medium normal-case tracking-normal">
                   Comment
-                </th>
-                <th scope="col" className="whitespace-nowrap px-3 py-2 text-right font-medium">
+                </TH>
+                <TH scope="col" className="whitespace-nowrap px-3 text-right font-medium normal-case tracking-normal">
                   <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {rulesQuery.isPending ? (
-                <tr>
-                  <td colSpan={7} className="px-3 py-6 text-sm text-muted-foreground">
-                    Loading rules…
-                  </td>
-                </tr>
-              ) : null}
+                </TH>
+              </TR>
+            </THead>
+            <TBody className="divide-y divide-border">
+              {rulesQuery.isPending ? <TableSkeletonRows columns={7} rows={5} /> : null}
               {rules.map((rule) => {
                 const locked = isRuleLocked(rule, cfOnly)
                 const portLabel = portFromTo(rule.to)
                 const reason = lockReason(rule, cfOnly)
                 const sourceLabel = formatSource(rule.from)
                 return (
-                  <tr key={rule.number}>
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{portLabel}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatFamily(rule.v6)}</td>
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{rule.proto}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatAction(rule.action)}</td>
-                    <td
+                  <TR key={rule.number}>
+                    <TD className="whitespace-nowrap px-3 font-mono text-sm">{portLabel}</TD>
+                    <TD className="whitespace-nowrap px-3">{formatFamily(rule.v6)}</TD>
+                    <TD className="whitespace-nowrap px-3 font-mono text-sm">{rule.proto}</TD>
+                    <TD className="whitespace-nowrap px-3">{formatAction(rule.action)}</TD>
+                    <TD
                       className={
                         sourceLabel === rule.from
-                          ? 'min-w-[8rem] break-all px-3 py-2 font-mono text-xs'
-                          : 'min-w-[8rem] px-3 py-2'
+                          ? 'min-w-[8rem] break-all px-3 font-mono text-sm'
+                          : 'min-w-[8rem] px-3'
                       }
                     >
                       {sourceLabel}
-                    </td>
-                    <td className="min-w-[8rem] break-words px-3 py-2 text-muted-foreground">
+                    </TD>
+                    <TD className="min-w-[8rem] break-words px-3 text-muted-foreground">
                       {rule.comment || '—'}
-                    </td>
-                    <td className="whitespace-nowrap px-3 py-2">
+                    </TD>
+                    <TD className="whitespace-nowrap px-3">
                       <div className="flex items-center justify-end gap-2">
                         <span className="inline-flex w-[7.5rem] shrink-0 items-center justify-end">
                           {locked ? (
                             <span
-                              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
                               title={reason}
                               aria-label={`${portLabel} locked`}
                             >
@@ -331,36 +320,37 @@ export function FirewallPage() {
                             </span>
                           ) : null}
                         </span>
-                        <button
-                          type="button"
+                        <Button
+                          variant="danger"
+                          size="sm"
                           disabled={locked || deleteMutation.isPending}
                           aria-label={`Delete rule ${rule.number}`}
                           title={locked ? reason : undefined}
-                          className="inline-flex w-[5.75rem] shrink-0 items-center justify-center gap-1.5 rounded-md border border-destructive/50 bg-transparent px-2.5 py-1.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-muted-foreground disabled:hover:bg-transparent"
+                          className="w-[5.75rem] shrink-0 disabled:border-border disabled:bg-transparent disabled:text-muted-foreground disabled:hover:bg-transparent"
+                          leftIcon={<Trash weight="regular" aria-hidden className="size-4" />}
                           onClick={() => setDeleteTarget(rule)}
                         >
-                          <Trash weight="regular" aria-hidden className="size-4" />
                           Delete
-                        </button>
+                        </Button>
                       </div>
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 )
               })}
               {!rulesQuery.isPending && !rulesQuery.isError && rules.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-3 py-6 text-sm text-muted-foreground">
+                <TR className="hover:bg-transparent">
+                  <TD colSpan={7} className="px-3 py-6 text-muted-foreground">
                     No firewall rules yet.
-                  </td>
-                </tr>
+                  </TD>
+                </TR>
               ) : null}
-            </tbody>
-          </table>
-        </div>
+            </TBody>
+          </Table>
+        </TableContainer>
       </section>
 
       <section className="space-y-3" aria-labelledby="fw-exposure-heading">
-        <h2 id="fw-exposure-heading" className="text-base font-semibold">
+        <h2 id="fw-exposure-heading" className="text-xl font-semibold">
           Exposure report
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">{EXPOSURE_GUIDANCE}</p>
@@ -372,67 +362,61 @@ export function FirewallPage() {
 
         <div className="space-y-2">
           <h3 className="text-sm font-medium">Reachable from the internet</h3>
-          <div className="overflow-x-auto rounded-lg border border-border bg-card">
-            <table className="w-full min-w-[720px] text-left text-sm">
-              <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                <tr>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+          <TableContainer>
+            <Table className="min-w-[720px]">
+              <THead>
+                <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                  <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                     Port
-                  </th>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                  </TH>
+                  <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                     Protocol
-                  </th>
-                  <th scope="col" className="min-w-[6rem] px-3 py-2 font-medium">
+                  </TH>
+                  <TH scope="col" className="min-w-[6rem] px-3 font-medium normal-case tracking-normal">
                     Service
-                  </th>
-                  <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
+                  </TH>
+                  <TH scope="col" className="min-w-[8rem] px-3 font-medium normal-case tracking-normal">
                     Process
-                  </th>
-                  <th scope="col" className="min-w-[6rem] px-3 py-2 font-medium">
+                  </TH>
+                  <TH scope="col" className="min-w-[6rem] px-3 font-medium normal-case tracking-normal">
                     Reach
-                  </th>
-                  <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                  </TH>
+                  <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                     Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {exposureQuery.isPending ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
-                      Loading exposure…
-                    </td>
-                  </tr>
-                ) : null}
+                  </TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-border">
+                {exposureQuery.isPending ? <TableSkeletonRows columns={6} rows={4} /> : null}
                 {exposure.publicListeners.map((row) => {
                   const names = serviceAndProcess(row.process)
                   return (
-                  <tr key={row.key}>
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.port}</td>
-                    <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.proto}</td>
-                    <td className="min-w-[6rem] px-3 py-2">{names.service}</td>
-                    <td className="min-w-[8rem] break-all px-3 py-2 font-mono text-xs text-muted-foreground">
-                      {names.program}
-                    </td>
-                    <td className="min-w-[6rem] px-3 py-2">{row.reach}</td>
-                    <td className="whitespace-nowrap px-3 py-2">
-                      <PublicStatus expected={row.expected} port={row.port} />
-                    </td>
-                  </tr>
+                    <TR key={row.key}>
+                      <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.port}</TD>
+                      <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.proto}</TD>
+                      <TD className="min-w-[6rem] px-3">{names.service}</TD>
+                      <TD className="min-w-[8rem] break-all px-3 font-mono text-sm text-muted-foreground">
+                        {names.program}
+                      </TD>
+                      <TD className="min-w-[6rem] px-3">{row.reach}</TD>
+                      <TD className="whitespace-nowrap px-3">
+                        <PublicStatus expected={row.expected} port={row.port} />
+                      </TD>
+                    </TR>
                   )
                 })}
                 {!exposureQuery.isPending &&
                 !exposureQuery.isError &&
                 exposure.publicListeners.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-6 text-sm text-muted-foreground">
+                  <TR className="hover:bg-transparent">
+                    <TD colSpan={6} className="px-3 py-6 text-muted-foreground">
                       Nothing is reachable from the internet.
-                    </td>
-                  </tr>
+                    </TD>
+                  </TR>
                 ) : null}
-              </tbody>
-            </table>
-          </div>
+              </TBody>
+            </Table>
+          </TableContainer>
         </div>
 
         {!exposureQuery.isPending && !exposureQuery.isError && exposure.localListeners.length > 0 ? (
@@ -443,63 +427,63 @@ export function FirewallPage() {
             <p className="max-w-3xl text-sm text-muted-foreground">
               These programs are not reachable from the internet.
             </p>
-            <div className="overflow-x-auto rounded-lg border border-border bg-card">
-              <table className="w-full min-w-[720px] text-left text-sm">
-                <thead className="border-b border-border bg-muted/40 text-muted-foreground">
-                  <tr>
-                    <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
+            <TableContainer>
+              <Table className="min-w-[720px]">
+                <THead>
+                  <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                    <TH scope="col" className="min-w-[8rem] px-3 font-medium normal-case tracking-normal">
                       Address
-                    </th>
-                    <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                    </TH>
+                    <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                       Port
-                    </th>
-                    <th scope="col" className="whitespace-nowrap px-3 py-2 font-medium">
+                    </TH>
+                    <TH scope="col" className="whitespace-nowrap px-3 font-medium normal-case tracking-normal">
                       Protocol
-                    </th>
-                    <th scope="col" className="min-w-[6rem] px-3 py-2 font-medium">
+                    </TH>
+                    <TH scope="col" className="min-w-[6rem] px-3 font-medium normal-case tracking-normal">
                       Service
-                    </th>
-                    <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
+                    </TH>
+                    <TH scope="col" className="min-w-[8rem] px-3 font-medium normal-case tracking-normal">
                       Process
-                    </th>
-                    <th scope="col" className="min-w-[8rem] px-3 py-2 font-medium">
+                    </TH>
+                    <TH scope="col" className="min-w-[8rem] px-3 font-medium normal-case tracking-normal">
                       Status
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
+                    </TH>
+                  </TR>
+                </THead>
+                <TBody className="divide-y divide-border">
                   {exposure.localListeners.map((row) => {
                     const names = serviceAndProcess(row.process)
                     return (
-                    <tr key={row.key}>
-                      <td className="min-w-[8rem] break-all px-3 py-2">
-                        <span className="font-mono text-xs">{row.address}</span>
-                        {row.scopeLabel ? (
-                          <span className="ml-1.5 text-xs text-muted-foreground">{row.scopeLabel}</span>
-                        ) : null}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.port}</td>
-                      <td className="whitespace-nowrap px-3 py-2 font-mono text-xs">{row.proto}</td>
-                      <td className="min-w-[6rem] px-3 py-2">{names.service}</td>
-                      <td className="min-w-[8rem] break-all px-3 py-2 font-mono text-xs text-muted-foreground">
-                        {names.program}
-                      </td>
-                      <td className="min-w-[8rem] px-3 py-2 text-sm text-muted-foreground">
-                        {row.blockedByFirewall ? 'Blocked by the firewall' : 'Local only'}
-                      </td>
-                    </tr>
+                      <TR key={row.key}>
+                        <TD className="min-w-[8rem] break-all px-3">
+                          <span className="font-mono text-sm">{row.address}</span>
+                          {row.scopeLabel ? (
+                            <span className="ml-1.5 text-sm text-muted-foreground">{row.scopeLabel}</span>
+                          ) : null}
+                        </TD>
+                        <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.port}</TD>
+                        <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.proto}</TD>
+                        <TD className="min-w-[6rem] px-3">{names.service}</TD>
+                        <TD className="min-w-[8rem] break-all px-3 font-mono text-sm text-muted-foreground">
+                          {names.program}
+                        </TD>
+                        <TD className="min-w-[8rem] px-3 text-sm text-muted-foreground">
+                          {row.blockedByFirewall ? 'Blocked by the firewall' : 'Local only'}
+                        </TD>
+                      </TR>
                     )
                   })}
-                </tbody>
-              </table>
-            </div>
+                </TBody>
+              </Table>
+            </TableContainer>
           </details>
         ) : null}
       </section>
 
       {addMutation.isPending ? (
         <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+          <Spinner />
           Adding rule…
         </p>
       ) : null}

@@ -1,6 +1,7 @@
-import { Info, Plus, Spinner, Trash } from '@phosphor-icons/react'
+import { Info, Plus, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CreationChecklist } from '../components/projects/CreationChecklist'
 import { ProjectDeleteSection } from '../components/projects/ProjectDeleteSection'
@@ -38,6 +39,7 @@ import {
   type ServiceMappingRow,
 } from '../lib/serviceMappingUtils'
 import { buildFqdn, validateSubdomain } from '../lib/subdomainValidation'
+import { Button, Card, Checkbox, Input, Select, Spinner } from '../components/ui'
 import { ApiError, apiErrorDetail, isStepUpRequired } from '../lib/api'
 
 const DEPLOY_NOW_START_TIMEOUT_MS = 1500
@@ -119,6 +121,16 @@ export function NewProjectWizardPage() {
   const [serviceRows, setServiceRows] = useState<ServiceMappingRow[]>([])
   const [deployNowPending, setDeployNowPending] = useState(false)
   const [deployNowError, setDeployNowError] = useState<string | null>(null)
+
+  const wizardDirty = useMemo(
+    () =>
+      displayName.trim() !== '' ||
+      repoUrl.trim() !== '' ||
+      userEnv.trim() !== '' ||
+      slugTouched,
+    [displayName, repoUrl, userEnv, slugTouched],
+  )
+  useUnsavedChangesWarning(wizardDirty)
 
   const domainsQuery = useQuery({
     queryKey: ['domains'],
@@ -562,20 +574,20 @@ export function NewProjectWizardPage() {
         >
           ← Projects
         </Link>
-        <h1 className="text-xl font-semibold tracking-tight">New project</h1>
+        <h1 className="text-[2.125rem] font-semibold leading-tight tracking-tight">New project</h1>
       </div>
 
       {step !== 'progress' ? <ProjectWizardStepper active={step} /> : null}
 
       {step === 'basics' ? (
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <Card className="space-y-4 p-4">
           <div className="space-y-1">
             <label className="block text-sm font-medium" htmlFor="display-name">
               Display name
             </label>
-            <input
+            <Input
               id="display-name"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+              className="mt-1"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
             />
@@ -584,9 +596,10 @@ export function NewProjectWizardPage() {
             <label className="block text-sm font-medium" htmlFor="project-slug">
               Slug
             </label>
-            <input
+            <Input
               id="project-slug"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+              mono
+                  className="mt-1"
               value={slug}
               aria-invalid={slugValidation.ok ? undefined : true}
               aria-describedby={slugValidation.ok ? undefined : 'slug-error'}
@@ -601,19 +614,20 @@ export function NewProjectWizardPage() {
               </p>
             ) : null}
           </div>
-        </section>
+        </Card>
       ) : null}
 
       {step === 'source' ? (
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <Card className="space-y-4 p-4">
           <div className="space-y-1">
             <label className="block text-sm font-medium" htmlFor="repo-url">
               Repository URL
             </label>
-            <input
+            <Input
               id="repo-url"
               placeholder="git@github.com:owner/name.git"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+              mono
+                  className="mt-1"
               value={repoUrl}
               onChange={(e) => setRepoUrl(e.target.value)}
             />
@@ -629,9 +643,9 @@ export function NewProjectWizardPage() {
               <label className="block text-sm font-medium" htmlFor="branch">
                 Branch
               </label>
-              <input
+              <Input
                 id="branch"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                className="mt-1"
                 value={branch}
                 onChange={(e) => setBranch(e.target.value)}
               />
@@ -640,9 +654,9 @@ export function NewProjectWizardPage() {
               <label className="block text-sm font-medium" htmlFor="compose-file">
                 Compose file
               </label>
-              <input
+              <Input
                 id="compose-file"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                className="mt-1"
                 value={composeFile}
                 onChange={(e) => setComposeFile(e.target.value)}
               />
@@ -675,10 +689,11 @@ export function NewProjectWizardPage() {
                 <label className="block text-sm font-medium" htmlFor="docker-hub">
                   Docker Hub repository
                 </label>
-                <input
+                <Input
                   id="docker-hub"
                   placeholder="namespace/name"
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                  mono
+                  className="mt-1"
                   value={dockerHubRepo}
                   onChange={(e) => setDockerHubRepo(e.target.value)}
                 />
@@ -700,7 +715,7 @@ export function NewProjectWizardPage() {
                   <p>
                     Add this read-only deploy key under the repo&apos;s Settings → Deploy keys.
                   </p>
-                  <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+                  <pre className="mt-2 overflow-x-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200">
                     {publicKey}
                   </pre>
                 </>
@@ -713,10 +728,11 @@ export function NewProjectWizardPage() {
               )}
             </div>
           ) : null}
-          <button
+          <Button
             type="button"
+            variant="secondary"
             disabled={!canTestAccess || testAccessMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            loading={testAccessMutation.isPending}
             onClick={() => {
               if (registeredProject) {
                 testAccessMutation.mutate(registeredProject.slug)
@@ -726,23 +742,23 @@ export function NewProjectWizardPage() {
             {canTestAccess
               ? 'Test access'
               : 'Test access is available after the project is registered'}
-          </button>
+          </Button>
           {testAccessMessage ? (
             <p className="text-sm text-muted-foreground">{testAccessMessage}</p>
           ) : null}
-        </section>
+        </Card>
       ) : null}
 
       {step === 'domain' ? (
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <Card className="space-y-4 p-4">
           <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(12rem,1fr)]">
             <div className="space-y-1">
               <label className="block text-sm font-medium" htmlFor="primary-domain">
                 Primary domain
               </label>
-              <select
+              <Select
                 id="primary-domain"
-                className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
+                className="mt-1"
                 value={primaryDomain}
                 onChange={(e) => setPrimaryDomain(e.target.value)}
               >
@@ -752,16 +768,16 @@ export function NewProjectWizardPage() {
                     {d.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
             <div className="space-y-1">
               <label className="block text-sm font-medium" htmlFor="primary-subdomain">
                 Subdomain
               </label>
-              <input
+              <Input
                 id="primary-subdomain"
                 placeholder="empty for root"
-                className="mt-1 h-10 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
+                className="mt-1"
                 value={primarySubdomain}
                 aria-invalid={primarySubdomainResult.ok ? undefined : true}
                 aria-describedby={primarySubdomainResult.ok ? undefined : 'primary-subdomain-error'}
@@ -796,9 +812,8 @@ export function NewProjectWizardPage() {
             </p>
             {extraHostnames.map((row, index) => (
               <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1.4fr)_minmax(8rem,0.8fr)_auto_auto] sm:items-center">
-                <select
+                <Select
                   aria-label={`Extra domain ${index + 1}`}
-                  className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                   value={row.domain}
                   onChange={(e) =>
                     setExtraHostnames((list) =>
@@ -814,10 +829,9 @@ export function NewProjectWizardPage() {
                       {d.name}
                     </option>
                   ))}
-                </select>
-                <input
+                </Select>
+                <Input
                   aria-label={`Extra subdomain ${index + 1}`}
-                  className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                   placeholder="subdomain"
                   value={row.subdomain}
                   onChange={(e) =>
@@ -828,9 +842,8 @@ export function NewProjectWizardPage() {
                     )
                   }
                 />
-                <select
+                <Select
                   aria-label={`Extra kind ${index + 1}`}
-                  className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground transition-colors duration-200"
                   value={row.kind}
                   onChange={(e) =>
                     setExtraHostnames((list) =>
@@ -844,22 +857,25 @@ export function NewProjectWizardPage() {
                 >
                   <option value="alias">Alias</option>
                   <option value="redirect">Redirect</option>
-                </select>
-                <button
+                </Select>
+                <Button
                   type="button"
-                  className="inline-flex h-10 items-center gap-1.5 rounded-md border border-destructive/50 px-2.5 text-xs font-medium text-destructive transition-colors duration-200 hover:bg-destructive/10 cursor-pointer"
+                  variant="danger"
+                  size="sm"
+                  className="h-10"
+                  leftIcon={<Trash weight="regular" aria-hidden className="size-4" />}
                   onClick={() =>
                     setExtraHostnames((list) => list.filter((_, i) => i !== index))
                   }
                 >
-                  <Trash weight="regular" aria-hidden className="size-4" />
                   Remove
-                </button>
+                </Button>
               </div>
             ))}
-            <button
+            <Button
               type="button"
-              className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              variant="secondary"
+              leftIcon={<Plus weight="regular" aria-hidden className="size-4" />}
               onClick={() =>
                 setExtraHostnames((list) => [
                   ...list,
@@ -867,15 +883,14 @@ export function NewProjectWizardPage() {
                 ])
               }
             >
-              <Plus weight="regular" aria-hidden className="size-4" />
               Add hostname
-            </button>
+            </Button>
           </div>
-        </section>
+        </Card>
       ) : null}
 
       {step === 'database' ? (
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <Card className="space-y-4 p-4">
           <fieldset className="space-y-2">
             <legend className="text-sm font-medium">Database</legend>
             {(['none', 'new', 'adopted'] as const).map((mode) => (
@@ -896,9 +911,10 @@ export function NewProjectWizardPage() {
                 <label className="block text-sm font-medium" htmlFor="db-name">
                   Database name
                 </label>
-                <input
+                <Input
                   id="db-name"
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                  mono
+                  className="mt-1"
                   value={dbName}
                   onChange={(e) => setDbName(e.target.value)}
                 />
@@ -907,9 +923,10 @@ export function NewProjectWizardPage() {
                 <label className="block text-sm font-medium" htmlFor="db-user">
                   Database user
                 </label>
-                <input
+                <Input
                   id="db-user"
-                  className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+                  mono
+                  className="mt-1"
                   value={dbUser}
                   onChange={(e) => setDbUser(e.target.value)}
                 />
@@ -921,9 +938,9 @@ export function NewProjectWizardPage() {
               <label className="block text-sm font-medium" htmlFor="adopt-db">
                 Unattached database
               </label>
-              <select
+              <Select
                 id="adopt-db"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+                className="mt-1"
                 value={adoptedDbName}
                 onChange={(e) => setAdoptedDbName(e.target.value)}
               >
@@ -933,7 +950,7 @@ export function NewProjectWizardPage() {
                     {db.name} ({db.owner})
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
           ) : null}
           {databaseMode !== 'none' ? (
@@ -953,7 +970,7 @@ export function NewProjectWizardPage() {
                   ].map((name) => (
                     <li
                       key={name}
-                      className="rounded-md bg-muted px-2 py-1 font-mono text-xs text-foreground"
+                      className="rounded-md bg-muted px-2 py-1 font-mono text-sm text-foreground"
                     >
                       {name}
                     </li>
@@ -962,8 +979,7 @@ export function NewProjectWizardPage() {
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     checked={writeDatabaseUrl}
                     onChange={(e) => setWriteDatabaseUrl(e.target.checked)}
                   />
@@ -985,41 +1001,42 @@ export function NewProjectWizardPage() {
             <label htmlFor="migration-service" className="block text-sm font-medium">
               Migration service (optional)
             </label>
-            <input
+            <Input
               id="migration-service"
               type="text"
               value={migrationService}
               placeholder="backend"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200"
+              className="mt-1"
               onChange={(e) => setMigrationService(e.target.value)}
             />
             <label htmlFor="migration-command" className="block text-sm font-medium">
               Migration command (optional)
             </label>
-            <input
+            <Input
               id="migration-command"
               type="text"
               value={migrationCommand}
               placeholder="bash /app/run_migrations.sh"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground transition-colors duration-200"
+              mono
+                  className="mt-1"
               onChange={(e) => setMigrationCommand(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Runs inside the service container on every deploy (before containers
               switch), e.g. <span className="font-mono">bash /app/run_migrations.sh</span>{' '}
               or <span className="font-mono">alembic upgrade head</span>. Both fields
               must be set to enable.
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Projects using Postgres must join the external <code>postgres-net</code> network in
             their compose file.
           </p>
-        </section>
+        </Card>
       ) : null}
 
       {step === 'environment' ? (
-        <section className="rounded-lg border border-border bg-card p-4">
+        <Card className="p-4">
           <EnvEditor
             rows={envRows}
             routePortEnvVars={routePortEnvVars}
@@ -1028,11 +1045,11 @@ export function NewProjectWizardPage() {
               setUserEnv(env)
             }}
           />
-        </section>
+        </Card>
       ) : null}
 
       {step === 'review' ? (
-        <section className="space-y-3 rounded-lg border border-border bg-card p-4 text-sm">
+        <Card className="space-y-3 p-4 text-base">
           <p>
             <span className="text-muted-foreground">Directory:</span>{' '}
             <span className="font-mono">/srv/apps/{slug}</span>
@@ -1063,14 +1080,14 @@ export function NewProjectWizardPage() {
           {createError ? (
             <p className="text-sm text-destructive" role="alert">{createError}</p>
           ) : null}
-        </section>
+        </Card>
       ) : null}
 
       {step === 'progress' ? (
-        <section className="space-y-4 rounded-lg border border-border bg-card p-4">
+        <Card className="space-y-4 p-4">
           {creationPollQuery.isPending && !creationState ? (
             <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
+              <Spinner />
               Loading creation status…
             </p>
           ) : null}
@@ -1104,7 +1121,7 @@ export function NewProjectWizardPage() {
                     continue.
                   </p>
                   {publicKey ? (
-                    <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+                    <pre className="overflow-x-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200">
                       {publicKey}
                     </pre>
                   ) : (
@@ -1115,10 +1132,10 @@ export function NewProjectWizardPage() {
                       {continueError}
                     </p>
                   ) : null}
-                  <button
+                  <Button
                     type="button"
                     disabled={retryMutation.isPending || !publicKey}
-                    className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    loading={retryMutation.isPending}
                     onClick={() => {
                       if (activeCreationSlug) {
                         retryMutation.mutate(activeCreationSlug)
@@ -1126,7 +1143,7 @@ export function NewProjectWizardPage() {
                     }}
                   >
                     {retryMutation.isPending ? 'Checking access…' : 'Continue'}
-                  </button>
+                  </Button>
                 </div>
               ) : null}
               {creationState.status === 'awaiting_ports' && activeCreationSlug ? (
@@ -1150,23 +1167,23 @@ export function NewProjectWizardPage() {
                     </p>
                   ) : null}
                   <div className="flex flex-wrap items-center gap-2">
-                    <button
+                    <Button
                       type="button"
                       disabled={deployNowPending}
-                      className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      loading={deployNowPending}
                       onClick={() => {
                         void handleDeployNow()
                       }}
                     >
                       {deployNowPending ? 'Starting deploy…' : 'Deploy now'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
                       type="button"
-                      className="inline-flex items-center gap-2 rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer"
+                      variant="secondary"
                       onClick={() => navigate(`/projects/${encodeURIComponent(activeCreationSlug ?? slug)}`)}
                     >
                       Open project
-                    </button>
+                    </Button>
                   </div>
                 </div>
               ) : null}
@@ -1175,42 +1192,41 @@ export function NewProjectWizardPage() {
           {isSshRepoUrl(repoUrl) && publicKey && creationState?.status !== 'awaiting_deploy_key' ? (
             <div className="text-sm text-muted-foreground">
               <p>Deploy key (read-only):</p>
-              <pre className="mt-1 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+              <pre className="mt-1 overflow-x-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200">
                 {publicKey}
               </pre>
             </div>
           ) : null}
-        </section>
+        </Card>
       ) : null}
 
       {step !== 'progress' ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <button
+          <Button
             type="button"
+            variant="secondary"
             disabled={step === 'basics'}
-            className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={goBack}
           >
             Back
-          </button>
+          </Button>
           {step === 'review' ? (
-            <button
+            <Button
               type="button"
               disabled={createMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              loading={createMutation.isPending}
               onClick={handleCreate}
             >
               {createMutation.isPending ? 'Creating…' : 'Create project'}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
               type="button"
               disabled={!stepValid[step]}
-              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={goContinue}
             >
               Continue
-            </button>
+            </Button>
           )}
         </div>
       ) : null}

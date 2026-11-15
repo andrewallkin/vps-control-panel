@@ -1,4 +1,5 @@
 import { CheckCircle, Circle, CircleDashed, XCircle } from '@phosphor-icons/react'
+import { Button } from '../ui'
 import type { CreationStep } from '../../lib/projectsApi'
 
 const STEP_LABELS: Record<string, string> = {
@@ -49,14 +50,14 @@ export function CreationChecklist({ steps, onRetry, retryPending }: CreationChec
         })}
       </ol>
       {failedStep && onRetry ? (
-        <button
+        <Button
           type="button"
           disabled={retryPending}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          loading={retryPending}
           onClick={onRetry}
         >
           {retryPending ? 'Retrying…' : 'Retry'}
-        </button>
+        </Button>
       ) : null}
     </div>
   )

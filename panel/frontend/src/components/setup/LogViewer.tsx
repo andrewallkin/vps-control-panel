@@ -2,6 +2,7 @@ import { DownloadSimple, MagnifyingGlass, Pause, Play } from '@phosphor-icons/re
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { parseJobEndData, parseJobLineData } from '../../lib/jobEvents'
 import type { JobEndPayload } from '../../lib/setupApi'
+import { Button, Card, Input } from '../ui'
 
 export interface LogViewerProps {
   jobId: string
@@ -90,7 +91,7 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
   }
 
   return (
-    <div className="space-y-3 rounded-lg border border-border bg-card">
+    <Card className="overflow-hidden">
       <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
         <div className="relative min-w-[12rem] flex-1">
           <MagnifyingGlass
@@ -98,50 +99,54 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
             aria-hidden
             className="pointer-events-none absolute left-2 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
           />
-          <input
+          <Input
             type="search"
             placeholder="Search log…"
             value={search}
+            className="pl-8"
             onChange={(event) => setSearch(event.target.value)}
-            className="w-full rounded-md border border-border bg-background py-2 pl-8 pr-3 text-sm text-foreground transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         </div>
-        <button
+        <Button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="secondary"
+          size="sm"
           onClick={() => setPaused((value) => !value)}
           aria-pressed={paused}
+          leftIcon={
+            paused ? (
+              <Play weight="regular" aria-hidden className="size-4" />
+            ) : (
+              <Pause weight="regular" aria-hidden className="size-4" />
+            )
+          }
         >
-          {paused ? (
-            <Play weight="regular" aria-hidden className="size-4" />
-          ) : (
-            <Pause weight="regular" aria-hidden className="size-4" />
-          )}
           {paused ? 'Resume scroll' : 'Pause scroll'}
-        </button>
-        <button
+        </Button>
+        <Button
           type="button"
-          className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="secondary"
+          size="sm"
           onClick={downloadLog}
+          leftIcon={<DownloadSimple weight="regular" aria-hidden className="size-4" />}
         >
-          <DownloadSimple weight="regular" aria-hidden className="size-4" />
           Download
-        </button>
+        </Button>
       </div>
       <div
         ref={scrollRef}
         data-testid="log-scroll"
-        className="max-h-72 overflow-auto p-3 font-mono text-xs leading-relaxed text-foreground"
+        className="max-h-72 overflow-auto bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200"
         tabIndex={0}
       >
         {displayLines.length === 0 ? (
-          <p className="text-muted-foreground">{ended ? 'No log lines yet.' : 'Waiting for log…'}</p>
+          <p className="text-zinc-400">{ended ? 'No log lines yet.' : 'Waiting for log…'}</p>
         ) : (
           displayLines.map((line, index) => (
             <div key={`${index}-${line.slice(0, 24)}`}>{line}</div>
           ))
         )}
       </div>
-    </div>
+    </Card>
   )
 }

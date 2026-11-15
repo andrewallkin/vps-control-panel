@@ -1,9 +1,4 @@
-import {
-  Database,
-  FileArrowUp,
-  Spinner,
-  Trash,
-} from '@phosphor-icons/react'
+import { Database, FileArrowUp, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -41,8 +36,7 @@ import {
   getPanelHostnameContinuePending,
 } from '../lib/setupSession'
 import { resolveActiveStep } from '../lib/setupWizard'
-
-
+import { Alert, Button, Card, CardBody, PageHeader, ProductLogo } from '../components/ui'
 
 function stepStatus(steps: SetupStep[], id: SetupStep['id']): string {
   return steps.find((step) => step.id === id)?.status ?? 'pending'
@@ -249,28 +243,27 @@ export function SetupPage() {
     stepStatus(steps, 'cloudflare') === 'done' || zonesQuery.data?.configured === true
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <div className="space-y-1">
-        <h1 className="text-xl font-semibold tracking-tight">First-run setup</h1>
-        <p className="text-sm text-muted-foreground">
-          Configure the database, Cloudflare, domains, and panel URL before using the dashboard.
-        </p>
-      </div>
+    <div className="min-h-dvh bg-background px-4 py-8 sm:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+        <ProductLogo size="md" showName nameClassName="tracking-tight text-foreground" />
+
+        <PageHeader
+          title="First-run setup"
+          description="Configure the database, Cloudflare, domains, and panel URL before using the dashboard."
+        />
 
       <SetupStepper active={activeStep} steps={steps} hasValidCert={hasValidCert} />
 
       {setupQuery.isError ? (
-        <p className="text-sm text-destructive" role="alert">
-          Could not load setup status.
-        </p>
+        <Alert tone="danger">Could not load setup status.</Alert>
       ) : null}
 
       {activeStep === 'database' && databaseStatus === 'pending' && !effectiveRestoreJobId ? (
         <section className="space-y-4" aria-labelledby="database-step-heading">
-          <h2 id="database-step-heading" className="text-base font-semibold">
+          <h2 id="database-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
             Database
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Start with an empty PostgreSQL cluster or upload a cluster dump to restore.
           </p>
 
@@ -278,19 +271,19 @@ export function SetupPage() {
             <button
               type="button"
               disabled={emptyMutation.isPending || uploading}
-              className="flex flex-col items-start gap-2 rounded-lg border border-border bg-card p-4 text-left transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex flex-col items-start gap-2 rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition-colors duration-150 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => emptyMutation.mutate()}
             >
               <Database weight="regular" aria-hidden className="size-6 text-accent" />
-              <span className="font-medium">Start empty</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-base font-medium text-foreground">Start empty</span>
+              <span className="text-sm text-muted-foreground">
                 Keep the default empty cluster and continue setup.
               </span>
             </button>
 
             <div
-              className={`rounded-lg border border-dashed p-4 transition-colors duration-200 ${
-                dragOver ? 'border-accent bg-muted/50' : 'border-border bg-card'
+              className={`rounded-2xl border border-dashed p-5 shadow-sm transition-colors duration-150 ${
+                dragOver ? 'border-accent bg-accent-soft/40' : 'border-border bg-card'
               }`}
               onDragOver={(event) => {
                 event.preventDefault()
@@ -300,18 +293,20 @@ export function SetupPage() {
               onDrop={onDrop}
             >
               <FileArrowUp weight="regular" aria-hidden className="size-6 text-foreground" />
-              <p className="mt-2 font-medium">Upload dump</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-2 text-base font-medium text-foreground">Upload dump</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Drag and drop a .sql or .sql.gz file, or choose a file.
               </p>
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
+                className="mt-3"
                 disabled={uploading}
-                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={() => fileInputRef.current?.click()}
               >
                 Choose file
-              </button>
+              </Button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -323,43 +318,41 @@ export function SetupPage() {
           </div>
 
           {uploading && uploadProgress ? (
-            <div className="space-y-3 rounded-lg border border-border bg-card p-4">
-              <ProgressBar
-                sent={uploadProgress.sent}
-                total={uploadProgress.total}
-                bytesPerSec={uploadProgress.bytesPerSec}
-                etaSec={uploadProgress.etaSec}
-              />
-              <button
-                type="button"
-                className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                onClick={cancelUpload}
-              >
-                <Trash weight="regular" aria-hidden className="size-4" />
-                Cancel upload
-              </button>
-            </div>
+            <Card>
+              <CardBody className="space-y-3">
+                <ProgressBar
+                  sent={uploadProgress.sent}
+                  total={uploadProgress.total}
+                  bytesPerSec={uploadProgress.bytesPerSec}
+                  etaSec={uploadProgress.etaSec}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  leftIcon={<Trash weight="regular" aria-hidden className="size-4" />}
+                  onClick={cancelUpload}
+                >
+                  Cancel upload
+                </Button>
+              </CardBody>
+            </Card>
           ) : null}
 
-          {uploadError ? (
-            <p className="text-sm text-destructive" role="alert">
-              {uploadError}
-            </p>
-          ) : null}
+          {uploadError ? <Alert tone="danger">{uploadError}</Alert> : null}
 
           {uploadInfo ? (
             <div className="space-y-3">
               <UploadInfoPanel info={uploadInfo} />
-              <button
+              <Button
                 type="button"
-                className="inline-flex items-center gap-2 rounded-md bg-destructive px-4 py-2 text-sm font-medium text-foreground transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                variant="danger"
                 onClick={() => {
                   setConfirmDialogKey((value) => value + 1)
                   setConfirmOpen(true)
                 }}
               >
                 Restore from dump
-              </button>
+              </Button>
             </div>
           ) : null}
         </section>
@@ -367,7 +360,7 @@ export function SetupPage() {
 
       {effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="restore-log-heading">
-          <h2 id="restore-log-heading" className="text-base font-semibold">
+          <h2 id="restore-log-heading" className="text-xl font-semibold tracking-tight text-foreground">
             Restore progress
           </h2>
           <LogViewer key={effectiveRestoreJobId} jobId={effectiveRestoreJobId} onEnd={handleJobEnd} />
@@ -441,29 +434,23 @@ export function SetupPage() {
 
       {activeStep === 'finish' && !effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="finish-heading">
-          <h2 id="finish-heading" className="text-base font-semibold">
+          <h2 id="finish-heading" className="text-xl font-semibold tracking-tight text-foreground">
             Finish
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {databaseStatus === 'restored'
               ? 'Restore completed. Complete setup to open the dashboard.'
               : 'Configuration is ready. Complete setup to open the dashboard.'}
           </p>
-          <button
+          <Button
             type="button"
-            disabled={finishMutation.isPending}
-            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            loading={finishMutation.isPending}
             onClick={() => finishMutation.mutate()}
           >
-            {finishMutation.isPending ? (
-              <Spinner weight="regular" aria-hidden className="size-4 animate-spin" />
-            ) : null}
             Finish setup
-          </button>
+          </Button>
           {finishMutation.isError ? (
-            <p className="text-sm text-destructive" role="alert">
-              Could not complete setup.
-            </p>
+            <Alert tone="danger">Could not complete setup.</Alert>
           ) : null}
         </section>
       ) : null}
@@ -480,6 +467,7 @@ export function SetupPage() {
           }
         }}
       />
+      </div>
     </div>
   )
 }

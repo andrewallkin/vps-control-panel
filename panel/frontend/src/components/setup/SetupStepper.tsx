@@ -1,5 +1,6 @@
-import { CheckCircle, Circle, CircleDashed } from '@phosphor-icons/react'
+import { Check, CircleDashed } from '@phosphor-icons/react'
 import type { SetupStep, SetupStepId } from '../../lib/setupApi'
+import { cn } from '../../lib/cn'
 
 export type WizardStepId = SetupStepId | 'optional' | 'finish'
 
@@ -72,19 +73,43 @@ function stepState(
   return stepIndex === activeIndex ? 'current' : 'upcoming'
 }
 
+function StepIcon({
+  state,
+  index,
+}: {
+  state: 'done' | 'current' | 'upcoming'
+  index: number
+}) {
+  if (state === 'done') {
+    return (
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft">
+        <Check weight="bold" aria-hidden className="size-4 text-accent" />
+      </span>
+    )
+  }
+  if (state === 'current') {
+    return (
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-accent bg-accent-soft/50">
+        <CircleDashed weight="bold" aria-hidden className="size-4 text-foreground" />
+      </span>
+    )
+  }
+  return (
+    <span
+      className={cn(
+        'flex size-8 shrink-0 items-center justify-center rounded-full border border-border text-sm font-medium tabular-nums text-muted-foreground',
+      )}
+    >
+      {index + 1}
+    </span>
+  )
+}
+
 export function SetupStepper({ active, steps, hasValidCert = false }: SetupStepperProps) {
   return (
-    <ol className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+    <ol className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-card sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
       {stepOrder.map((stepId, index) => {
         const state = stepState(stepId, active, steps, hasValidCert)
-        const icon =
-          state === 'done' ? (
-            <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />
-          ) : state === 'current' ? (
-            <CircleDashed weight="regular" aria-hidden className="size-5 shrink-0 text-foreground" />
-          ) : (
-            <Circle weight="regular" aria-hidden className="size-5 shrink-0 text-muted-foreground" />
-          )
 
         return (
           <li
@@ -93,7 +118,7 @@ export function SetupStepper({ active, steps, hasValidCert = false }: SetupStepp
             className="flex min-w-0 items-center gap-2 sm:flex-1 sm:min-w-[8rem]"
           >
             <div className="flex min-w-0 items-center gap-2">
-              {icon}
+              <StepIcon state={state} index={index} />
               <span
                 className={
                   state === 'upcoming'

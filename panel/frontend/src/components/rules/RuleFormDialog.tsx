@@ -10,9 +10,19 @@ import {
   type RuleDraft,
   type SkipComponent,
 } from '../../lib/cloudflareRules'
-
-const fieldClass =
-  'mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50'
+import {
+  Button,
+  Checkbox,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  Field,
+  Input,
+  Select,
+  Switch,
+  Textarea,
+} from '../ui'
 
 export interface RuleFormDialogProps {
   open: boolean
@@ -54,7 +64,6 @@ export function RuleFormDialog({
   onSubmit,
 }: RuleFormDialogProps) {
   const titleId = useId()
-  const nameId = useId()
   const expressionId = useId()
   const actionId = useId()
   const orderId = useId()
@@ -71,18 +80,7 @@ export function RuleFormDialog({
       return
     }
     nameRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onCancel()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [open, onCancel])
-
-  if (!open) {
-    return null
-  }
+  }, [open])
 
   const actionHint = ACTION_OPTIONS.find((option) => option.value === form.action)?.hint
   const mainSkip = SKIP_OPTIONS.filter((option) => option.group === 'main')
@@ -116,25 +114,27 @@ export function RuleFormDialog({
   const expressionCount = form.expression.length
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 cursor-pointer bg-background/80"
-        aria-label="Dismiss dialog"
-        onClick={onCancel}
-      />
-      <div
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) {
+          onCancel()
+        }
+      }}
+    >
+      <DialogContent
+        className="max-h-[calc(100dvh-2rem)] max-w-4xl overflow-y-auto"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-lg"
+        onOpenAutoFocus={(event) => {
+          event.preventDefault()
+          nameRef.current?.focus()
+        }}
       >
-        <h2 id={titleId} className="text-base font-semibold">
-          {mode === 'create' ? 'Add rule' : 'Edit rule'}
-        </h2>
-        <p className="mt-2 text-sm text-muted-foreground">
+        <DialogTitle id={titleId}>{mode === 'create' ? 'Add rule' : 'Edit rule'}</DialogTitle>
+        <DialogDescription>
           Custom rule for this domain. The expression is sent to Cloudflare as written.
-        </p>
+        </DialogDescription>
 
         <form
           className="mt-4 space-y-4"
@@ -152,28 +152,20 @@ export function RuleFormDialog({
             })
           }}
         >
-          <div>
-            <label htmlFor={nameId} className="block text-sm font-medium">
-              Rule name
-            </label>
-            <input
-              ref={nameRef}
-              id={nameId}
-              value={form.name}
-              aria-invalid={errors.name ? true : undefined}
-              aria-describedby={errors.name ? `${nameId}-error` : `${nameId}-hint`}
-              className={fieldClass}
-              onChange={(event) => update({ name: event.target.value })}
-            />
-            <p id={`${nameId}-hint`} className="mt-1 text-sm text-muted-foreground">
-              Give your rule a descriptive name.
-            </p>
-            {errors.name ? (
-              <p id={`${nameId}-error`} className="mt-1 text-sm text-destructive" role="alert">
-                {errors.name}
-              </p>
-            ) : null}
-          </div>
+          <Field
+            label="Rule name"
+            hint="Give your rule a descriptive name."
+            error={errors.name}
+          >
+            {(props) => (
+              <Input
+                {...props}
+                ref={nameRef}
+                value={form.name}
+                onChange={(event) => update({ name: event.target.value })}
+              />
+            )}
+          </Field>
 
           <div>
             <div className="flex items-center justify-between gap-3">
@@ -181,25 +173,29 @@ export function RuleFormDialog({
                 {editingExpression ? 'Expression' : 'Expression preview'}
               </label>
               {editingExpression ? (
-                <button
+                <Button
                   type="button"
-                  className="cursor-pointer text-sm font-medium text-accent transition-opacity duration-200 hover:opacity-80"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-0 text-accent hover:bg-transparent"
                   onClick={() => setEditingExpression(false)}
                 >
                   Show preview
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
                   type="button"
-                  className="cursor-pointer text-sm font-medium text-accent transition-opacity duration-200 hover:opacity-80"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-0 text-accent hover:bg-transparent"
                   onClick={() => setEditingExpression(true)}
                 >
                   Edit expression
-                </button>
+                </Button>
               )}
             </div>
             {editingExpression ? (
-              <textarea
+              <Textarea
                 id={expressionId}
                 rows={Math.min(12, Math.max(4, form.expression.split('\n').length + 2))}
                 value={form.expression}
@@ -208,18 +204,18 @@ export function RuleFormDialog({
                 aria-describedby={
                   errors.expression ? `${expressionId}-error ${expressionId}-count` : `${expressionId}-count`
                 }
-                className={`${fieldClass} font-mono text-xs leading-5`}
+                className="mt-1 font-mono text-sm leading-6"
                 onChange={(event) => update({ expression: event.target.value })}
               />
             ) : (
               <pre
                 id={expressionId}
-                className="mt-1 whitespace-pre-wrap break-words rounded-md border border-border bg-muted/40 p-3 font-mono text-xs leading-5 text-foreground"
+                className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-zinc-950 p-3 font-mono text-sm leading-6 text-zinc-200"
               >
                 {form.expression || 'No expression yet.'}
               </pre>
             )}
-            <p id={`${expressionId}-count`} className="mt-1 text-right text-xs text-muted-foreground">
+            <p id={`${expressionId}-count`} className="mt-1 text-right text-sm text-muted-foreground">
               {expressionCount} / {EXPRESSION_LIMIT} characters
             </p>
             {errors.expression ? (
@@ -229,14 +225,13 @@ export function RuleFormDialog({
             ) : null}
           </div>
 
-          <div>
-            <label htmlFor={actionId} className="block text-sm font-medium">
+          <div className="space-y-1.5">
+            <label htmlFor={actionId} className="text-sm font-medium text-foreground">
               Action
             </label>
-            <select
+            <Select
               id={actionId}
               value={form.action}
-              className={fieldClass}
               onChange={(event) => {
                 const action = event.target.value as RuleAction
                 update(action === 'skip' ? { action } : { action, skip: [] })
@@ -247,12 +242,12 @@ export function RuleFormDialog({
                   {option.label}
                 </option>
               ))}
-            </select>
-            {actionHint ? <p className="mt-1 text-sm text-muted-foreground">{actionHint}</p> : null}
+            </Select>
+            {actionHint ? <p className="text-sm text-muted-foreground">{actionHint}</p> : null}
           </div>
 
           {form.action === 'skip' ? (
-            <fieldset className="space-y-2 rounded-md border border-border p-3">
+            <fieldset className="space-y-2 rounded-lg border border-border p-3">
               <legend className="px-1 text-sm font-medium">Skip</legend>
               <label className="flex min-h-11 cursor-pointer items-center justify-between gap-3">
                 <span className="text-sm">
@@ -261,44 +256,31 @@ export function RuleFormDialog({
                     When off, matches stay out of Security Events.
                   </span>
                 </span>
-                <span className="relative inline-flex h-6 w-11 shrink-0 items-center">
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    className="peer sr-only"
-                    checked={form.logging}
-                    aria-label="Log matching requests"
-                    onChange={(event) => update({ logging: event.target.checked })}
-                  />
-                  <span
-                    aria-hidden
-                    className="absolute inset-0 rounded-full border border-border bg-muted transition-colors duration-200 peer-checked:border-accent peer-checked:bg-accent peer-focus-visible:ring-2 peer-focus-visible:ring-accent"
-                  />
-                  <span
-                    aria-hidden
-                    className="pointer-events-none absolute left-0.5 size-5 rounded-full bg-background shadow-sm transition-transform duration-200 peer-checked:translate-x-5"
-                  />
-                </span>
+                <Switch
+                  checked={form.logging}
+                  aria-label="Log matching requests"
+                  onCheckedChange={(checked) => update({ logging: checked })}
+                />
               </label>
 
               <div className="space-y-1">
                 <p className="text-sm font-medium">WAF components to skip</p>
                 {mainSkip.map((option) => (
                   <label key={option.value} className="flex cursor-pointer items-center gap-2 py-1 text-sm">
-                    <input
-                      type="checkbox"
-                      className="size-4 accent-accent"
+                    <Checkbox
                       checked={form.skip.includes(option.value)}
                       onChange={() => toggleSkip(option.value)}
                     />
                     {option.label}
                   </label>
                 ))}
-                <button
+                <Button
                   type="button"
-                  className="inline-flex cursor-pointer items-center gap-1 py-1 text-sm font-medium text-foreground transition-colors duration-200 hover:text-accent"
+                  variant="ghost"
+                  size="sm"
+                  className="h-auto px-0"
                   aria-expanded={moreOpen}
-                  onClick={() => setMoreOpen((open) => !open)}
+                  onClick={() => setMoreOpen((value) => !value)}
                 >
                   More components to skip
                   {moreOpen ? (
@@ -306,16 +288,14 @@ export function RuleFormDialog({
                   ) : (
                     <CaretDown weight="regular" aria-hidden className="size-4" />
                   )}
-                </button>
+                </Button>
                 {moreOpen
                   ? moreSkip.map((option) => (
                       <label
                         key={option.value}
                         className="flex cursor-pointer items-center gap-2 py-1 text-sm"
                       >
-                        <input
-                          type="checkbox"
-                          className="size-4 accent-accent"
+                        <Checkbox
                           checked={form.skip.includes(option.value)}
                           onChange={() => toggleSkip(option.value)}
                         />
@@ -332,36 +312,34 @@ export function RuleFormDialog({
             </fieldset>
           ) : null}
 
-          <div>
-            <label htmlFor={orderId} className="block text-sm font-medium">
+          <div className="space-y-1.5">
+            <label htmlFor={orderId} className="text-sm font-medium text-foreground">
               Order
             </label>
             <p className="text-sm text-muted-foreground">
               Rules run from top to bottom. This sets where the rule sits in that list.
             </p>
-            <select
+            <Select
               id={orderId}
               value={form.placement.kind}
-              className={fieldClass}
               onChange={(event) => onOrderKind(event.target.value as 'first' | 'last' | 'custom')}
             >
               <option value="first">First</option>
               <option value="last">Last</option>
               <option value="custom">Custom</option>
-            </select>
+            </Select>
             {form.placement.kind === 'custom' ? (
-              <div className="mt-3">
-                <label htmlFor={`${orderId}-position`} className="block text-sm font-medium">
+              <div className="mt-3 space-y-1.5">
+                <label htmlFor={`${orderId}-position`} className="text-sm font-medium text-foreground">
                   Position
                 </label>
                 <p id={`${orderId}-position-hint`} className="text-sm text-muted-foreground">
                   Pick any slot in the list, including between existing rules.
                 </p>
-                <select
+                <Select
                   id={`${orderId}-position`}
                   value={form.placement.position}
                   aria-describedby={`${orderId}-position-hint`}
-                  className={fieldClass}
                   onChange={(event) =>
                     update({ placement: { kind: 'custom', position: Number(event.target.value) } })
                   }
@@ -371,7 +349,7 @@ export function RuleFormDialog({
                       {slot.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </div>
             ) : null}
           </div>
@@ -399,22 +377,15 @@ export function RuleFormDialog({
           </fieldset>
 
           <div className="flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              className="inline-flex min-h-11 cursor-pointer items-center rounded-md border border-border px-3 py-2 text-sm font-medium text-foreground transition-colors duration-200 hover:bg-muted"
-              onClick={onCancel}
-            >
+            <Button type="button" variant="secondary" className="min-h-11" onClick={onCancel}>
               Cancel
-            </button>
-            <button
-              type="submit"
-              className="inline-flex min-h-11 cursor-pointer items-center rounded-md bg-accent px-3 py-2 text-sm font-semibold text-background transition-opacity duration-200 hover:opacity-90"
-            >
+            </Button>
+            <Button type="submit" className="min-h-11">
               Save rule
-            </button>
+            </Button>
           </div>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

@@ -118,6 +118,71 @@ export function formatLoad(load: number, cpuCount: number): string {
   return `${load.toFixed(2)} / ${cpuCount}`
 }
 
+function formatRelativeCore(iso: string, eventMs: number, nowMs: number): string {
+  const deltaMs = nowMs - eventMs
+  const absSeconds = Math.floor(Math.abs(deltaMs) / 1000)
+  if (absSeconds < 60) {
+    return 'just now'
+  }
+  const isFuture = deltaMs < 0
+  const minutes = Math.floor(absSeconds / 60)
+  if (minutes < 60) {
+    return isFuture ? `in ${minutes}m` : `${minutes}m ago`
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) {
+    return isFuture ? `in ${hours}h` : `${hours}h ago`
+  }
+  const days = Math.floor(hours / 24)
+  if (days < 14) {
+    return isFuture ? `in ${days}d` : `${days}d ago`
+  }
+  return formatDateTime(iso)
+}
+
+export function formatRelativeTime(iso: string, nowMs: number): string {
+  const parsedMs = Date.parse(iso)
+  if (!Number.isFinite(parsedMs)) {
+    return iso
+  }
+  return formatRelativeCore(iso, parsedMs, nowMs)
+}
+
+export function formatIsoRelative(iso: string, nowMs: number): string {
+  const eventMs = Date.parse(iso)
+  if (!Number.isFinite(eventMs)) {
+    return '—'
+  }
+  return formatRelativeCore(iso, eventMs, nowMs)
+}
+
+export function formatDeployDuration(
+  startedAt: string,
+  finishedAt: string | null,
+  nowMs: number,
+): string {
+  const startMs = Date.parse(startedAt)
+  if (!Number.isFinite(startMs)) {
+    return '—'
+  }
+  const endMs = finishedAt ? Date.parse(finishedAt) : nowMs
+  if (!Number.isFinite(endMs)) {
+    return '—'
+  }
+  const seconds = Math.max(0, Math.floor((endMs - startMs) / 1000))
+  if (seconds < 60) {
+    return `${seconds}s`
+  }
+  const minutes = Math.floor(seconds / 60)
+  const rem = seconds % 60
+  if (minutes < 60) {
+    return rem > 0 ? `${minutes}m ${rem}s` : `${minutes}m`
+  }
+  const hours = Math.floor(minutes / 60)
+  const remM = minutes % 60
+  return remM > 0 ? `${hours}h ${remM}m` : `${hours}h`
+}
+
 export function formatPushedAtRelative(pushedAtIso: string, nowMs: number): string {
   const pushedMs = Date.parse(pushedAtIso)
   if (!Number.isFinite(pushedMs)) {

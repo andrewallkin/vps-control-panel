@@ -37,6 +37,7 @@ from vpscp_panel.project_creation import (
     initial_creation_state,
     run_creation,
 )
+from vpscp_panel.project_list import enrich_project_summaries
 from vpscp_panel.validation import (
     BranchName,
     DockerImageEnv,
@@ -487,10 +488,12 @@ async def list_adoptable_databases(
 @router.get("")
 async def list_projects(
     db: Annotated[DbSession, Depends(get_db)],
+    agent: Annotated[AgentClient, Depends(_agent)],
     _session: Annotated[Session, Depends(current_session)],
 ) -> list[dict[str, Any]]:
     rows = db.scalars(select(Project).order_by(Project.slug)).all()
-    return [_project_payload(row) for row in rows]
+    base = [_project_payload(row) for row in rows]
+    return await enrich_project_summaries(db, agent, rows, base)
 
 
 @router.get("/{slug}")
