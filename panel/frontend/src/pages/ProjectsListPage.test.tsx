@@ -143,8 +143,11 @@ describe('ProjectsListPage', () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = typeof input === 'string' ? input : input.toString()
         if (url.endsWith('/api/projects')) {
-          const withoutLastDeploy = { ...projectSummary }
-          delete withoutLastDeploy.last_deploy
+          const withoutLastDeploy = JSON.parse(
+            JSON.stringify(projectSummary, (key, value) =>
+              key === 'last_deploy' ? undefined : value,
+            ),
+          ) as Omit<typeof projectSummary, 'last_deploy'>
           return Promise.resolve(jsonResponse([withoutLastDeploy]))
         }
         if (url.includes('/api/projects/demo-app/deploys')) {
