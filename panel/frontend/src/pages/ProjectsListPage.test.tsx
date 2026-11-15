@@ -143,7 +143,8 @@ describe('ProjectsListPage', () => {
       vi.fn((input: RequestInfo | URL) => {
         const url = typeof input === 'string' ? input : input.toString()
         if (url.endsWith('/api/projects')) {
-          const { last_deploy: _omitted, ...withoutLastDeploy } = projectSummary
+          const withoutLastDeploy = { ...projectSummary }
+          delete withoutLastDeploy.last_deploy
           return Promise.resolve(jsonResponse([withoutLastDeploy]))
         }
         if (url.includes('/api/projects/demo-app/deploys')) {
