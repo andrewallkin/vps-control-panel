@@ -10,6 +10,8 @@ import {
   CardBody,
   Input,
   PageHeader,
+  Skeleton,
+  useToast,
 } from '../components/ui'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import {
@@ -61,6 +63,7 @@ function ConfiguredRow({
 }
 
 export function SettingsPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [tokenDraft, setTokenDraft] = useState('')
   const [replaceOpen, setReplaceOpen] = useState(false)
@@ -69,13 +72,11 @@ export function SettingsPage() {
   const [acmeOverride, setAcmeOverride] = useState<string | null>(null)
   const [ipv4Override, setIpv4Override] = useState<string | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
-  const [formSuccess, setFormSuccess] = useState<string | null>(null)
 
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [passwordCode, setPasswordCode] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
-  const [passwordSuccess, setPasswordSuccess] = useState<string | null>(null)
 
   const [totpPending, setTotpPending] = useState<{ secret: string; otpauth_uri: string } | null>(
     null,
@@ -88,8 +89,6 @@ export function SettingsPage() {
   const [registryToken, setRegistryToken] = useState('')
   const [registryFormOpen, setRegistryFormOpen] = useState(false)
   const [registryError, setRegistryError] = useState<string | null>(null)
-  const [registrySuccess, setRegistrySuccess] = useState<string | null>(null)
-
   const zonesQuery = useQuery({
     queryKey: ['cloudflare', 'zones'],
     queryFn: fetchCloudflareZones,
@@ -134,7 +133,6 @@ export function SettingsPage() {
       return
     }
     setFormError(null)
-    setFormSuccess(null)
     setRegistryError(null)
     setTotpError(null)
     try {
@@ -142,17 +140,17 @@ export function SettingsPage() {
         await postCloudflareToken(action.token)
         setTokenDraft('')
         setReplaceOpen(false)
-        setFormSuccess('Cloudflare token updated.')
+        toast({ title: 'Cloudflare token updated.' })
         await queryClient.invalidateQueries({ queryKey: ['cloudflare', 'zones'] })
       } else if (action.kind === 'server-settings') {
         await updateServerSettings(action.payload)
-        setFormSuccess('Server settings saved.')
+        toast({ title: 'Server settings saved.' })
         setAcmeOverride(null)
         setIpv4Override(null)
         await queryClient.invalidateQueries({ queryKey: ['server-settings'] })
       } else if (action.kind === 'registry') {
         await setRegistryCredentials(action.body)
-        setRegistrySuccess('Docker Hub credentials saved.')
+        toast({ title: 'Docker Hub credentials saved.' })
         setRegistryUsername('')
         setRegistryToken('')
         setRegistryFormOpen(false)
@@ -162,6 +160,7 @@ export function SettingsPage() {
         setTotpPending(result)
         setTotpConfirmCode('')
         setTotpSuccess('Scan the QR code and confirm with a code from your authenticator.')
+        toast({ title: 'Scan the new authenticator QR code.' })
       }
       await queryClient.invalidateQueries({ queryKey: authQueryKey })
     } catch (error) {
@@ -202,14 +201,13 @@ export function SettingsPage() {
         code: passwordCode,
       }),
     onSuccess: () => {
-      setPasswordSuccess('Password updated.')
+      toast({ title: 'Password updated.' })
       setPasswordError(null)
       setCurrentPassword('')
       setNewPassword('')
       setPasswordCode('')
     },
     onError: (error) => {
-      setPasswordSuccess(null)
       if (error instanceof ApiError && error.status === 401) {
         setPasswordError('Current password or authenticator code is incorrect.')
         return
@@ -221,7 +219,7 @@ export function SettingsPage() {
   const totpConfirmMutation = useMutation({
     mutationFn: () => confirmAccountTotp({ code: totpConfirmCode.trim() }),
     onSuccess: async () => {
-      setTotpSuccess('Authenticator updated.')
+      toast({ title: 'Authenticator updated.' })
       setTotpError(null)
       setTotpPending(null)
       setTotpConfirmCode('')
@@ -267,30 +265,20 @@ export function SettingsPage() {
           {formError}
         </p>
       ) : null}
-      {formSuccess ? (
-        <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
-          <CheckCircle weight="regular" aria-hidden className="size-4" />
-          {formSuccess}
-        </p>
-      ) : null}
-
       <Card aria-labelledby="account-settings-heading">
         <CardBody className="space-y-4 sm:p-6">
-        <h2 id="account-settings-heading" className="text-base font-semibold">
+        <h2 id="account-settings-heading" className="text-sm font-semibold">
           Account
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Password, two-factor authentication, and active sessions for this user.
+        </p>
 
         <div className="space-y-3">
           <h3 className="text-sm font-semibold">Password</h3>
           {passwordError ? (
             <p className="text-sm text-destructive" role="alert">
               {passwordError}
-            </p>
-          ) : null}
-          {passwordSuccess ? (
-            <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
-              <CheckCircle weight="regular" aria-hidden className="size-4" />
-              {passwordSuccess}
             </p>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
@@ -355,17 +343,9 @@ export function SettingsPage() {
             </p>
           ) : null}
           {!totpPending ? (
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setTotpError(null)
-                setTotpSuccess(null)
-                setPendingAction({ kind: 'totp-reset' })
-                setStepUpOpen(true)
-              }}
-            >
-              Reset authenticator
-            </Button>
+            <p className="text-sm text-muted-foreground">
+              Use the danger zone below to replace your authenticator device.
+            </p>
           ) : (
             <div className="space-y-3">
               {totpSuccess ? <p className="text-sm text-muted-foreground">{totpSuccess}</p> : null}
@@ -409,7 +389,11 @@ export function SettingsPage() {
               Could not load sessions.
             </p>
           ) : sessionsQuery.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading sessions…</p>
+            <div className="space-y-2" aria-busy>
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-16 w-full" />
+              <span className="sr-only">Loading sessions…</span>
+            </div>
           ) : (
             <ul className="divide-y divide-border rounded-md border border-border">
               {(sessionsQuery.data ?? []).length === 0 ? (
@@ -453,9 +437,12 @@ export function SettingsPage() {
 
       <Card aria-labelledby="cf-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="cf-settings-heading" className="text-base font-semibold">
+        <h2 id="cf-settings-heading" className="text-sm font-semibold">
           Cloudflare API token
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Required for DNS, certificates, and WAF rules across your zones.
+        </p>
         {cloudflareConfigured ? (
           <ConfiguredRow
             label="Configured"
@@ -539,9 +526,12 @@ export function SettingsPage() {
 
       <Card aria-labelledby="registry-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="registry-settings-heading" className="text-base font-semibold">
+        <h2 id="registry-settings-heading" className="text-sm font-semibold">
           Docker Hub
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Registry credentials used when projects pull private images.
+        </p>
         {registryConfigured ? (
           <ConfiguredRow
             label="Configured"
@@ -556,7 +546,6 @@ export function SettingsPage() {
                   onClick={() => {
                     setRegistryFormOpen(true)
                     setRegistryError(null)
-                    setRegistrySuccess(null)
                   }}
                 >
                   Replace credentials
@@ -570,12 +559,6 @@ export function SettingsPage() {
         {registryError ? (
           <p className="text-sm text-destructive" role="alert">
             {registryError}
-          </p>
-        ) : null}
-        {registrySuccess ? (
-          <p className="inline-flex items-center gap-2 text-sm text-accent" role="status">
-            <CheckCircle weight="regular" aria-hidden className="size-4" />
-            {registrySuccess}
           </p>
         ) : null}
         {!registryConfigured || registryFormOpen ? (
@@ -640,9 +623,12 @@ export function SettingsPage() {
 
       <Card aria-labelledby="server-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="server-settings-heading" className="text-base font-semibold">
+        <h2 id="server-settings-heading" className="text-sm font-semibold">
           Server settings
         </h2>
+        <p className="text-sm text-muted-foreground">
+          Contact email for ACME and the public IPv4 published to DNS records.
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1">
             <label htmlFor="settings-acme-email" className="block text-sm font-medium">
@@ -689,9 +675,10 @@ export function SettingsPage() {
 
       <Card aria-labelledby="about-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="about-settings-heading" className="text-base font-semibold">
+        <h2 id="about-settings-heading" className="text-sm font-semibold">
           About
         </h2>
+        <p className="text-sm text-muted-foreground">Versions running on this host.</p>
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
             <dt className="text-muted-foreground">Panel version</dt>
@@ -708,6 +695,30 @@ export function SettingsPage() {
             </dd>
           </div>
         </dl>
+        </CardBody>
+      </Card>
+
+      <Card aria-labelledby="danger-zone-heading" className="border-destructive/30">
+        <CardBody className="space-y-3 sm:p-6">
+          <h2 id="danger-zone-heading" className="text-sm font-semibold text-destructive">
+            Danger zone
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Replacing your authenticator or revoking sessions signs you out of other devices.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="danger"
+              onClick={() => {
+                setTotpError(null)
+                setTotpSuccess(null)
+                setPendingAction({ kind: 'totp-reset' })
+                setStepUpOpen(true)
+              }}
+            >
+              Reset authenticator
+            </Button>
+          </div>
         </CardBody>
       </Card>
 

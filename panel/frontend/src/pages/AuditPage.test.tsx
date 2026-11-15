@@ -57,7 +57,7 @@ describe('AuditPage', () => {
       expect(screen.getByText('container.restart')).toBeInTheDocument()
     })
 
-    expect(screen.getByText('agent')).toBeInTheDocument()
+    expect(screen.getByText('Agent')).toBeInTheDocument()
 
     const row = screen.getByText('container.restart').closest('tr')
     expect(row).toBeTruthy()

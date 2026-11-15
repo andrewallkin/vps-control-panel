@@ -1,7 +1,7 @@
 import { CheckCircle, Clock, Warning, XCircle } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { StatusBadge } from '../StatusBadge'
-import { Badge, Card, CardBody } from '../ui'
+import { Badge, Card, CardBody, Skeleton } from '../ui'
 import { formatBytes, formatDateTime } from '../../lib/format'
 import type { BackupStatus } from '../../lib/backupsApi'
 
@@ -76,7 +76,7 @@ export function BackupStatusCard({ status, loading, actions }: BackupStatusCardP
       <CardBody className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 id="backup-status-heading" className="text-base font-semibold">
+            <h2 id="backup-status-heading" className="text-sm font-semibold">
               Backup status
             </h2>
             {status?.overdue ? <StatusBadge variant="warning" label="Overdue" /> : null}
@@ -86,7 +86,12 @@ export function BackupStatusCard({ status, loading, actions }: BackupStatusCardP
         </div>
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading status…</p>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3" aria-busy>
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-14 w-full" />
+            ))}
+            <span className="sr-only">Loading status…</span>
+          </div>
         ) : (
           <dl className="grid gap-4 text-sm sm:grid-cols-2 xl:grid-cols-3">
             <div>

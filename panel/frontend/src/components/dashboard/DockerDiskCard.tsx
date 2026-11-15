@@ -9,8 +9,7 @@ import { useTickingNow } from '../../hooks/useTickingNow'
 import { formatSecondsAgo } from '../../lib/format'
 import { ConfirmDialog } from '../ConfirmDialog'
 import { StaleBadge } from '../StatusBadge'
-import { Toast } from '../Toast'
-import { Alert, Button, Card, CardBody } from '../ui'
+import { Alert, Button, Card, CardBody, Skeleton, useToast } from '../ui'
 import { cn } from '../../lib/cn'
 
 export interface DockerDiskCardProps {
@@ -28,8 +27,8 @@ export function DockerDiskCard({
 }: DockerDiskCardProps) {
   const [imagesConfirmOpen, setImagesConfirmOpen] = useState(false)
   const [buildCacheConfirmOpen, setBuildCacheConfirmOpen] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
   const [inlineError, setInlineError] = useState<string | null>(null)
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const now = useTickingNow()
   const isStale = useQueryStale(dataUpdatedAt, SLOW_POLL_STALE_MS)
@@ -39,7 +38,10 @@ export function DockerDiskCard({
     onSuccess: (result) => {
       setImagesConfirmOpen(false)
       setInlineError(null)
-      setToast(`Reclaimed ${formatBytes(result.reclaimed_bytes)}`)
+      toast({
+        title: 'Docker images pruned',
+        description: `Reclaimed ${formatBytes(result.reclaimed_bytes)}`,
+      })
       void queryClient.invalidateQueries({ queryKey: ['docker', 'df'] })
     },
     onError: (error: unknown) => {
@@ -57,7 +59,10 @@ export function DockerDiskCard({
     onSuccess: (result) => {
       setBuildCacheConfirmOpen(false)
       setInlineError(null)
-      setToast(`Reclaimed ${formatBytes(result.reclaimed_bytes)}`)
+      toast({
+        title: 'Build cache pruned',
+        description: `Reclaimed ${formatBytes(result.reclaimed_bytes)}`,
+      })
       void queryClient.invalidateQueries({ queryKey: ['docker', 'df'] })
     },
     onError: (error: unknown) => {
@@ -94,7 +99,12 @@ export function DockerDiskCard({
             </div>
           </div>
           {isLoading && !df ? (
-            <p className="text-sm text-muted-foreground">Loading…</p>
+            <div className="space-y-3" aria-busy>
+              {Array.from({ length: 4 }, (_, index) => (
+                <Skeleton key={index} className="h-10 w-full" />
+              ))}
+              <span className="sr-only">Loading…</span>
+            </div>
           ) : (
             <ul className="space-y-3 text-sm">
               {rows.map(({ label, data }) => (
@@ -171,7 +181,6 @@ export function DockerDiskCard({
         }}
         onConfirm={() => pruneBuildCacheMutation.mutate()}
       />
-      {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </>
   )
 }

@@ -4,7 +4,6 @@ import { useMemo, useState } from 'react'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { RuleFormDialog } from '../components/rules/RuleFormDialog'
 import { StepUpDialog } from '../components/StepUpDialog'
-import { Toast } from '../components/Toast'
 import {
   Badge,
   Button,
@@ -19,7 +18,9 @@ import {
   TH,
   THead,
   TR,
+  useToast,
 } from '../components/ui'
+import { TableSkeletonRows } from '../components/dashboard/TableSkeletonRows'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
 import {
@@ -62,6 +63,7 @@ function errorDetail(error: unknown): string {
 }
 
 export function RulesPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const domainsQuery = useQuery({
     queryKey: ['domains'],
@@ -79,7 +81,6 @@ export function RulesPage() {
   const permissionDenied = rulesQuery.data?.error === 'permission'
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<CloudflareCustomRule | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [pendingSave, setPendingSave] = useState<PendingSave | null>(null)
   const [pendingDelete, setPendingDelete] = useState<CloudflareCustomRule | null>(null)
@@ -100,10 +101,10 @@ export function RulesPage() {
   async function saveRule(current: EditorState, draft: RuleDraft) {
     if (current.mode === 'edit') {
       await updateCloudflareRule(selectedDomain, current.ruleId, draft)
-      setToast('Rule updated.')
+      toast({ title: 'Rule updated.' })
     } else {
       await createCloudflareRule(selectedDomain, draft)
-      setToast('Rule added.')
+      toast({ title: 'Rule added.' })
     }
     setEditor(null)
     setPendingSave(null)
@@ -114,7 +115,7 @@ export function RulesPage() {
     await deleteCloudflareRule(selectedDomain, rule.id)
     setDeleteTarget(null)
     setPendingDelete(null)
-    setToast('Rule deleted.')
+    toast({ title: 'Rule deleted.' })
     await refreshRules()
   }
 
@@ -210,7 +211,7 @@ export function RulesPage() {
       ) : null}
 
       <section className="space-y-3" aria-labelledby="rules-list-heading">
-        <h2 id="rules-list-heading" className="text-base font-semibold">
+        <h2 id="rules-list-heading" className="text-sm font-semibold">
           Custom rules{' '}
           <span className="font-normal text-muted-foreground">
             {rules.length} {rules.length === 1 ? 'rule' : 'rules'}
@@ -288,11 +289,7 @@ export function RulesPage() {
                 </TR>
               ))}
               {rulesQuery.isLoading ? (
-                <TR className="hover:bg-transparent">
-                  <TD colSpan={6} className="px-3 py-6 text-muted-foreground">
-                    Loading rules…
-                  </TD>
-                </TR>
+                <TableSkeletonRows columns={6} rows={4} />
               ) : null}
               {!rulesQuery.isLoading && rules.length === 0 ? (
                 <TR className="hover:bg-transparent">
@@ -366,7 +363,6 @@ export function RulesPage() {
         }}
       />
 
-      {toast ? <Toast message={toast} onDismiss={() => setToast(null)} /> : null}
     </div>
   )
 }

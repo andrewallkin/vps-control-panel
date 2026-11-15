@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
 import { BackupSettingsForm } from '../components/backups/BackupSettingsForm'
 import { BackupStatusCard } from '../components/backups/BackupStatusCard'
-import { Button, Card, CardBody, PageHeader, Spinner } from '../components/ui'
+import { Button, Card, CardBody, PageHeader, Skeleton, useToast } from '../components/ui'
 import {
   fetchBackupSettings,
   fetchBackupStatus,
@@ -13,6 +13,7 @@ const RUN_POLL_MS = 2000
 const RUN_POLL_TIMEOUT_MS = 30000
 
 export function BackupsPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [runMessage, setRunMessage] = useState<{ text: string; error: boolean } | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -44,6 +45,7 @@ export function BackupsPage() {
   const runMutation = useMutation({
     mutationFn: runBackupNow,
     onSuccess: async () => {
+      toast({ title: 'Backup run started.', description: 'Waiting for status…' })
       setRunMessage({ text: 'Backup triggered. Waiting for status…', error: false })
       const baseline = statusQuery.data?.last_run?.finished_at ?? null
       clearRunPolling()
@@ -65,6 +67,7 @@ export function BackupsPage() {
           clearRunPolling()
           unsubscribe()
           setRunMessage({ text: 'Backup run finished.', error: false })
+          toast({ title: 'Backup run finished.' })
           void queryClient.invalidateQueries({ queryKey: ['backups', 'status'] })
         }
       })
@@ -118,14 +121,18 @@ export function BackupsPage() {
             <BackupSettingsForm
               key={settingsQuery.dataUpdatedAt}
               settings={settingsQuery.data}
+              onSaved={() => toast({ title: 'Backup settings saved.' })}
             />
           </CardBody>
         </Card>
       ) : (
-        <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner />
-          Loading settings…
-        </p>
+        <Card>
+          <CardBody className="space-y-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-32 w-full" />
+            <span className="sr-only">Loading settings…</span>
+          </CardBody>
+        </Card>
       )}
     </div>
   )

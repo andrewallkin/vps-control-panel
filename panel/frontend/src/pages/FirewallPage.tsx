@@ -19,7 +19,9 @@ import {
   TH,
   THead,
   TR,
+  useToast,
 } from '../components/ui'
+import { TableSkeletonRows } from '../components/dashboard/TableSkeletonRows'
 import { ApiError, isStepUpRequired } from '../lib/api'
 import {
   addFirewallRule,
@@ -103,6 +105,7 @@ function PublicStatus({ expected, port }: { expected: boolean; port: number }) {
 }
 
 export function FirewallPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const [addOpen, setAddOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<FirewallRule | null>(null)
@@ -142,6 +145,7 @@ export function FirewallPage() {
       if (mutation.kind === 'add') {
         await addFirewallRule(mutation.payload)
         setAddOpen(false)
+        toast({ title: 'Firewall rule added.' })
       } else if (mutation.kind === 'delete') {
         const rule = mutation.rule
         await deleteFirewallRule(rule.number, {
@@ -153,6 +157,7 @@ export function FirewallPage() {
           comment: rule.comment,
         })
         setDeleteTarget(null)
+        toast({ title: 'Firewall rule deleted.' })
       } else {
         await setCloudflareOnly(mutation.on)
       }
@@ -205,7 +210,7 @@ export function FirewallPage() {
         <CardBody className="space-y-3">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
             <div className="min-w-0 flex-1 space-y-1">
-              <h2 id="cf-only-heading" className="text-base font-semibold">
+              <h2 id="cf-only-heading" className="text-sm font-semibold">
                 Cloudflare-only mode
               </h2>
               <p className="max-w-3xl text-sm text-muted-foreground">{CF_ONLY_SUMMARY}</p>
@@ -236,7 +241,7 @@ export function FirewallPage() {
       ) : null}
 
       <section className="space-y-3" aria-labelledby="fw-rules-heading">
-        <h2 id="fw-rules-heading" className="text-base font-semibold">
+        <h2 id="fw-rules-heading" className="text-sm font-semibold">
           Rules
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">{SSH_DELETE_HELPER}</p>
@@ -277,13 +282,7 @@ export function FirewallPage() {
               </TR>
             </THead>
             <TBody className="divide-y divide-border">
-              {rulesQuery.isPending ? (
-                <TR className="hover:bg-transparent">
-                  <TD colSpan={7} className="px-3 py-6 text-muted-foreground">
-                    Loading rules…
-                  </TD>
-                </TR>
-              ) : null}
+              {rulesQuery.isPending ? <TableSkeletonRows columns={7} rows={5} /> : null}
               {rules.map((rule) => {
                 const locked = isRuleLocked(rule, cfOnly)
                 const portLabel = portFromTo(rule.to)
@@ -351,7 +350,7 @@ export function FirewallPage() {
       </section>
 
       <section className="space-y-3" aria-labelledby="fw-exposure-heading">
-        <h2 id="fw-exposure-heading" className="text-base font-semibold">
+        <h2 id="fw-exposure-heading" className="text-sm font-semibold">
           Exposure report
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">{EXPOSURE_GUIDANCE}</p>
@@ -388,13 +387,7 @@ export function FirewallPage() {
                 </TR>
               </THead>
               <TBody className="divide-y divide-border">
-                {exposureQuery.isPending ? (
-                  <TR className="hover:bg-transparent">
-                    <TD colSpan={6} className="px-3 py-6 text-muted-foreground">
-                      Loading exposure…
-                    </TD>
-                  </TR>
-                ) : null}
+                {exposureQuery.isPending ? <TableSkeletonRows columns={6} rows={4} /> : null}
                 {exposure.publicListeners.map((row) => {
                   const names = serviceAndProcess(row.process)
                   return (

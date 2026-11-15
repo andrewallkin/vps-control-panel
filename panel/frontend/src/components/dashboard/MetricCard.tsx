@@ -8,13 +8,12 @@ import {
 import { useTickingNow } from '../../hooks/useTickingNow'
 import { formatSecondsAgo } from '../../lib/format'
 import { StaleBadge } from '../StatusBadge'
-import { Button, Card, CardBody } from '../ui'
+import { Card, CardBody, IconButton } from '../ui'
 import { MetricChart, type ChartPoint } from './MetricChart'
 
 export interface MetricCardProps {
   title: string
   dataUpdatedAt: number
-  /** When set (e.g. metrics history), stale/time-ago follow both queries. */
   historyDataUpdatedAt?: number
   children: ReactNode
   chartData?: ChartPoint[]
@@ -57,27 +56,24 @@ export function MetricCard({
   return (
     <Card className="flex h-full flex-col">
       <CardBody className="flex flex-1 flex-col gap-3">
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
             <span>updated {formatSecondsAgo(displayUpdatedAt, now)}</span>
             {isStale ? <StaleBadge /> : null}
-            <Button
-              type="button"
-              variant="secondary"
+            <IconButton
               size="sm"
+              label={chartPaused ? 'Resume chart' : 'Pause chart'}
               aria-pressed={chartPaused}
-              onClick={() => setChartPaused((p) => !p)}
-              leftIcon={
-                chartPaused ? (
-                  <Play weight="regular" aria-hidden className="size-4" />
-                ) : (
-                  <Pause weight="regular" aria-hidden className="size-4" />
-                )
-              }
+              className="text-muted-foreground hover:text-foreground"
+              onClick={() => setChartPaused((paused) => !paused)}
             >
-              {chartPaused ? 'Resume chart' : 'Pause chart'}
-            </Button>
+              {chartPaused ? (
+                <Play weight="regular" aria-hidden className="size-4" />
+              ) : (
+                <Pause weight="regular" aria-hidden className="size-4" />
+              )}
+            </IconButton>
           </div>
         </div>
         <div>{children}</div>
@@ -98,15 +94,21 @@ export function MetricCard({
             <table className="w-full text-left text-xs">
               <thead className="sticky top-0 border-b border-border bg-muted text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">{tableHeaders[0]}</th>
-                  <th scope="col" className="px-3 py-2 font-medium">{tableHeaders[1]}</th>
+                  <th scope="col" className="px-3 py-2 font-medium">
+                    {tableHeaders[0]}
+                  </th>
+                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                    {tableHeaders[1]}
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
                 {tableRows.map((row) => (
                   <tr key={row.label}>
-                    <td className="px-3 py-2 font-mono tabular">{row.label}</td>
-                    <td className="px-3 py-2 font-mono tabular">{row.value}</td>
+                    <td className="px-3 py-2 font-mono tabular-nums">{row.label}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums">
+                      {row.value}
+                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -223,7 +223,7 @@ export function BackupSettingsForm({
     setFormSuccess(null)
     try {
       await updateBackupSettings(payload)
-      setFormSuccess('Backup settings saved. The backup container will be recreated.')
+      setFormSuccess(null)
       setServiceAccountDraft('')
       setPassphraseDraft('')
       setPassphraseAction('keep')

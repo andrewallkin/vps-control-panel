@@ -1,4 +1,4 @@
-import { ArrowsClockwise, Plus, Trash } from '@phosphor-icons/react'
+import { ArrowsClockwise, Globe, Plus, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { AddDomainDialog } from '../components/domains/AddDomainDialog'
@@ -13,6 +13,7 @@ import {
   CardBody,
   EmptyState,
   PageHeader,
+  Skeleton,
   Spinner,
   Table,
   TableContainer,
@@ -21,6 +22,7 @@ import {
   TH,
   THead,
   TR,
+  useToast,
 } from '../components/ui'
 import { ApiError } from '../lib/api'
 import {
@@ -68,6 +70,7 @@ function zoneHostnames(row: { name: string; hostnames?: DomainHostname[] }): Dom
 }
 
 export function DomainsPage() {
+  const { toast } = useToast()
   const queryClient = useQueryClient()
   const nowMs = useTickingNow(60_000)
   const [addOpen, setAddOpen] = useState(false)
@@ -112,6 +115,7 @@ export function DomainsPage() {
       setIssueJobId(result.job_id)
       setIssueJobRunning(result.job_id !== null)
       setActionError(null)
+      toast({ title: 'Domain registered.' })
       void queryClient.invalidateQueries({ queryKey: ['domains'] })
     },
     onError: () => {
@@ -126,6 +130,7 @@ export function DomainsPage() {
       setIssueError(null)
       setIssueJobRunning(true)
       setActionError(null)
+      toast({ title: 'Certificate reissue started.' })
       void queryClient.invalidateQueries({ queryKey: ['domains'] })
     },
     onError: () => {
@@ -138,6 +143,7 @@ export function DomainsPage() {
     onSuccess: () => {
       setRemoveTarget(null)
       setActionError(null)
+      toast({ title: 'Domain removed.' })
       void queryClient.invalidateQueries({ queryKey: ['domains'] })
     },
     onError: (error: unknown) => {
@@ -224,12 +230,20 @@ export function DomainsPage() {
 
       {tableLoading ? (
         <Card>
-          <CardBody className="text-sm text-muted-foreground">Loading domains…</CardBody>
+          <CardBody className="space-y-3">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-40 w-full" />
+            <span className="sr-only">Loading domains…</span>
+          </CardBody>
         </Card>
       ) : null}
       {!tableLoading && !domainsQuery.isError && domains.length === 0 ? (
         <Card>
-          <EmptyState title="No domains registered yet." />
+          <EmptyState
+            icon={<Globe weight="regular" className="size-8" aria-hidden />}
+            title="No domains registered yet."
+          />
         </Card>
       ) : null}
       {!tableLoading
@@ -321,7 +335,7 @@ export function DomainsPage() {
 
       {issueJobId ? (
         <section className="space-y-3" aria-labelledby="issue-log-heading">
-          <h2 id="issue-log-heading" className="text-base font-semibold">
+          <h2 id="issue-log-heading" className="text-sm font-semibold">
             Certificate issue log
           </h2>
           <LogViewer

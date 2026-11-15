@@ -14,7 +14,22 @@ import {
 import { useQueryStale } from '../../hooks/useQueryStale'
 import { useTickingNow } from '../../hooks/useTickingNow'
 import { StaleBadge } from '../StatusBadge'
-import { Button, Card, CardBody, Table, TableContainer, TBody, TD, TH, THead, TR } from '../ui'
+import {
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  EmptyState,
+  Table,
+  TableContainer,
+  TBody,
+  TD,
+  TH,
+  THead,
+  TR,
+} from '../ui'
+import { TableSkeletonRows } from './TableSkeletonRows'
+import { Package } from '@phosphor-icons/react'
 
 export interface ContainersTableProps {
   containers: ContainerMetrics[] | undefined
@@ -86,17 +101,48 @@ export function ContainersTable({
           </div>
         </div>
         {isLoading && !containers ? (
-          <p className="text-sm text-muted-foreground">Loading…</p>
-        ) : !containers?.length ? (
-          <p className="text-sm text-muted-foreground">No containers yet.</p>
-        ) : (
           <TableContainer className="border-0">
-            <Table className="min-w-[40rem]">
+            <Table className="min-w-[40rem] text-sm">
               <THead>
                 <TR className="hover:bg-transparent">
-                  <TH className="w-[1%] whitespace-nowrap">Project</TH>
-                  <TH>Name</TH>
-                  <TH className="w-28 whitespace-nowrap text-right">
+                  <TH scope="col" className="w-[1%] whitespace-nowrap">
+                    Project
+                  </TH>
+                  <TH scope="col">Name</TH>
+                  <TH scope="col" className="whitespace-nowrap">
+                    Status
+                  </TH>
+                  <TH scope="col" className="w-28 whitespace-nowrap text-right">
+                    CPU
+                  </TH>
+                  <TH scope="col" className="w-72 whitespace-nowrap text-right">
+                    Memory
+                  </TH>
+                </TR>
+              </THead>
+              <TBody>
+                <TableSkeletonRows columns={5} />
+              </TBody>
+            </Table>
+          </TableContainer>
+        ) : !containers?.length ? (
+          <EmptyState
+            icon={<Package weight="regular" className="size-8" aria-hidden />}
+            title="No containers yet."
+          />
+        ) : (
+          <TableContainer className="border-0">
+            <Table className="min-w-[40rem] text-sm">
+              <THead>
+                <TR className="hover:bg-transparent">
+                  <TH scope="col" className="w-[1%] whitespace-nowrap">
+                    Project
+                  </TH>
+                  <TH scope="col">Name</TH>
+                  <TH scope="col" className="whitespace-nowrap">
+                    Status
+                  </TH>
+                  <TH scope="col" className="w-28 whitespace-nowrap text-right">
                     <SortHeaderButton
                       label="CPU"
                       active={sortKey === 'cpu_percent'}
@@ -104,7 +150,7 @@ export function ContainersTable({
                       onClick={() => toggleSort('cpu_percent')}
                     />
                   </TH>
-                  <TH className="w-72 whitespace-nowrap text-right">
+                  <TH scope="col" className="w-72 whitespace-nowrap text-right">
                     <SortHeaderButton
                       label="Memory"
                       active={sortKey === 'mem_percent'}
@@ -118,14 +164,19 @@ export function ContainersTable({
                 {grouped.map((group) =>
                   group.containers.map((row, index) => (
                     <TR key={`${group.project}-${row.name}`} className="hover:bg-muted/50">
-                      <TD className="whitespace-nowrap text-muted-foreground">
+                      <TD className="whitespace-nowrap py-2 text-muted-foreground">
                         {index === 0 ? group.project : ''}
                       </TD>
-                      <TD className="break-all font-mono sm:break-normal">{row.name}</TD>
-                      <TD className="whitespace-nowrap text-right font-mono tabular">
+                      <TD className="break-all py-2 font-mono sm:break-normal">{row.name}</TD>
+                      <TD className="whitespace-nowrap py-2">
+                        <Badge tone="success" dot>
+                          Running
+                        </Badge>
+                      </TD>
+                      <TD className="whitespace-nowrap py-2 text-right font-mono tabular-nums">
                         {formatPercent(row.cpu_percent)}
                       </TD>
-                      <TD className="whitespace-nowrap text-right font-mono tabular">
+                      <TD className="whitespace-nowrap py-2 text-right font-mono tabular-nums">
                         {formatBytes(row.mem_used)} / {formatBytes(row.mem_limit)} (
                         {formatPercent(row.mem_percent)})
                       </TD>

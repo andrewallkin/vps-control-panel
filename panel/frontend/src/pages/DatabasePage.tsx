@@ -1,4 +1,4 @@
-import { FileArrowUp, Info, Trash } from '@phosphor-icons/react'
+import { Database, FileArrowUp, Info, Trash } from '@phosphor-icons/react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   useCallback,
@@ -12,7 +12,7 @@ import {
 } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { StatusBadge } from '../components/StatusBadge'
+import { TableSkeletonRows } from '../components/dashboard/TableSkeletonRows'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { LogViewer } from '../components/setup/LogViewer'
 import { ProgressBar } from '../components/setup/ProgressBar'
@@ -24,9 +24,11 @@ import { RestoreResultSummary } from '../components/setup/RestoreResultSummary'
 import { UploadInfoPanel } from '../components/setup/UploadInfoPanel'
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Checkbox,
+  EmptyState,
   Input,
   PageHeader,
   Select,
@@ -37,6 +39,7 @@ import {
   TH,
   THead,
   TR,
+  useToast,
 } from '../components/ui'
 import { ApiError, apiErrorDetail, isStepUpRequired } from '../lib/api'
 import { authQueryKey } from '../lib/auth'
@@ -53,7 +56,8 @@ import {
   type DatabaseRow,
   type DropDatabasePayload,
 } from '../lib/databaseApi'
-import { formatBytes } from '../lib/format'
+import { formatBytes, formatDateTime, formatRelativeTime } from '../lib/format'
+import { useTickingNow } from '../hooks/useTickingNow'
 import { deployToApplyEnv, fetchProjects, type ProjectSummary } from '../lib/projectsApi'
 import {
   startSetupRestore,
@@ -106,6 +110,8 @@ function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
 }
 
 export function DatabasePage() {
+  const { toast } = useToast()
+  const nowMs = useTickingNow(60_000)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const dropConfirmInputId = useId()
@@ -237,6 +243,7 @@ export function DatabasePage() {
       })
       setUploadId(result.uploadId)
       setUploadInfo(result.info)
+      toast({ title: 'Dump uploaded.' })
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setUploadError('Upload cancelled.')
@@ -251,7 +258,7 @@ export function DatabasePage() {
       setUploadProgress(null)
       uploadAbortRef.current = null
     }
-  }, [])
+  }, [toast])
 
   const queueUpload = (file: File) => {
     setPendingStepUp({ kind: 'upload', file })
@@ -294,7 +301,10 @@ export function DatabasePage() {
         const result = await adoptDatabase(payload)
         if (result.restart_required) {
           setActionMessage('Database adopted. Restart project containers to apply the new password.')
+        } else {
+          setActionMessage(null)
         }
+        toast({ title: 'Database adopted.' })
         setAdoptTarget(null)
         setAdoptSlug('')
         setPasswordMode('rotate')
@@ -311,6 +321,7 @@ export function DatabasePage() {
           setDeployError(null)
           setDeployPromptSlug(slug)
         }
+        toast({ title: 'Database password rotated.' })
       }),
   })
 
@@ -321,7 +332,8 @@ export function DatabasePage() {
         setDropTarget(null)
         setDropConfirmText('')
         setDropRole(false)
-        setActionMessage('Database dropped.')
+        setActionMessage(null)
+        toast({ title: 'Database dropped.' })
       }),
   })
 
@@ -332,6 +344,7 @@ export function DatabasePage() {
         setRestoreJobId(result.job_id)
         setConfirmOpen(false)
         setRestoreConflict(null)
+        toast({ title: 'Cluster restore started.' })
       }),
     onError: (err) => {
       const conflict = clusterNotEmptyDetail(err)
@@ -405,7 +418,7 @@ export function DatabasePage() {
   const rows = databasesQuery.data ?? []
 
   return (
-    <div className="flex w-full flex-col gap-8">
+    <div className="flex w-full flex-col gap-6">
       <PageHeader
         title="Database"
         description="PostgreSQL databases on the central cluster, and dumps for each attached project."
@@ -609,7 +622,7 @@ export function DatabasePage() {
       ) : (
         <section className="space-y-3" aria-labelledby="databases-heading">
           <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 id="databases-heading" className="text-base font-semibold">
+            <h2 id="databases-heading" className="text-sm font-semibold">
               Databases
             </h2>
             {rows.length > 0 ? (
@@ -638,10 +651,15 @@ export function DatabasePage() {
                 </TR>
               </THead>
               <TBody className="divide-y divide-border">
-                {rows.length === 0 ? (
+                {databasesQuery.isPending ? (
+                  <TableSkeletonRows columns={5} rows={4} />
+                ) : rows.length === 0 ? (
                   <TR className="hover:bg-transparent">
-                    <TD colSpan={5} className="py-8 text-muted-foreground">
-                      {databasesQuery.isPending ? 'Loading…' : 'No databases yet.'}
+                    <TD colSpan={5}>
+                      <EmptyState
+                        icon={<Database weight="regular" className="size-8" aria-hidden />}
+                        title="No databases yet."
+                      />
                     </TD>
                   </TR>
                 ) : (
@@ -649,7 +667,7 @@ export function DatabasePage() {
                     <TR key={row.name}>
                       <TD className="font-mono font-medium">{row.name}</TD>
                       <TD className="font-mono text-muted-foreground">{row.owner}</TD>
-                      <TD className="tabular-nums">{formatBytes(row.size_bytes)}</TD>
+                      <TD className="text-right tabular-nums">{formatBytes(row.size_bytes)}</TD>
                       <TD>
                         {row.attached_slug ? (
                           <Link
@@ -659,7 +677,9 @@ export function DatabasePage() {
                             {row.attached_slug}
                           </Link>
                         ) : (
-                          <StatusBadge variant="warning" label="Unattached" />
+                          <Badge tone="warning" dot>
+                            Unattached
+                          </Badge>
                         )}
                       </TD>
                       <TD>
@@ -743,7 +763,10 @@ export function DatabasePage() {
                       >
                         <span className="font-mono">{dump.name}</span>
                         <span className="text-muted-foreground tabular-nums">
-                          {formatBytes(dump.size_bytes)} · {dump.created_at}
+                          {formatBytes(dump.size_bytes)} ·{' '}
+                          <time dateTime={dump.created_at} title={formatDateTime(dump.created_at)}>
+                            {formatRelativeTime(dump.created_at, nowMs)}
+                          </time>
                         </span>
                         <a
                           href={databaseDumpDownloadUrl(slug, dump.name)}
