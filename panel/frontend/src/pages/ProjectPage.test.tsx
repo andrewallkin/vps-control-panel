@@ -321,7 +321,8 @@ describe('ProjectPage overview, logs, and migrations', () => {
   it('opens project URLs in a new tab', async () => {
     renderProject()
 
-    const link = await screen.findByRole('link', { name: 'https://spliteasy.andrewallkin.com/' })
+    const links = await screen.findAllByRole('link', { name: 'https://spliteasy.andrewallkin.com/' })
+    const link = links[0]!
     expect(link).toHaveAttribute('target', '_blank')
     expect(link).toHaveAttribute('rel', 'noopener noreferrer')
   })
@@ -332,7 +333,7 @@ describe('ProjectPage overview, logs, and migrations', () => {
 
     const filter = await screen.findByLabelText('Service')
     expect(within(filter).getByRole('option', { name: 'All services' })).toBeInTheDocument()
-    expect(within(filter).getByRole('option', { name: 'backend' })).toBeInTheDocument()
+    expect(await within(filter).findByRole('option', { name: 'backend' })).toBeInTheDocument()
     expect(within(filter).getByRole('option', { name: 'frontend' })).toBeInTheDocument()
 
     const initial = MockEventSource.instances[0]

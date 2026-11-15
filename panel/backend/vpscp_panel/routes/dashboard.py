@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 from vpscp_panel.agent_client import AgentClient, AgentError
 from vpscp_panel.auth import current_session, get_db
 from vpscp_panel.models import Project, Session
+from vpscp_panel.project_runtime import classify_compose_ps
 
 router = APIRouter(tags=["dashboard"])
 
@@ -83,24 +84,6 @@ def _ready_project_slugs(db: DbSession) -> list[str]:
     return slugs
 
 
-def _classify_compose_ps(ps: Any) -> str | None:
-    if not isinstance(ps, dict):
-        return "unhealthy"
-    services = ps.get("services")
-    if not isinstance(services, list):
-        return "unhealthy"
-    if not services:
-        return None
-    for svc in services:
-        if not isinstance(svc, dict):
-            return "unhealthy"
-        if svc.get("state") != "running":
-            return "unhealthy"
-        if svc.get("health") == "unhealthy":
-            return "unhealthy"
-    return "up"
-
-
 async def _project_counts(
     agent: AgentClient,
     db: DbSession,
@@ -115,7 +98,7 @@ async def _project_counts(
         except AgentError:
             unhealthy += 1
             continue
-        kind = _classify_compose_ps(ps)
+        kind = classify_compose_ps(ps)
         if kind == "up":
             up += 1
         elif kind == "unhealthy":

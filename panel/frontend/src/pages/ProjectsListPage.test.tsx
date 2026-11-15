@@ -27,6 +27,14 @@ const projectSummary = {
   health_check_url: null,
   creation_state: { status: 'ready', steps: [] },
   created_at: '2026-01-01T00:00:00+00:00',
+  runtime_status: 'running',
+  primary_url: 'https://app.example.com/',
+  last_deploy: {
+    id: 9,
+    status: 'succeeded',
+    started_at: '2026-01-01T12:00:00+00:00',
+    finished_at: '2026-01-01T12:01:00+00:00',
+  },
 }
 
 describe('ProjectsListPage', () => {
@@ -127,6 +135,22 @@ describe('ProjectsListPage', () => {
     })
 
     expect(screen.queryByText('There are no projects yet.')).not.toBeInTheDocument()
+  })
+
+  it('shows runtime, deploy summary, and a separate public URL link', async () => {
+    renderWithProviders(<ProjectsListPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Demo App')).toBeInTheDocument()
+    })
+
+    const publicLink = screen.getByRole('link', { name: /https:\/\/app\.example\.com\//i })
+    expect(publicLink).toHaveAttribute('target', '_blank')
+
+    const nameLink = screen.getByRole('link', { name: 'Demo App' })
+    expect(nameLink).not.toBe(publicLink)
+    expect(screen.getByText('Running')).toBeInTheDocument()
+    expect(screen.getByText('Succeeded')).toBeInTheDocument()
   })
 
   it('lists projects and uses full-width page layout', async () => {

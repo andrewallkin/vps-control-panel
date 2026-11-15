@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { ComposeLogsViewer } from '../components/projects/ComposeLogsViewer'
 import { DeployHistory } from '../components/projects/DeployHistory'
@@ -31,6 +32,7 @@ import type { ComposePsService, RegistryTagOption } from '../lib/projectDeployTy
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import {
   Alert,
+  Badge,
   Button,
   Card,
   Input,
@@ -47,6 +49,7 @@ import {
   TH,
   THead,
   TR,
+  useToast,
 } from '../components/ui'
 import { StepUpDialog } from '../components/StepUpDialog'
 import { MigrationRunControls } from '../components/projects/MigrationRunControls'
@@ -81,6 +84,11 @@ import {
 } from '../lib/projectsApi'
 import { buildFqdn } from '../lib/subdomainValidation'
 import { validateRoutes, type RouteDraft } from '../lib/routeValidation'
+import {
+  runtimeStatusFromComposeServices,
+  runtimeStatusLabel,
+  runtimeStatusTone,
+} from '../lib/projectRuntime'
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -177,6 +185,7 @@ export function ProjectPage() {
   const { slug = '' } = useParams<{ slug: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { toast } = useToast()
   const [activeTab, setActiveTab] = useState<TabId>(() => tabFromHash(window.location.hash))
   const [logService, setLogService] = useState('')
   const [selectedTags, setSelectedTags] = useState<Record<string, string>>({})
@@ -263,10 +272,12 @@ export function ProjectPage() {
     )
   }
 
+  const projectReady = project?.creation_state.status === 'ready'
+
   const psQuery = useQuery({
     queryKey: ['project', slug, 'compose-ps'],
     queryFn: () => fetchComposePs(slug),
-    enabled: Boolean(slug) && (activeTab === 'overview' || activeTab === 'logs'),
+    enabled: Boolean(slug) && projectReady,
     refetchInterval: activeTab === 'overview' ? 5000 : false,
     refetchIntervalInBackground: false,
   })
@@ -321,6 +332,7 @@ export function ProjectPage() {
     }) => startProjectDeploy(slug, body),
     onSuccess: (data) => {
       setActiveDeployId(data.id)
+      toast({ title: 'Deploy started', tone: 'success' })
       void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
     },
   })
@@ -329,6 +341,7 @@ export function ProjectPage() {
     mutationFn: (deployId: number) => redeployDeploy(deployId),
     onSuccess: (data) => {
       setActiveDeployId(data.id)
+      toast({ title: 'Redeploy started', tone: 'success' })
       void queryClient.invalidateQueries({ queryKey: ['project', slug, 'deploys'] })
     },
   })
@@ -492,6 +505,7 @@ export function ProjectPage() {
       clearMigrateDismiss()
       setActiveDeployId(null)
       setMigrateJobId(data.job_id)
+      toast({ title: 'Migration started', tone: 'success' })
     },
   })
 
@@ -525,6 +539,7 @@ export function ProjectPage() {
       setEnvSavedMessage(null)
       setApplyDeployError(null)
       setApplyPrompt('env')
+      toast({ title: 'Environment saved', tone: 'success' })
       void queryClient.invalidateQueries({ queryKey: ['project', slug, 'env'] })
     },
   })
@@ -545,6 +560,7 @@ export function ProjectPage() {
     },
     onSuccess: () => {
       setRoutingError(null)
+      toast({ title: 'Routing saved', tone: 'success' })
       void queryClient.invalidateQueries({ queryKey: ['project', slug] })
     },
     onError: (error) => {
@@ -565,6 +581,7 @@ export function ProjectPage() {
         health_check_url: healthCheckUrl || null,
       }),
     onSuccess: () => {
+      toast({ title: 'Settings saved', tone: 'success' })
       void queryClient.invalidateQueries({ queryKey: ['project', slug] })
     },
   })
@@ -578,6 +595,7 @@ export function ProjectPage() {
       return putProjectServices(slug, prepared.rows)
     },
     onSuccess: () => {
+      toast({ title: 'Services saved', tone: 'success' })
       void queryClient.invalidateQueries({ queryKey: ['project', slug] })
       void queryClient.invalidateQueries({ queryKey: ['project', slug, 'tags'] })
     },
@@ -670,6 +688,60 @@ export function ProjectPage() {
 
   const logServices = psQuery.data?.services ?? []
 
+  const routingDirty = useMemo(() => {
+    if (!project) {
+      return false
+    }
+    const baseline = {
+      hostnames: project.hostnames,
+      routes: project.routes,
+    }
+    const draft = {
+      hostnames: hostnamesDraft,
+      routes: routesDraft.map((route) => ({
+        path_prefix: route.path_prefix,
+        port_env_var: route.port_env_var,
+        max_body_mb: route.max_body_mb ?? 25,
+        read_timeout_s: route.read_timeout_s ?? 60,
+        send_timeout_s: route.send_timeout_s ?? 60,
+        streaming: route.streaming ?? false,
+        websocket: route.websocket ?? false,
+        pass_authorization: route.pass_authorization ?? false,
+      })),
+    }
+    return JSON.stringify(baseline) !== JSON.stringify(draft)
+  }, [project, hostnamesDraft, routesDraft])
+
+  const settingsDirty = useMemo(() => {
+    if (!project) {
+      return false
+    }
+    return (
+      migrationCommand !== (project.migration_command ?? '') ||
+      migrationService !== (project.migration_service ?? '') ||
+      healthCheckUrl !== (project.health_check_url ?? '')
+    )
+  }, [project, migrationCommand, migrationService, healthCheckUrl])
+
+  const servicesDirty = useMemo(() => {
+    if (!project) {
+      return false
+    }
+    const baseline = project.services.map((row) => ({
+      service_name: row.service_name,
+      image_env_var: row.image_env_var,
+      tag_prefix: row.tag_prefix,
+    }))
+    const draft = servicesDraft.map((row) => ({
+      service_name: row.service_name,
+      image_env_var: row.image_env_var,
+      tag_prefix: row.tag_prefix,
+    }))
+    return JSON.stringify(baseline) !== JSON.stringify(draft)
+  }, [project, servicesDraft])
+
+  useUnsavedChangesWarning(envDirty || routingDirty || settingsDirty || servicesDirty)
+
   if (projectQuery.isPending) {
     return (
       <p className="inline-flex items-center gap-2 text-sm text-muted-foreground">
@@ -694,12 +766,46 @@ export function ProjectPage() {
   }
 
   const publicUrls = projectPublicUrls(project)
+  const primaryUrl = publicUrls[0]
+  const headerRuntime =
+    psQuery.data?.services !== undefined
+      ? runtimeStatusFromComposeServices(psQuery.data.services)
+      : null
 
   return (
     <div className="flex w-full min-w-0 max-w-full flex-col gap-6">
       <PageHeader
         title={project.display_name}
-        description={<span className="font-mono">{project.slug}</span>}
+        description={
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="font-mono">{project.slug}</span>
+            {headerRuntime ? (
+              <Badge tone={runtimeStatusTone(headerRuntime)} dot>
+                {runtimeStatusLabel(headerRuntime)}
+              </Badge>
+            ) : null}
+            {primaryUrl ? (
+              <a
+                href={primaryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-accent hover:underline"
+              >
+                {primaryUrl}
+              </a>
+            ) : null}
+          </span>
+        }
+        actions={
+          <>
+            <Button type="button" aria-label="Open Deploy tab" onClick={() => selectTab('deploy')}>
+              Deploy
+            </Button>
+            <Button type="button" variant="secondary" aria-label="Open Logs tab" onClick={() => selectTab('logs')}>
+              Logs
+            </Button>
+          </>
+        }
       />
 
       <Tabs value={activeTab} onValueChange={(value) => selectTab(value as TabId)}>
@@ -977,16 +1083,19 @@ export function ProjectPage() {
                   setEnvDirty(true)
                 }}
               />
-              <Button
-                type="button"
-                disabled={!envDirty || envSaveMutation.isPending}
-                loading={envSaveMutation.isPending}
-                onClick={() =>
-                  envSaveMutation.mutate({ rows: envRows, loadedKeys: loadedEnvKeys })
-                }
-              >
-                {envSaveMutation.isPending ? 'Saving…' : 'Save'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  disabled={!envDirty || envSaveMutation.isPending}
+                  loading={envSaveMutation.isPending}
+                  onClick={() =>
+                    envSaveMutation.mutate({ rows: envRows, loadedKeys: loadedEnvKeys })
+                  }
+                >
+                  {envSaveMutation.isPending ? 'Saving…' : 'Save'}
+                </Button>
+                {envDirty ? <Badge tone="warning">Unsaved changes</Badge> : null}
+              </div>
               {envSaveMutation.isError ? (
                 <p className="text-sm text-destructive" role="alert">
                   {mutationErrorMessage(envSaveMutation.error, 'Could not save environment.')}
@@ -1017,14 +1126,17 @@ export function ProjectPage() {
             onChange={setRoutesDraft}
             portEnvVarOptions={portEnvVarOptions}
           />
-          <Button
-            type="button"
-            disabled={routingMutation.isPending || !routesValidation.ok}
-            loading={routingMutation.isPending}
-            onClick={() => routingMutation.mutate()}
-          >
-            {routingMutation.isPending ? 'Saving…' : 'Save routing'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              disabled={routingMutation.isPending || !routesValidation.ok}
+              loading={routingMutation.isPending}
+              onClick={() => routingMutation.mutate()}
+            >
+              {routingMutation.isPending ? 'Saving…' : 'Save routing'}
+            </Button>
+            {routingDirty ? <Badge tone="warning">Unsaved changes</Badge> : null}
+          </div>
         </div>
       ) : null}
 
@@ -1143,14 +1255,17 @@ export function ProjectPage() {
                 onChange={setServicesDraft}
                 onValidationChange={(ok) => setServicesMappingValid(ok)}
               />
-              <Button
-                type="button"
-                disabled={!servicesMappingValid || servicesSaveMutation.isPending}
-                loading={servicesSaveMutation.isPending}
-                onClick={() => servicesSaveMutation.mutate()}
-              >
-                {servicesSaveMutation.isPending ? 'Saving…' : 'Save services'}
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  type="button"
+                  disabled={!servicesMappingValid || servicesSaveMutation.isPending}
+                  loading={servicesSaveMutation.isPending}
+                  onClick={() => servicesSaveMutation.mutate()}
+                >
+                  {servicesSaveMutation.isPending ? 'Saving…' : 'Save services'}
+                </Button>
+                {servicesDirty ? <Badge tone="warning">Unsaved changes</Badge> : null}
+              </div>
               {servicesSaveMutation.isError ? (
                 <p className="text-sm text-destructive" role="alert">
                   {mutationErrorMessage(servicesSaveMutation.error, 'Could not save services.')}
@@ -1196,14 +1311,17 @@ export function ProjectPage() {
               />
             </div>
           </div>
-          <Button
-            type="button"
-            disabled={settingsMutation.isPending}
-            loading={settingsMutation.isPending}
-            onClick={() => settingsMutation.mutate()}
-          >
-            {settingsMutation.isPending ? 'Saving…' : 'Save settings'}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              disabled={settingsMutation.isPending}
+              loading={settingsMutation.isPending}
+              onClick={() => settingsMutation.mutate()}
+            >
+              {settingsMutation.isPending ? 'Saving…' : 'Save settings'}
+            </Button>
+            {settingsDirty ? <Badge tone="warning">Unsaved changes</Badge> : null}
+          </div>
           {settingsMutation.isError ? (
             <p className="text-sm text-destructive" role="alert">
               {mutationErrorMessage(settingsMutation.error, 'Could not save settings.')}

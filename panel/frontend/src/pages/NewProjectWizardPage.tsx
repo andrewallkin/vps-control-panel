@@ -1,6 +1,7 @@
 import { Info, Plus, Trash } from '@phosphor-icons/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo, useRef, useState } from 'react'
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { CreationChecklist } from '../components/projects/CreationChecklist'
 import { ProjectDeleteSection } from '../components/projects/ProjectDeleteSection'
@@ -120,6 +121,16 @@ export function NewProjectWizardPage() {
   const [serviceRows, setServiceRows] = useState<ServiceMappingRow[]>([])
   const [deployNowPending, setDeployNowPending] = useState(false)
   const [deployNowError, setDeployNowError] = useState<string | null>(null)
+
+  const wizardDirty = useMemo(
+    () =>
+      displayName.trim() !== '' ||
+      repoUrl.trim() !== '' ||
+      userEnv.trim() !== '' ||
+      slugTouched,
+    [displayName, repoUrl, userEnv, slugTouched],
+  )
+  useUnsavedChangesWarning(wizardDirty)
 
   const domainsQuery = useQuery({
     queryKey: ['domains'],

@@ -1,6 +1,15 @@
 import { Plus, Trash } from '@phosphor-icons/react'
 import { useEffect, useRef, useState } from 'react'
-import { Button, Card, IconButton, Textarea } from '../ui'
+import {
+  Button,
+  Card,
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogTitle,
+  IconButton,
+  Textarea,
+} from '../ui'
 import {
   applyEnvPaste,
   type EnvRow,
@@ -172,16 +181,26 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
         })}
       </ul>
 
-      {expanded !== null && rows[expanded.index] ? (
-        <EnvValueDialog
-          row={rows[expanded.index]!}
-          field={expanded.field}
-          onChangeKey={(value) => updateRow(expanded.index, { key: value.toUpperCase() })}
-          onChangeValue={(value) => updateRow(expanded.index, { value })}
-          onRevealValue={onRevealValue}
-          onClose={() => setExpanded(null)}
-        />
-      ) : null}
+      <EnvValueDialog
+        key={expanded ? `${expanded.index}-${expanded.field}` : 'closed'}
+        open={expanded !== null && rows[expanded?.index ?? -1] !== undefined}
+        row={expanded !== null ? rows[expanded.index] : null}
+        field={expanded?.field ?? 'value'}
+        onChangeKey={(value) => {
+          if (expanded === null) {
+            return
+          }
+          updateRow(expanded.index, { key: value.toUpperCase() })
+        }}
+        onChangeValue={(value) => {
+          if (expanded === null) {
+            return
+          }
+          updateRow(expanded.index, { value })
+        }}
+        onRevealValue={onRevealValue}
+        onClose={() => setExpanded(null)}
+      />
 
       {rows.length === 0 ? (
         <button
@@ -197,6 +216,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
 }
 
 function EnvValueDialog({
+  open,
   row,
   field,
   onChangeKey,
@@ -204,7 +224,8 @@ function EnvValueDialog({
   onRevealValue,
   onClose,
 }: {
-  row: EnvRow
+  open: boolean
+  row: EnvRow | null
   field: 'key' | 'value'
   onChangeKey: (value: string) => void
   onChangeValue: (value: string) => void
@@ -212,22 +233,19 @@ function EnvValueDialog({
   onClose: () => void
 }) {
   const fieldRef = useRef<HTMLTextAreaElement>(null)
-  const [draft, setDraft] = useState(field === 'key' ? row.key : row.value)
+  const [draft, setDraft] = useState(() => (field === 'key' ? row?.key ?? '' : row?.value ?? ''))
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fieldRef.current?.focus()
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        onClose()
-      }
+    if (!open) {
+      return
     }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [onClose])
+    const id = window.requestAnimationFrame(() => fieldRef.current?.focus())
+    return () => window.cancelAnimationFrame(id)
+  }, [open, field])
 
   useEffect(() => {
-    if (field !== 'value' || !onRevealValue || !isMaskedEnvPlaceholder(row.value)) {
+    if (!open || !row || field !== 'value' || !onRevealValue || !isMaskedEnvPlaceholder(row.value)) {
       return
     }
     // After a rename the backend still stores the value under the original
@@ -248,27 +266,18 @@ function EnvValueDialog({
     return () => {
       cancelled = true
     }
-  }, [field, onRevealValue, row.renamedFrom, row.key, row.value])
+  }, [open, field, onRevealValue, row])
+
+  if (!row) {
+    return null
+  }
 
   const label = field === 'key' ? 'Full key' : 'Full value'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <button
-        type="button"
-        className="absolute inset-0 bg-background/80 cursor-pointer"
-        aria-label="Dismiss dialog"
-        onClick={onClose}
-      />
-      <div
-        role="dialog"
-        aria-modal="true"
-        aria-label={label}
-        className="relative z-10 w-full max-w-3xl rounded-xl border border-border bg-card p-4 shadow-popover"
-      >
-        <label className="block text-sm font-medium" htmlFor="env-full-field">
-          {row.key || 'New variable'}
-        </label>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="max-w-3xl" aria-label={label}>
+        <DialogTitle>{row.key || 'New variable'}</DialogTitle>
         <Textarea
           id="env-full-field"
           ref={fieldRef}
@@ -293,13 +302,13 @@ function EnvValueDialog({
             {error}
           </p>
         ) : null}
-        <div className="mt-4 flex justify-end">
+        <DialogFooter>
           <Button type="button" onClick={onClose}>
             Done
           </Button>
-        </div>
-      </div>
-    </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
