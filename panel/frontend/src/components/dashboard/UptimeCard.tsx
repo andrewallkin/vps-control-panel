@@ -17,13 +17,13 @@ export function UptimeCard({ uptimeSeconds, dataUpdatedAt }: UptimeCardProps) {
     <Card className="shrink-0">
       <CardBody className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground">Uptime</h2>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <h2 className="text-xl font-semibold text-foreground">Uptime</h2>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
             {isStale ? <StaleBadge /> : null}
           </div>
         </div>
-        <p className="font-mono text-lg tabular">
+        <p className="text-[40px] font-semibold leading-none tabular-nums">
           {uptimeSeconds !== undefined ? formatUptime(uptimeSeconds) : '—'}
         </p>
       </CardBody>

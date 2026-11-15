@@ -10,14 +10,14 @@ export function TableContainer({ contained = true, className, children, ...props
     return <>{children}</>
   }
   return (
-    <div className={cn('overflow-x-auto rounded-xl border border-border', className)} {...props}>
+    <div className={cn('overflow-x-auto rounded-xl bg-card shadow-card', className)} {...props}>
       {children}
     </div>
   )
 }
 
 export function Table({ className, ...props }: TableHTMLAttributes<HTMLTableElement>) {
-  return <table className={cn('w-full min-w-full border-collapse text-sm', className)} {...props} />
+  return <table className={cn('w-full min-w-full border-collapse text-[15px]', className)} {...props} />
 }
 
 export function THead(props: HTMLAttributes<HTMLTableSectionElement>) {
@@ -31,7 +31,10 @@ export function TBody(props: HTMLAttributes<HTMLTableSectionElement>) {
 export function TR({ className, ...props }: HTMLAttributes<HTMLTableRowElement>) {
   return (
     <tr
-      className={cn('border-b border-border last:border-b-0 transition-colors duration-150 hover:bg-muted/50', className)}
+      className={cn(
+        'border-b border-border last:border-b-0 transition-colors duration-150 hover:bg-accent-soft/45',
+        className,
+      )}
       {...props}
     />
   )
@@ -41,7 +44,7 @@ export function TH({ className, ...props }: ThHTMLAttributes<HTMLTableCellElemen
   return (
     <th
       className={cn(
-        'px-4 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground',
+        'px-4 py-3 text-left text-sm font-semibold uppercase tracking-wide text-muted-foreground',
         className,
       )}
       {...props}
@@ -50,5 +53,5 @@ export function TH({ className, ...props }: ThHTMLAttributes<HTMLTableCellElemen
 }
 
 export function TD({ className, ...props }: TdHTMLAttributes<HTMLTableCellElement>) {
-  return <td className={cn('px-4 py-2.5 text-foreground', className)} {...props} />
+  return <td className={cn('px-4 py-3 text-base text-foreground', className)} {...props} />
 }

@@ -211,7 +211,7 @@ export function RulesPage() {
       ) : null}
 
       <section className="space-y-3" aria-labelledby="rules-list-heading">
-        <h2 id="rules-list-heading" className="text-sm font-semibold">
+        <h2 id="rules-list-heading" className="text-xl font-semibold">
           Custom rules{' '}
           <span className="font-normal text-muted-foreground">
             {rules.length} {rules.length === 1 ? 'rule' : 'rules'}
@@ -244,7 +244,7 @@ export function RulesPage() {
             <TBody>
               {rules.map((rule, index) => (
                 <TR key={rule.id}>
-                  <TD className="whitespace-nowrap px-3 font-mono text-xs">{index + 1}</TD>
+                  <TD className="whitespace-nowrap px-3 font-mono text-sm tabular-nums">{index + 1}</TD>
                   <TD className="whitespace-nowrap px-3 font-medium">{rule.name}</TD>
                   <TD className="max-w-xl px-3 text-muted-foreground">
                     {rule.description.trim() || describeExpression(rule.expression)}

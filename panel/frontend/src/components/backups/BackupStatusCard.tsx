@@ -46,7 +46,7 @@ function ArchiveStatus({
     return (
       <Badge tone="success">
         <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0" />
-        <span className="font-mono text-xs">{archiveObject}</span>
+        <span className="font-mono text-sm">{archiveObject}</span>
       </Badge>
     )
   }
@@ -76,7 +76,7 @@ export function BackupStatusCard({ status, loading, actions }: BackupStatusCardP
       <CardBody className="space-y-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 id="backup-status-heading" className="text-sm font-semibold">
+            <h2 id="backup-status-heading" className="text-base font-semibold">
               Backup status
             </h2>
             {status?.overdue ? <StatusBadge variant="warning" label="Overdue" /> : null}
@@ -108,7 +108,16 @@ export function BackupStatusCard({ status, loading, actions }: BackupStatusCardP
             </div>
             <div>
               <dt className="text-muted-foreground">Object</dt>
-              <dd className="mt-0.5 font-mono text-xs break-all">{lastRun?.object ?? '—'}</dd>
+              <dd className="mt-0.5">
+                {lastRun?.object ? (
+                  <Badge tone="success">
+                    <CheckCircle weight="regular" aria-hidden className="size-4 shrink-0" />
+                    <span className="font-mono text-sm">{lastRun.object}</span>
+                  </Badge>
+                ) : (
+                  <span className="text-sm text-muted-foreground">—</span>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-muted-foreground">Size</dt>
@@ -117,7 +126,7 @@ export function BackupStatusCard({ status, loading, actions }: BackupStatusCardP
               </dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Archive</dt>
+              <dt className="text-muted-foreground">Config file</dt>
               <dd className="mt-0.5">
                 <ArchiveStatus
                   archiveObject={lastRun?.archive_object}

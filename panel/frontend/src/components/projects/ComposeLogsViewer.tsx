@@ -30,7 +30,7 @@ function highlightLine(line: string, needle: string) {
   }
   return parts.map((part, i) =>
     part.match ? (
-      <mark key={i} className="rounded bg-warning/30 text-foreground">
+      <mark key={i} className="rounded bg-warning/40 text-zinc-100">
         {part.text}
       </mark>
     ) : (
@@ -168,11 +168,11 @@ export function ComposeLogsViewer({ slug, service }: ComposeLogsViewerProps) {
       <div
         ref={scrollRef}
         data-testid="log-scroll"
-        className="max-h-96 overflow-auto p-3 font-mono text-xs leading-relaxed text-foreground"
+        className="max-h-96 overflow-auto bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200"
         tabIndex={0}
       >
         {displayLines.length === 0 ? (
-          <p className="text-muted-foreground">
+          <p className="text-zinc-400">
             {paused
               ? 'Log stream paused.'
               : lines.length > 0

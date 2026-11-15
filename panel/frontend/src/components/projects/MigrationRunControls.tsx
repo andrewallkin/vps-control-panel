@@ -46,7 +46,7 @@ export function MigrationRunControls({
           Run database migrations
         </label>
         {command ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Command: <span className="font-mono">{command}</span>
           </p>
         ) : null}

@@ -123,6 +123,18 @@ function composeServiceLabel(svc: ComposePsService): string {
   return svc.name || svc.service || ''
 }
 
+function ServiceImageCell({ image }: { image: string }) {
+  const splitAt = image.lastIndexOf(':')
+  const name = splitAt > 0 ? image.slice(0, splitAt) : image
+  const tag = splitAt > 0 ? image.slice(splitAt + 1) : null
+  return (
+    <span className="font-mono text-sm leading-5">
+      <span className="block whitespace-nowrap">{name}</span>
+      {tag ? <span className="block whitespace-nowrap text-muted-foreground">{tag}</span> : null}
+    </span>
+  )
+}
+
 function metricsForService(
   rows: { name: string; cpu_percent: number; mem_used: number }[],
   slug: string,
@@ -777,8 +789,7 @@ export function ProjectPage() {
       <PageHeader
         title={project.display_name}
         description={
-          <span className="flex flex-wrap items-center gap-2">
-            <span className="font-mono">{project.slug}</span>
+          <span className="flex flex-wrap items-center gap-3 text-base">
             {headerRuntime ? (
               <Badge tone={runtimeStatusTone(headerRuntime)} dot>
                 {runtimeStatusLabel(headerRuntime)}
@@ -789,11 +800,14 @@ export function ProjectPage() {
                 href={primaryUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-mono text-accent hover:underline"
+                className="inline-flex items-center gap-1 font-medium text-accent hover:underline"
               >
                 {primaryUrl}
               </a>
             ) : null}
+            <span className="text-sm text-muted-foreground">
+              {project.slug} · {project.branch}
+            </span>
           </span>
         }
         actions={
@@ -821,18 +835,18 @@ export function ProjectPage() {
       {activeTab === 'overview' ? (
         <div role="tabpanel" className="space-y-6">
           <section className="space-y-3">
-            <h2 className="text-base font-semibold">Services</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Services</h2>
             <TableContainer>
               <Table>
                 <THead className="border-b border-border bg-muted/40">
                   <TR className="hover:bg-transparent">
-                    <TH scope="col" className="normal-case tracking-normal">Service</TH>
-                    <TH scope="col" className="normal-case tracking-normal">Status</TH>
-                    <TH scope="col" className="normal-case tracking-normal">Image</TH>
-                    <TH scope="col" className="normal-case tracking-normal">Ports</TH>
-                    <TH scope="col" className="normal-case tracking-normal">Started</TH>
-                    <TH scope="col" className="text-right normal-case tracking-normal">CPU</TH>
-                    <TH scope="col" className="text-right normal-case tracking-normal">Memory</TH>
+                    <TH scope="col" className="whitespace-nowrap normal-case tracking-normal">Service</TH>
+                    <TH scope="col" className="whitespace-nowrap normal-case tracking-normal">Status</TH>
+                    <TH scope="col" className="whitespace-nowrap normal-case tracking-normal">Image</TH>
+                    <TH scope="col" className="whitespace-nowrap normal-case tracking-normal">Ports</TH>
+                    <TH scope="col" className="whitespace-nowrap normal-case tracking-normal">Started</TH>
+                    <TH scope="col" className="whitespace-nowrap text-right normal-case tracking-normal">CPU</TH>
+                    <TH scope="col" className="whitespace-nowrap text-right normal-case tracking-normal">Memory</TH>
                   </TR>
                 </THead>
                 <TBody>
@@ -854,21 +868,33 @@ export function ProjectPage() {
                     const variant = composeServiceStatusVariant(svc.state, svc.health)
                     return (
                       <TR key={svc.container || serviceName || index}>
-                        <TD className="font-mono">{serviceName}</TD>
-                        <TD>
+                        <TD className="whitespace-nowrap font-mono">{serviceName}</TD>
+                        <TD className="whitespace-nowrap">
                           <StatusBadge variant={variant} label={svc.state || variant} />
                         </TD>
-                        <TD className="min-w-0 font-mono text-xs break-all">{svc.image}</TD>
-                        <TD className="font-mono text-xs text-muted-foreground">
-                          {(svc.ports ?? []).length > 0 ? svc.ports!.join(', ') : '—'}
+                        <TD>
+                          <ServiceImageCell image={svc.image} />
                         </TD>
-                        <TD className="text-muted-foreground">
+                        <TD className="font-mono text-sm text-muted-foreground">
+                          {(svc.ports ?? []).length > 0 ? (
+                            <span className="flex flex-col gap-0.5">
+                              {svc.ports!.map((port) => (
+                                <span key={port} className="whitespace-nowrap">
+                                  {port}
+                                </span>
+                              ))}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </TD>
+                        <TD className="whitespace-nowrap text-muted-foreground">
                           {svc.started_at ? formatStartedAt(svc.started_at) : '—'}
                         </TD>
-                        <TD className="text-right font-mono">
+                        <TD className="whitespace-nowrap text-right font-mono tabular-nums">
                           {metrics ? `${metrics.cpu_percent.toFixed(1)}%` : '—'}
                         </TD>
-                        <TD className="text-right font-mono">
+                        <TD className="whitespace-nowrap text-right font-mono tabular-nums">
                           {metrics ? formatBytes(metrics.mem_used) : '—'}
                         </TD>
                       </TR>
@@ -880,8 +906,8 @@ export function ProjectPage() {
           </section>
           {publicUrls.length > 0 ? (
             <section className="space-y-3">
-              <h2 className="text-base font-semibold">URLs</h2>
-              <ul className="space-y-1 text-sm">
+              <h2 className="text-xl font-semibold tracking-tight">URLs</h2>
+              <ul className="space-y-1 text-base">
                 {publicUrls.map((url) => (
                   <li key={url}>
                     <a
@@ -1015,7 +1041,7 @@ export function ProjectPage() {
 
           {migrateJobId ? (
             <div className="space-y-3">
-              <h2 className="text-base font-semibold">Migration log</h2>
+              <h2 className="text-xl font-semibold tracking-tight">Migration log</h2>
               <LogViewer
                 key={migrateJobId}
                 jobId={migrateJobId}
@@ -1148,17 +1174,17 @@ export function ProjectPage() {
 
       {activeTab === 'database' ? (
         <div role="tabpanel" className="space-y-4">
-          <dl className="grid gap-2 text-sm sm:grid-cols-3">
+          <dl className="grid gap-2 text-base sm:grid-cols-3">
             <div>
-              <dt className="text-muted-foreground">Database</dt>
+              <dt className="text-sm text-muted-foreground">Database</dt>
               <dd className="font-mono">{project.db_name ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">User</dt>
+              <dt className="text-sm text-muted-foreground">User</dt>
               <dd className="font-mono">{project.db_user ?? '—'}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Size</dt>
+              <dt className="text-sm text-muted-foreground">Size</dt>
               <dd className="font-mono">
                 {databaseSizeBytes == null ? '—' : formatBytes(databaseSizeBytes)}
               </dd>
@@ -1194,7 +1220,7 @@ export function ProjectPage() {
             onCancel={() => setRotateStepUpOpen(false)}
           />
           <section className="space-y-3">
-            <h2 className="text-base font-semibold">Dumps</h2>
+            <h2 className="text-xl font-semibold tracking-tight">Dumps</h2>
             <Card className="overflow-x-auto p-0">
               <ul className="w-full divide-y divide-border">
               {!dumpsQuery.isPending && (dumpsQuery.data ?? []).length === 0 ? (
@@ -1219,24 +1245,24 @@ export function ProjectPage() {
 
       {activeTab === 'settings' ? (
         <div role="tabpanel" className="space-y-6">
-          <dl className="grid gap-3 text-sm sm:grid-cols-2">
+          <dl className="grid gap-3 text-base sm:grid-cols-2">
             <div>
-              <dt className="text-muted-foreground">Repository</dt>
+              <dt className="text-sm text-muted-foreground">Repository</dt>
               <dd className="break-all font-mono">{project.repo_url}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Branch</dt>
+              <dt className="text-sm text-muted-foreground">Branch</dt>
               <dd className="font-mono">{project.branch}</dd>
             </div>
             <div>
-              <dt className="text-muted-foreground">Deploy mode</dt>
+              <dt className="text-sm text-muted-foreground">Deploy mode</dt>
               <dd>{project.deploy_mode}</dd>
             </div>
           </dl>
           {project.deploy_mode === 'image' ? (
             <section className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-base font-semibold">Image services</h2>
+                <h2 className="text-xl font-semibold tracking-tight">Image services</h2>
                 <Button
                   type="button"
                   variant="secondary"

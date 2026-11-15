@@ -14,7 +14,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(function 
     <textarea
       ref={ref}
       className={cn(
-        'min-h-[4.5rem] w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground transition-colors duration-150',
+        'min-h-[4.5rem] w-full rounded-xl border bg-card px-3 py-2.5 text-base text-foreground placeholder:text-muted-foreground transition-colors duration-150',
         invalid || props['aria-invalid']
           ? 'border-destructive'
           : 'border-border-strong focus:border-accent',

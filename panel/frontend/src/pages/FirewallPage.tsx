@@ -210,7 +210,7 @@ export function FirewallPage() {
         <CardBody className="space-y-3">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-8">
             <div className="min-w-0 flex-1 space-y-1">
-              <h2 id="cf-only-heading" className="text-sm font-semibold">
+              <h2 id="cf-only-heading" className="text-xl font-semibold">
                 Cloudflare-only mode
               </h2>
               <p className="max-w-3xl text-sm text-muted-foreground">{CF_ONLY_SUMMARY}</p>
@@ -241,7 +241,7 @@ export function FirewallPage() {
       ) : null}
 
       <section className="space-y-3" aria-labelledby="fw-rules-heading">
-        <h2 id="fw-rules-heading" className="text-sm font-semibold">
+        <h2 id="fw-rules-heading" className="text-xl font-semibold">
           Rules
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">{SSH_DELETE_HELPER}</p>
@@ -290,14 +290,14 @@ export function FirewallPage() {
                 const sourceLabel = formatSource(rule.from)
                 return (
                   <TR key={rule.number}>
-                    <TD className="whitespace-nowrap px-3 font-mono text-xs">{portLabel}</TD>
+                    <TD className="whitespace-nowrap px-3 font-mono text-sm">{portLabel}</TD>
                     <TD className="whitespace-nowrap px-3">{formatFamily(rule.v6)}</TD>
-                    <TD className="whitespace-nowrap px-3 font-mono text-xs">{rule.proto}</TD>
+                    <TD className="whitespace-nowrap px-3 font-mono text-sm">{rule.proto}</TD>
                     <TD className="whitespace-nowrap px-3">{formatAction(rule.action)}</TD>
                     <TD
                       className={
                         sourceLabel === rule.from
-                          ? 'min-w-[8rem] break-all px-3 font-mono text-xs'
+                          ? 'min-w-[8rem] break-all px-3 font-mono text-sm'
                           : 'min-w-[8rem] px-3'
                       }
                     >
@@ -311,7 +311,7 @@ export function FirewallPage() {
                         <span className="inline-flex w-[7.5rem] shrink-0 items-center justify-end">
                           {locked ? (
                             <span
-                              className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+                              className="inline-flex items-center gap-1.5 text-sm text-muted-foreground"
                               title={reason}
                               aria-label={`${portLabel} locked`}
                             >
@@ -350,7 +350,7 @@ export function FirewallPage() {
       </section>
 
       <section className="space-y-3" aria-labelledby="fw-exposure-heading">
-        <h2 id="fw-exposure-heading" className="text-sm font-semibold">
+        <h2 id="fw-exposure-heading" className="text-xl font-semibold">
           Exposure report
         </h2>
         <p className="max-w-3xl text-sm text-muted-foreground">{EXPOSURE_GUIDANCE}</p>
@@ -392,10 +392,10 @@ export function FirewallPage() {
                   const names = serviceAndProcess(row.process)
                   return (
                     <TR key={row.key}>
-                      <TD className="whitespace-nowrap px-3 font-mono text-xs">{row.port}</TD>
-                      <TD className="whitespace-nowrap px-3 font-mono text-xs">{row.proto}</TD>
+                      <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.port}</TD>
+                      <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.proto}</TD>
                       <TD className="min-w-[6rem] px-3">{names.service}</TD>
-                      <TD className="min-w-[8rem] break-all px-3 font-mono text-xs text-muted-foreground">
+                      <TD className="min-w-[8rem] break-all px-3 font-mono text-sm text-muted-foreground">
                         {names.program}
                       </TD>
                       <TD className="min-w-[6rem] px-3">{row.reach}</TD>
@@ -457,15 +457,15 @@ export function FirewallPage() {
                     return (
                       <TR key={row.key}>
                         <TD className="min-w-[8rem] break-all px-3">
-                          <span className="font-mono text-xs">{row.address}</span>
+                          <span className="font-mono text-sm">{row.address}</span>
                           {row.scopeLabel ? (
-                            <span className="ml-1.5 text-xs text-muted-foreground">{row.scopeLabel}</span>
+                            <span className="ml-1.5 text-sm text-muted-foreground">{row.scopeLabel}</span>
                           ) : null}
                         </TD>
-                        <TD className="whitespace-nowrap px-3 font-mono text-xs">{row.port}</TD>
-                        <TD className="whitespace-nowrap px-3 font-mono text-xs">{row.proto}</TD>
+                        <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.port}</TD>
+                        <TD className="whitespace-nowrap px-3 font-mono text-sm">{row.proto}</TD>
                         <TD className="min-w-[6rem] px-3">{names.service}</TD>
-                        <TD className="min-w-[8rem] break-all px-3 font-mono text-xs text-muted-foreground">
+                        <TD className="min-w-[8rem] break-all px-3 font-mono text-sm text-muted-foreground">
                           {names.program}
                         </TD>
                         <TD className="min-w-[8rem] px-3 text-sm text-muted-foreground">

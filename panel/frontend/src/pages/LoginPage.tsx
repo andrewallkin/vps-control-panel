@@ -104,7 +104,7 @@ export function LoginPage() {
   if (authState === null) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-background px-4">
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <p className="text-base text-muted-foreground">Loading…</p>
       </div>
     )
   }
@@ -135,19 +135,21 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-8">
-      <Card className="w-full max-w-sm shadow-popover">
-        <CardBody className="space-y-6 p-6">
-          <ProductLogo size="md" showName="below" nameClassName="tracking-tight text-foreground" />
+    <div className="flex min-h-dvh items-center justify-center bg-background px-4 py-10 sm:px-6">
+      <Card className="w-full max-w-md border-border shadow-card">
+        <CardBody className="space-y-8 p-8">
+          <div className="flex justify-center">
+            <ProductLogo size="md" showName="below" nameClassName="tracking-tight text-foreground" />
+          </div>
 
-          <div className="space-y-1">
-            <h1 className="text-lg font-semibold text-foreground">Sign in</h1>
-            <p className="text-sm text-muted-foreground">
+          <div className="space-y-2 text-center sm:text-left">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Sign in</h1>
+            <p className="text-base text-muted-foreground">
               Username, password, and authenticator code
             </p>
           </div>
 
-          <form className="space-y-4" onSubmit={handleSubmit} noValidate>
+          <form className="space-y-5" onSubmit={handleSubmit} noValidate>
             <Field label="Username" error={fieldErrors.username}>
               {(control) => (
                 <Input

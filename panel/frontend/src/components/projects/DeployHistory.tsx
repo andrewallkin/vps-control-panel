@@ -37,7 +37,7 @@ export function DeployHistory({
     <section className="space-y-3">
       <button
         type="button"
-        className="inline-flex items-center gap-2 text-base font-semibold text-foreground cursor-pointer"
+        className="inline-flex cursor-pointer items-center gap-2 text-xl font-semibold tracking-tight text-foreground"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
@@ -93,7 +93,7 @@ export function DeployHistory({
                           <TD className="text-muted-foreground">
                             {formatDeployDuration(row.started_at, row.finished_at, nowMs)}
                           </TD>
-                          <TD className="max-w-[12rem] truncate font-mono text-xs" title={formatTagsSummary(row)}>
+                          <TD className="max-w-[12rem] truncate font-mono text-sm" title={formatTagsSummary(row)}>
                             {formatTagsSummary(row)}
                           </TD>
                           <TD className="text-right">
@@ -130,7 +130,7 @@ export function DeployHistory({
                               <pre
                                 id={logId}
                                 aria-label={`Deploy log #${row.id}`}
-                                className="max-h-64 overflow-auto rounded-lg border border-border-strong bg-background p-3 font-mono text-xs"
+                                className="max-h-64 overflow-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200"
                               >
                                 {row.log}
                               </pre>

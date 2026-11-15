@@ -15,7 +15,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
       <select
         ref={ref}
         className={cn(
-          'h-9 w-full appearance-none rounded-lg border bg-background pl-3 pr-9 text-sm text-foreground transition-colors duration-150',
+          'h-11 w-full appearance-none rounded-xl border bg-card pl-3 pr-9 text-base text-foreground transition-colors duration-150',
           invalid || props['aria-invalid']
             ? 'border-destructive'
             : 'border-border-strong focus:border-accent',

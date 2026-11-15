@@ -1,72 +1,36 @@
+import type { ReactNode } from 'react'
 import type { CurrentMetrics } from '../../lib/dashboardTypes'
 import { formatBytes, formatPercent, formatUptime } from '../../lib/format'
 import { Card, CardBody, Skeleton } from '../ui'
 import { diskMountLabel } from '../../lib/diskLabel'
-import type { ChartPoint } from './MetricChart'
-import { MiniSparkline } from './MiniSparkline'
 import { percentStressClass } from './metricThresholds'
 
 export interface KpiStatRowProps {
   current: CurrentMetrics | undefined
-  cpuSparkline: ChartPoint[]
-  memSparkline: ChartPoint[]
-  diskSparkline: ChartPoint[]
   loading?: boolean
 }
 
 interface KpiTileProps {
   label: string
-  value: string
+  value: ReactNode
   detail?: string
   valueClassName?: string
-  sparkline?: ChartPoint[]
-  sparkColor?: string
-  deltaLabel?: string | null
 }
 
-function KpiTile({
-  label,
-  value,
-  detail,
-  valueClassName = 'text-foreground',
-  sparkline,
-  sparkColor,
-  deltaLabel,
-}: KpiTileProps) {
+function KpiTile({ label, value, detail, valueClassName = 'text-foreground' }: KpiTileProps) {
   return (
-    <Card className="min-w-0">
-      <CardBody className="flex flex-col gap-2 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-medium text-muted-foreground">{label}</p>
-          {sparkline?.length ? (
-            <MiniSparkline data={sparkline} color={sparkColor} className="shrink-0 opacity-80" />
-          ) : null}
-        </div>
-        <p className={`font-mono text-2xl tabular-nums tracking-tight ${valueClassName}`}>{value}</p>
-        {detail ? <p className="text-xs text-muted-foreground">{detail}</p> : null}
-        {deltaLabel ? (
-          <p className="text-xs tabular-nums text-muted-foreground">{deltaLabel}</p>
-        ) : null}
+    <Card className="min-w-0 shadow-[var(--shadow-card,0_1px_2px_rgba(24,24,27,0.04),0_8px_24px_rgba(24,24,27,0.06))]">
+      <CardBody className="flex flex-col gap-2 p-6">
+        <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <p
+          className={`text-[40px] font-semibold leading-none tabular-nums tracking-tight ${valueClassName}`}
+        >
+          {value}
+        </p>
+        {detail ? <p className="text-sm text-muted-foreground">{detail}</p> : null}
       </CardBody>
     </Card>
   )
-}
-
-function sparkDelta(data: ChartPoint[]): string | null {
-  if (data.length < 2) {
-    return null
-  }
-  const first = data[0]?.value
-  const last = data[data.length - 1]?.value
-  if (!Number.isFinite(first) || !Number.isFinite(last)) {
-    return null
-  }
-  const diff = last - first
-  if (Math.abs(diff) < 0.05) {
-    return null
-  }
-  const sign = diff > 0 ? '+' : ''
-  return `${sign}${diff.toFixed(1)} pts`
 }
 
 function KpiSkeleton() {
@@ -81,16 +45,10 @@ function KpiSkeleton() {
   )
 }
 
-export function KpiStatRow({
-  current,
-  cpuSparkline,
-  memSparkline,
-  diskSparkline,
-  loading,
-}: KpiStatRowProps) {
+export function KpiStatRow({ current, loading }: KpiStatRowProps) {
   if (loading && !current) {
     return (
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-5 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
           <KpiSkeleton key={index} />
         ))}
@@ -110,31 +68,30 @@ export function KpiStatRow({
         label="CPU"
         value={current ? formatPercent(current.cpu_percent) : '—'}
         valueClassName={current ? percentStressClass(current.cpu_percent) : 'text-foreground'}
-        sparkline={cpuSparkline}
-        sparkColor="var(--color-accent)"
-        deltaLabel={sparkDelta(cpuSparkline)}
         detail={current ? `${current.cpu_count} cores` : undefined}
       />
       <KpiTile
         label="Memory"
         value={
-          current
-            ? `${formatBytes(current.mem_used)} / ${formatBytes(current.mem_total)}`
-            : '—'
+          current ? (
+            <span className="inline-flex flex-wrap items-baseline">
+              <span>{formatBytes(current.mem_used)}</span>
+              <span className="whitespace-nowrap text-[22px] font-medium text-muted-foreground">
+                {' '}
+                / {formatBytes(current.mem_total)}
+              </span>
+            </span>
+          ) : (
+            '—'
+          )
         }
         valueClassName={current ? percentStressClass(memPercent) : 'text-foreground'}
-        sparkline={memSparkline}
-        sparkColor="var(--color-foreground)"
-        deltaLabel={sparkDelta(memSparkline)}
         detail={current ? `${formatPercent(memPercent)} used` : undefined}
       />
       <KpiTile
         label={primaryDisk ? `Disk (${diskMountLabel(primaryDisk.path)})` : 'Disk'}
         value={primaryDisk ? formatPercent(primaryDisk.percent) : '—'}
         valueClassName={primaryDisk ? percentStressClass(primaryDisk.percent) : 'text-foreground'}
-        sparkline={diskSparkline}
-        sparkColor="var(--color-warning)"
-        deltaLabel={sparkDelta(diskSparkline)}
         detail={
           primaryDisk
             ? `${formatBytes(primaryDisk.free)} free`
@@ -144,9 +101,13 @@ export function KpiStatRow({
       <KpiTile
         label="Uptime"
         value={
-          current?.uptime_seconds !== undefined
-            ? formatUptime(current.uptime_seconds)
-            : '—'
+          current?.uptime_seconds !== undefined ? (
+            <span className="whitespace-nowrap text-[32px] font-semibold leading-tight tabular-nums tracking-tight sm:text-[40px]">
+              {formatUptime(current.uptime_seconds)}
+            </span>
+          ) : (
+            '—'
+          )
         }
         detail="Since last boot"
       />

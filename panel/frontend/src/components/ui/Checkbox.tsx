@@ -12,7 +12,7 @@ export const Checkbox = forwardRef<HTMLInputElement, CheckboxProps>(function Che
       ref={ref}
       type="checkbox"
       className={cn(
-        'size-4 shrink-0 rounded border-border-strong bg-background accent-accent cursor-pointer',
+        'size-[1.125rem] shrink-0 rounded border-border-strong bg-card accent-accent cursor-pointer',
         className,
       )}
       {...props}

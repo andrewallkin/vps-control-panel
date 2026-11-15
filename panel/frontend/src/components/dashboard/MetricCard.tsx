@@ -54,11 +54,11 @@ export function MetricCard({
       : isCurrentStale
 
   return (
-    <Card className="flex h-full flex-col">
-      <CardBody className="flex flex-1 flex-col gap-3">
+    <Card className="flex h-full flex-col shadow-[var(--shadow-card,0_1px_2px_rgba(24,24,27,0.04),0_8px_24px_rgba(24,24,27,0.06))]">
+      <CardBody className="flex flex-1 flex-col gap-4 p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+          <h2 className="text-xl font-semibold text-foreground">{title}</h2>
+          <div className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
             <span>updated {formatSecondsAgo(displayUpdatedAt, now)}</span>
             {isStale ? <StaleBadge /> : null}
             <IconButton
@@ -91,22 +91,22 @@ export function MetricCard({
             Data table
           </summary>
           <div className="mt-2 max-h-48 overflow-auto rounded-lg border border-border">
-            <table className="w-full text-left text-xs">
-              <thead className="sticky top-0 border-b border-border bg-muted text-muted-foreground">
+            <table className="w-full text-left text-base">
+              <thead className="sticky top-0 border-b border-border bg-muted text-sm text-muted-foreground">
                 <tr>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <th scope="col" className="px-3 py-2 font-semibold">
                     {tableHeaders[0]}
                   </th>
-                  <th scope="col" className="px-3 py-2 text-right font-medium">
+                  <th scope="col" className="px-3 py-2 text-right font-semibold">
                     {tableHeaders[1]}
                   </th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-border text-[15px]">
                 {tableRows.map((row) => (
                   <tr key={row.label}>
-                    <td className="px-3 py-2 font-mono tabular-nums">{row.label}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums">
+                    <td className="px-3 py-2.5 font-mono tabular-nums">{row.label}</td>
+                    <td className="px-3 py-2.5 text-right font-mono tabular-nums">
                       {row.value}
                     </td>
                   </tr>

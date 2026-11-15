@@ -6,7 +6,7 @@ export type CardProps = HTMLAttributes<HTMLDivElement>
 export function Card({ className, ...props }: CardProps) {
   return (
     <div
-      className={cn('rounded-xl border border-border bg-card text-foreground', className)}
+      className={cn('rounded-xl bg-card text-foreground shadow-card', className)}
       {...props}
     />
   )
@@ -26,9 +26,9 @@ export function CardHeader({
   return (
     <div className={cn('flex items-start justify-between gap-4 border-b border-border px-4 py-3', className)}>
       <div className="min-w-0 space-y-0.5">
-        <div className="text-sm font-semibold tracking-tight">{title}</div>
+        <div className="text-base font-semibold tracking-tight">{title}</div>
         {description ? (
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="text-sm text-muted-foreground">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="shrink-0">{actions}</div> : null}

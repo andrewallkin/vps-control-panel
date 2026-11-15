@@ -1,4 +1,9 @@
-import { ArrowRight } from '@phosphor-icons/react'
+import {
+  ArrowRight,
+  CloudArrowDown,
+  FolderOpen,
+  ShieldCheck,
+} from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import type { BackupLastRun } from '../../lib/backupsApi'
@@ -25,32 +30,45 @@ export function formatBackupLastRun(
 function StatusTile({
   title,
   href,
+  icon,
+  iconClassName,
   children,
-  className,
 }: {
   title: string
   href: string
+  icon: ReactNode
+  iconClassName: string
   children: ReactNode
-  className?: string
 }) {
   return (
-    <Link
-      to={href}
-      className={cn(
-        'group flex min-w-0 flex-col gap-2 rounded-lg border border-transparent p-3 transition-colors duration-150 hover:border-border hover:bg-muted/40',
-        className,
-      )}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-muted-foreground">{title}</p>
-        <ArrowRight
-          weight="regular"
-          aria-hidden
-          className="size-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
-        />
-      </div>
-      {children}
-    </Link>
+    <Card className="shadow-[var(--shadow-card,0_1px_2px_rgba(24,24,27,0.04),0_8px_24px_rgba(24,24,27,0.06))]">
+      <CardBody className="p-5">
+        <Link
+          to={href}
+          className="group flex items-center gap-4 transition-colors duration-150"
+        >
+          <div
+            className={cn(
+              'flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
+              iconClassName,
+            )}
+          >
+            {icon}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm text-muted-foreground">{title}</p>
+              <ArrowRight
+                weight="regular"
+                aria-hidden
+                className="size-4 shrink-0 text-muted-foreground opacity-0 transition-opacity duration-150 group-hover:opacity-100"
+              />
+            </div>
+            <div className="mt-1">{children}</div>
+          </div>
+        </Link>
+      </CardBody>
+    </Card>
   )
 }
 
@@ -100,18 +118,18 @@ export function StatusStrip({ summary, loading }: StatusStripProps) {
 
   if (loading && !summary) {
     return (
-      <Card>
-        <CardBody>
-          <div
-            className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
-            aria-label="System status"
-          >
-            {Array.from({ length: 3 }, (_, index) => (
-              <Skeleton key={index} className="h-20 w-full" />
-            ))}
-          </div>
-        </CardBody>
-      </Card>
+      <div
+        className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        aria-label="System status"
+      >
+        {Array.from({ length: 3 }, (_, index) => (
+          <Card key={index}>
+            <CardBody className="p-5">
+              <Skeleton className="h-14 w-full" />
+            </CardBody>
+          </Card>
+        ))}
+      </div>
     )
   }
 
@@ -122,50 +140,64 @@ export function StatusStrip({ summary, loading }: StatusStripProps) {
   const { projects, backup, nearest_cert_expiry } = summary
 
   return (
-    <Card>
-      <CardBody className="p-2 sm:p-3">
-        <section
-          aria-label="System status"
-          className="grid grid-cols-1 gap-1 sm:grid-cols-2 xl:grid-cols-3"
-        >
-          <StatusTile title="Projects" href="/projects">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="text-sm">
-                <span className="font-mono tabular-nums">{projects.up}</span>
-                <span className="text-muted-foreground"> up</span>
-              </p>
-              {projectsBadge(summary)}
-            </div>
-          </StatusTile>
-          <StatusTile title="Backup" href="/backups">
-            {backup === null ? (
-              <p className="text-sm text-muted-foreground">Not configured</p>
-            ) : (
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm font-mono tabular-nums">
-                  {formatBackupLastRun(backup.last_run)}
-                </p>
-                {backupBadge(summary)}
-              </div>
-            )}
-          </StatusTile>
-          <StatusTile title="Nearest cert" href="/domains" className="sm:col-span-2 xl:col-span-1">
-            {nearest_cert_expiry ? (
-              <div className="space-y-1">
-                <p
-                  className="text-sm font-mono tabular-nums"
-                  title={formatDateTime(nearest_cert_expiry)}
-                >
-                  {formatRelativeTime(nearest_cert_expiry, now)}
-                </p>
-                <p className="text-xs text-muted-foreground">Certificate expiry</p>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">None</p>
-            )}
-          </StatusTile>
-        </section>
-      </CardBody>
-    </Card>
+    <section
+      aria-label="System status"
+      className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+    >
+      <StatusTile
+        title="Projects"
+        href="/projects"
+        icon={<FolderOpen weight="regular" className="size-6" aria-hidden />}
+        iconClassName="bg-accent-soft text-accent"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-lg font-semibold">
+            <span className="tabular-nums">{projects.up}</span>
+            <span className="font-normal text-muted-foreground"> up</span>
+            {projects.unhealthy > 0 ? (
+              <>
+                <span className="font-normal text-muted-foreground"> · </span>
+                <span className="text-warning">{projects.unhealthy} degraded</span>
+              </>
+            ) : null}
+          </p>
+          {projectsBadge(summary)}
+        </div>
+      </StatusTile>
+      <StatusTile
+        title="Last backup"
+        href="/backups"
+        icon={<CloudArrowDown weight="regular" className="size-6" aria-hidden />}
+        iconClassName="bg-[#ECFDF5] text-[#047857]"
+      >
+        {backup === null ? (
+          <p className="text-lg font-semibold text-muted-foreground">Not configured</p>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-lg font-semibold tabular-nums">
+              {formatBackupLastRun(backup.last_run)}
+            </p>
+            {backupBadge(summary)}
+          </div>
+        )}
+      </StatusTile>
+      <StatusTile
+        title="Nearest cert expiry"
+        href="/domains"
+        icon={<ShieldCheck weight="regular" className="size-6" aria-hidden />}
+        iconClassName="bg-muted text-muted-foreground"
+      >
+        {nearest_cert_expiry ? (
+          <p
+            className="text-lg font-semibold tabular-nums"
+            title={formatDateTime(nearest_cert_expiry)}
+          >
+            {formatRelativeTime(nearest_cert_expiry, now)}
+          </p>
+        ) : (
+          <p className="text-lg font-semibold text-muted-foreground">None</p>
+        )}
+      </StatusTile>
+    </section>
   )
 }

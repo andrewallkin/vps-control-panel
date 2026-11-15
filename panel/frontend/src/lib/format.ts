@@ -118,28 +118,34 @@ export function formatLoad(load: number, cpuCount: number): string {
   return `${load.toFixed(2)} / ${cpuCount}`
 }
 
+function formatRelativeCore(iso: string, eventMs: number, nowMs: number): string {
+  const deltaMs = nowMs - eventMs
+  const absSeconds = Math.floor(Math.abs(deltaMs) / 1000)
+  if (absSeconds < 60) {
+    return 'just now'
+  }
+  const isFuture = deltaMs < 0
+  const minutes = Math.floor(absSeconds / 60)
+  if (minutes < 60) {
+    return isFuture ? `in ${minutes}m` : `${minutes}m ago`
+  }
+  const hours = Math.floor(minutes / 60)
+  if (hours < 48) {
+    return isFuture ? `in ${hours}h` : `${hours}h ago`
+  }
+  const days = Math.floor(hours / 24)
+  if (days < 14) {
+    return isFuture ? `in ${days}d` : `${days}d ago`
+  }
+  return formatDateTime(iso)
+}
+
 export function formatRelativeTime(iso: string, nowMs: number): string {
   const parsedMs = Date.parse(iso)
   if (!Number.isFinite(parsedMs)) {
     return iso
   }
-  const seconds = Math.max(0, Math.floor((nowMs - parsedMs) / 1000))
-  if (seconds < 60) {
-    return 'just now'
-  }
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) {
-    return `${minutes}m ago`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 48) {
-    return `${hours}h ago`
-  }
-  const days = Math.floor(hours / 24)
-  if (days < 14) {
-    return `${days}d ago`
-  }
-  return formatDateTime(iso)
+  return formatRelativeCore(iso, parsedMs, nowMs)
 }
 
 export function formatIsoRelative(iso: string, nowMs: number): string {
@@ -147,23 +153,7 @@ export function formatIsoRelative(iso: string, nowMs: number): string {
   if (!Number.isFinite(eventMs)) {
     return '—'
   }
-  const seconds = Math.max(0, Math.floor((nowMs - eventMs) / 1000))
-  if (seconds < 60) {
-    return 'just now'
-  }
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) {
-    return `${minutes}m ago`
-  }
-  const hours = Math.floor(minutes / 60)
-  if (hours < 48) {
-    return `${hours}h ago`
-  }
-  const days = Math.floor(hours / 24)
-  if (days < 14) {
-    return `${days}d ago`
-  }
-  return formatDateTime(iso)
+  return formatRelativeCore(iso, eventMs, nowMs)
 }
 
 export function formatDeployDuration(

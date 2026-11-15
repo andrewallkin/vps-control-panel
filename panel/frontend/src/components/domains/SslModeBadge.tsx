@@ -47,11 +47,11 @@ export function SslModeBadge({ sslMode, sslModeError, warning }: SslModeBadgePro
         </span>
       </span>
       {permissionDenied ? (
-        <p className="text-xs text-warning">
+        <p className="text-sm text-warning">
           Add Zone Settings:Read on the Cloudflare token, then save it in Settings.
         </p>
       ) : warning === SSL_MODE_WARNING ? (
-        <p className="text-xs text-warning">{SSL_MODE_WARNING}</p>
+        <p className="text-sm text-warning">{SSL_MODE_WARNING}</p>
       ) : null}
     </div>
   )

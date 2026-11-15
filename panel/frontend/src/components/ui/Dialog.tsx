@@ -14,7 +14,7 @@ export function DialogOverlay({
 }: ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
-      className={cn('fixed inset-0 z-50 bg-black/60 backdrop-blur-sm', className)}
+      className={cn('fixed inset-0 z-50 bg-black/25 backdrop-blur-sm', className)}
       {...props}
     />
   )
@@ -46,7 +46,7 @@ export function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          'fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl border border-border bg-card p-4 shadow-popover outline-none',
+          'fixed left-1/2 top-1/2 z-50 w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-xl bg-card p-5 shadow-popover outline-none',
           className,
         )}
         onEscapeKeyDown={(event) => {
@@ -66,7 +66,7 @@ export function DialogContent({
         {children}
         {showClose ? (
           <DialogPrimitive.Close
-            className="absolute right-3 top-3 rounded-lg p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground cursor-pointer"
+            className="absolute right-3 top-3 rounded-xl p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground cursor-pointer"
             aria-label="Close"
             disabled={busy}
           >

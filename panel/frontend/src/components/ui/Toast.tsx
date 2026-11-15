@@ -46,28 +46,28 @@ const toneConfig: Record<
     role: 'status',
     live: 'polite',
     icon: <CheckCircle weight="fill" aria-hidden className="size-4 shrink-0" />,
-    surface: 'bg-muted',
-    iconClass: 'text-accent',
+    surface: 'bg-[#ECFDF5] border-[#A7F3D0]/50',
+    iconClass: 'text-[#047857]',
   },
   info: {
     role: 'status',
     live: 'polite',
     icon: <Info weight="fill" aria-hidden className="size-4 shrink-0" />,
-    surface: 'bg-secondary',
+    surface: 'bg-info-soft',
     iconClass: 'text-info',
   },
   warning: {
     role: 'alert',
     live: 'polite',
     icon: <Warning weight="fill" aria-hidden className="size-4 shrink-0" />,
-    surface: 'bg-secondary',
+    surface: 'bg-warning-soft',
     iconClass: 'text-warning',
   },
   danger: {
     role: 'alert',
     live: 'assertive',
     icon: <XCircle weight="fill" aria-hidden className="size-4 shrink-0" />,
-    surface: 'bg-muted',
+    surface: 'bg-destructive-soft',
     iconClass: 'text-destructive',
   },
 }
@@ -151,7 +151,7 @@ function ToastItem({
     <MotionSafeToast
       dismissing={record.dismissing}
       className={cn(
-        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-border px-4 py-3 text-sm text-foreground shadow-popover',
+        'pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border px-4 py-3 text-base text-foreground shadow-popover',
         config.surface,
       )}
       role={config.role}
@@ -177,7 +177,7 @@ function ToastItem({
       </div>
       <button
         type="button"
-        className="shrink-0 rounded-lg p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground cursor-pointer"
+        className="shrink-0 rounded-xl p-1 text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground cursor-pointer"
         aria-label="Dismiss notification"
         onClick={dismiss}
       >

@@ -53,11 +53,11 @@ export function UiShowcasePage() {
   const { toast } = useToast()
 
   return (
-    <div className="min-h-dvh bg-background px-6 py-10">
-      <div className="mx-auto max-w-5xl space-y-10">
+    <div className="min-h-dvh bg-background px-6 py-10 sm:px-8">
+      <div className="mx-auto max-w-5xl space-y-12">
         <PageHeader
-          title="UI foundation"
-          description="Dev-only component showcase for the VPS control panel redesign."
+          title="Studio UI kit"
+          description="Dev-only showcase for the light Studio foundation — warm canvas, indigo accent, 16px+ body type, and white cards."
           actions={
             <Link className={buttonClasses({ variant: 'secondary' })} to="/">
               Back to app
@@ -66,7 +66,7 @@ export function UiShowcasePage() {
         />
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Buttons</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Buttons</h2>
           <div className="flex flex-wrap gap-2">
             <Button variant="primary">Primary</Button>
             <Button variant="secondary">Secondary</Button>
@@ -80,24 +80,26 @@ export function UiShowcasePage() {
           </div>
         </section>
 
-        <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Product logo</h2>
-          <div className="flex flex-wrap items-center gap-8">
-            <ProductLogo size="sm" showName nameClassName="tracking-tight" />
-            <ProductLogo size="sm" showName />
-            <ProductLogo size="md" showName="below" nameClassName="tracking-tight text-foreground" />
-          </div>
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Product logo</h2>
+          <Card>
+            <CardBody className="flex flex-wrap items-center gap-10 py-6">
+              <ProductLogo size="sm" showName nameClassName="tracking-tight text-foreground" />
+              <ProductLogo size="md" showName="beside" nameClassName="tracking-tight text-foreground" />
+              <ProductLogo size="md" showName="below" nameClassName="tracking-tight text-foreground" />
+            </CardBody>
+          </Card>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Icon button</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Icon button</h2>
           <IconButton label="Settings">
             <Gear weight="bold" className="size-5" aria-hidden />
           </IconButton>
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Form controls</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Form controls</h2>
           <div className="grid max-w-md gap-4">
             <Field label="Project name" hint="Lowercase slug is derived automatically.">
               {(props) => <Input {...props} placeholder="my-app" />}
@@ -114,7 +116,7 @@ export function UiShowcasePage() {
                 </Select>
               )}
             </Field>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex items-center gap-2 text-base">
               <Checkbox defaultChecked />
               Enable automatic backups
             </label>
@@ -123,11 +125,11 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Card</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Card</h2>
           <Card>
             <CardHeader title="nginx" description="Reverse proxy · 2 replicas" actions={<Badge tone="success" dot>Running</Badge>} />
             <CardBody>
-              <p className="text-sm text-muted-foreground">Card body content.</p>
+              <p className="text-base text-muted-foreground">Card body content on a white Studio surface.</p>
             </CardBody>
             <CardFooter>
               <Button variant="secondary" size="sm">View logs</Button>
@@ -136,7 +138,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Tabs</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Tabs</h2>
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
               <TabsTrigger value="one">Overview</TabsTrigger>
@@ -148,7 +150,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Dialog</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Dialog</h2>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button variant="secondary">Open dialog</Button>
@@ -164,7 +166,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Badges</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Badges</h2>
           <div className="flex flex-wrap gap-2">
             {(['neutral', 'success', 'warning', 'danger', 'info'] as const).map((tone) => (
               <Badge key={tone} tone={tone} dot>
@@ -175,7 +177,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Alerts</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Alerts</h2>
           <div className="space-y-2">
             <Alert tone="info" title="Info">Deployment queued.</Alert>
             <Alert tone="success" title="Success">DNS propagated.</Alert>
@@ -185,7 +187,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Empty state</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Empty state</h2>
           <Card>
             <EmptyState
               icon={<Gear weight="duotone" className="size-10" aria-hidden />}
@@ -197,7 +199,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Loading</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Loading</h2>
           <div className="flex items-center gap-4">
             <Spinner />
             <Skeleton className="h-9 w-48" />
@@ -205,7 +207,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Table</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Table</h2>
           <TableContainer>
             <Table>
               <THead>
@@ -233,7 +235,7 @@ export function UiShowcasePage() {
         </section>
 
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Toasts</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Toasts</h2>
           <div className="flex flex-wrap gap-2">
             {(['success', 'danger', 'info', 'warning'] as const).map((tone) => (
               <Button
@@ -254,8 +256,25 @@ export function UiShowcasePage() {
           </div>
         </section>
 
+        <section className="space-y-4">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Terminal log</h2>
+          <Card className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-card px-5 py-3">
+              <span className="text-base font-medium text-foreground">Live job log</span>
+              <span className="text-sm text-muted-foreground">Restore job · streaming</span>
+            </div>
+            <pre className="max-h-52 overflow-auto bg-zinc-950 p-5 font-mono text-sm leading-relaxed text-zinc-200">
+              {`14:32:01 ▸ Pulling image ghcr.io/example/api:v2.4.1
+14:32:08 ✓ Image pulled (142 MB)
+14:32:14 ✓ Migrations applied
+14:32:49 Deploy succeeded in 48s
+— Waiting for events…`}
+            </pre>
+          </Card>
+        </section>
+
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Dropdown</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">Dropdown</h2>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="secondary" rightIcon={<DotsThree weight="bold" className="size-4" aria-hidden />}>

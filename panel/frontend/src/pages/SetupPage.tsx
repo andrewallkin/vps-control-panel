@@ -36,7 +36,7 @@ import {
   getPanelHostnameContinuePending,
 } from '../lib/setupSession'
 import { resolveActiveStep } from '../lib/setupWizard'
-import { Alert, Button, Card, CardBody, PageHeader } from '../components/ui'
+import { Alert, Button, Card, CardBody, PageHeader, ProductLogo } from '../components/ui'
 
 function stepStatus(steps: SetupStep[], id: SetupStep['id']): string {
   return steps.find((step) => step.id === id)?.status ?? 'pending'
@@ -243,11 +243,14 @@ export function SetupPage() {
     stepStatus(steps, 'cloudflare') === 'done' || zonesQuery.data?.configured === true
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-6">
-      <PageHeader
-        title="First-run setup"
-        description="Configure the database, Cloudflare, domains, and panel URL before using the dashboard."
-      />
+    <div className="min-h-dvh bg-background px-4 py-8 sm:px-6">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+        <ProductLogo size="md" showName nameClassName="tracking-tight text-foreground" />
+
+        <PageHeader
+          title="First-run setup"
+          description="Configure the database, Cloudflare, domains, and panel URL before using the dashboard."
+        />
 
       <SetupStepper active={activeStep} steps={steps} hasValidCert={hasValidCert} />
 
@@ -257,10 +260,10 @@ export function SetupPage() {
 
       {activeStep === 'database' && databaseStatus === 'pending' && !effectiveRestoreJobId ? (
         <section className="space-y-4" aria-labelledby="database-step-heading">
-          <h2 id="database-step-heading" className="text-base font-semibold">
+          <h2 id="database-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
             Database
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             Start with an empty PostgreSQL cluster or upload a cluster dump to restore.
           </p>
 
@@ -268,19 +271,19 @@ export function SetupPage() {
             <button
               type="button"
               disabled={emptyMutation.isPending || uploading}
-              className="flex flex-col items-start gap-2 rounded-xl border border-border bg-card p-4 text-left transition-colors duration-150 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex flex-col items-start gap-2 rounded-2xl border border-border bg-card p-5 text-left shadow-sm transition-colors duration-150 hover:bg-muted cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={() => emptyMutation.mutate()}
             >
               <Database weight="regular" aria-hidden className="size-6 text-accent" />
-              <span className="font-medium">Start empty</span>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-base font-medium text-foreground">Start empty</span>
+              <span className="text-sm text-muted-foreground">
                 Keep the default empty cluster and continue setup.
               </span>
             </button>
 
             <div
-              className={`rounded-xl border border-dashed p-4 transition-colors duration-150 ${
-                dragOver ? 'border-accent bg-muted/50' : 'border-border bg-card'
+              className={`rounded-2xl border border-dashed p-5 shadow-sm transition-colors duration-150 ${
+                dragOver ? 'border-accent bg-accent-soft/40' : 'border-border bg-card'
               }`}
               onDragOver={(event) => {
                 event.preventDefault()
@@ -290,8 +293,8 @@ export function SetupPage() {
               onDrop={onDrop}
             >
               <FileArrowUp weight="regular" aria-hidden className="size-6 text-foreground" />
-              <p className="mt-2 font-medium">Upload dump</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-2 text-base font-medium text-foreground">Upload dump</p>
+              <p className="mt-1 text-sm text-muted-foreground">
                 Drag and drop a .sql or .sql.gz file, or choose a file.
               </p>
               <Button
@@ -343,7 +346,6 @@ export function SetupPage() {
               <Button
                 type="button"
                 variant="danger"
-                className="bg-destructive text-foreground hover:bg-destructive/90"
                 onClick={() => {
                   setConfirmDialogKey((value) => value + 1)
                   setConfirmOpen(true)
@@ -358,7 +360,7 @@ export function SetupPage() {
 
       {effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="restore-log-heading">
-          <h2 id="restore-log-heading" className="text-base font-semibold">
+          <h2 id="restore-log-heading" className="text-xl font-semibold tracking-tight text-foreground">
             Restore progress
           </h2>
           <LogViewer key={effectiveRestoreJobId} jobId={effectiveRestoreJobId} onEnd={handleJobEnd} />
@@ -432,10 +434,10 @@ export function SetupPage() {
 
       {activeStep === 'finish' && !effectiveRestoreJobId ? (
         <section className="space-y-3" aria-labelledby="finish-heading">
-          <h2 id="finish-heading" className="text-base font-semibold">
+          <h2 id="finish-heading" className="text-xl font-semibold tracking-tight text-foreground">
             Finish
           </h2>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {databaseStatus === 'restored'
               ? 'Restore completed. Complete setup to open the dashboard.'
               : 'Configuration is ready. Complete setup to open the dashboard.'}
@@ -465,6 +467,7 @@ export function SetupPage() {
           }
         }}
       />
+      </div>
     </div>
   )
 }

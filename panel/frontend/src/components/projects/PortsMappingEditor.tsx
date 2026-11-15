@@ -69,7 +69,7 @@ export function PortsMappingEditor({
             >
               <div className="min-w-0">
                 <p className="truncate font-mono text-sm text-foreground">{row.env_var}</p>
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="truncate text-sm text-muted-foreground">
                   {row.service ? `${row.service} · ` : ''}
                   {row.default !== null ? `compose default ${row.default}` : 'no compose default'}
                 </p>
@@ -90,7 +90,7 @@ export function PortsMappingEditor({
               </div>
               <div className="min-w-0">
                 {hint !== null ? (
-                  <span className={`text-xs ${TONE_CLASS[hint.tone]}`} role="status">
+                  <span className={`text-sm ${TONE_CLASS[hint.tone]}`} role="status">
                     {hint.text}
                   </span>
                 ) : null}

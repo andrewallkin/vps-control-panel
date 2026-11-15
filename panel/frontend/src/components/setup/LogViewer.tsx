@@ -136,11 +136,11 @@ export function LogViewer({ jobId, onEnd }: LogViewerProps) {
       <div
         ref={scrollRef}
         data-testid="log-scroll"
-        className="max-h-72 overflow-auto p-3 font-mono text-xs leading-relaxed text-foreground"
+        className="max-h-72 overflow-auto bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200"
         tabIndex={0}
       >
         {displayLines.length === 0 ? (
-          <p className="text-muted-foreground">{ended ? 'No log lines yet.' : 'Waiting for log…'}</p>
+          <p className="text-zinc-400">{ended ? 'No log lines yet.' : 'Waiting for log…'}</p>
         ) : (
           displayLines.map((line, index) => (
             <div key={`${index}-${line.slice(0, 24)}`}>{line}</div>

@@ -81,10 +81,10 @@ export function CloudflareSetupStep({
 
   return (
     <section className="space-y-4" aria-labelledby="cloudflare-step-heading">
-      <h2 id="cloudflare-step-heading" className="text-base font-semibold">
+      <h2 id="cloudflare-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
         Cloudflare
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Paste an API token with Zone:Read, DNS:Edit, and Zone WAF Edit for the zones you will
         use. Zone Settings:Read is optional and enables SSL mode warnings on the Domains page.
       </p>
@@ -123,7 +123,7 @@ export function CloudflareSetupStep({
                   {zones.map((zone) => (
                     <li key={zone.id} className="px-4 py-2 text-sm">
                       <span className="font-medium">{zone.name}</span>
-                      <span className="ml-2 text-xs text-muted-foreground">{zone.status}</span>
+                      <span className="ml-2 text-sm text-muted-foreground">{zone.status}</span>
                     </li>
                   ))}
                 </ul>

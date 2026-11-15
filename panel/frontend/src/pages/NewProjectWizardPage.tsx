@@ -574,7 +574,7 @@ export function NewProjectWizardPage() {
         >
           ← Projects
         </Link>
-        <h1 className="text-xl font-semibold tracking-tight">New project</h1>
+        <h1 className="text-[2.125rem] font-semibold leading-tight tracking-tight">New project</h1>
       </div>
 
       {step !== 'progress' ? <ProjectWizardStepper active={step} /> : null}
@@ -715,7 +715,7 @@ export function NewProjectWizardPage() {
                   <p>
                     Add this read-only deploy key under the repo&apos;s Settings → Deploy keys.
                   </p>
-                  <pre className="mt-2 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+                  <pre className="mt-2 overflow-x-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200">
                     {publicKey}
                   </pre>
                 </>
@@ -970,7 +970,7 @@ export function NewProjectWizardPage() {
                   ].map((name) => (
                     <li
                       key={name}
-                      className="rounded-md bg-muted px-2 py-1 font-mono text-xs text-foreground"
+                      className="rounded-md bg-muted px-2 py-1 font-mono text-sm text-foreground"
                     >
                       {name}
                     </li>
@@ -1021,14 +1021,14 @@ export function NewProjectWizardPage() {
                   className="mt-1"
               onChange={(e) => setMigrationCommand(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Runs inside the service container on every deploy (before containers
               switch), e.g. <span className="font-mono">bash /app/run_migrations.sh</span>{' '}
               or <span className="font-mono">alembic upgrade head</span>. Both fields
               must be set to enable.
             </p>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Projects using Postgres must join the external <code>postgres-net</code> network in
             their compose file.
           </p>
@@ -1049,7 +1049,7 @@ export function NewProjectWizardPage() {
       ) : null}
 
       {step === 'review' ? (
-        <Card className="space-y-3 p-4 text-sm">
+        <Card className="space-y-3 p-4 text-base">
           <p>
             <span className="text-muted-foreground">Directory:</span>{' '}
             <span className="font-mono">/srv/apps/{slug}</span>
@@ -1121,7 +1121,7 @@ export function NewProjectWizardPage() {
                     continue.
                   </p>
                   {publicKey ? (
-                    <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+                    <pre className="overflow-x-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200">
                       {publicKey}
                     </pre>
                   ) : (
@@ -1192,7 +1192,7 @@ export function NewProjectWizardPage() {
           {isSshRepoUrl(repoUrl) && publicKey && creationState?.status !== 'awaiting_deploy_key' ? (
             <div className="text-sm text-muted-foreground">
               <p>Deploy key (read-only):</p>
-              <pre className="mt-1 overflow-x-auto rounded-md border border-border bg-background p-3 font-mono text-xs text-foreground">
+              <pre className="mt-1 overflow-x-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200">
                 {publicKey}
               </pre>
             </div>

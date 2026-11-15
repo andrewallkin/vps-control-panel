@@ -6,7 +6,6 @@ import {
   Globe,
   Gear,
   List,
-  MagnifyingGlass,
   Scroll,
   Shield,
   Stack,
@@ -20,7 +19,7 @@ import {
   CommandPaletteSearchButton,
   useCommandPaletteHotkeys,
 } from './CommandPalette'
-import { IconButton, ProductLogo } from './ui'
+import { ProductLogo } from './ui'
 
 export function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -69,57 +68,97 @@ export function Layout() {
     })
   }
 
-  const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  const desktopNavLinkClass = ({ isActive }: { isActive: boolean }) =>
     cn(
-      'relative flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer',
+      'rounded-lg px-3 py-2 text-base transition-colors duration-150 cursor-pointer',
       isActive
-        ? 'bg-muted text-foreground before:absolute before:inset-y-1.5 before:left-0 before:w-0.5 before:rounded-full before:bg-accent'
+        ? 'bg-accent-soft font-semibold text-accent'
+        : 'font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground',
+    )
+
+  const drawerNavLinkClass = ({ isActive }: { isActive: boolean }) =>
+    cn(
+      'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors duration-150 cursor-pointer',
+      isActive
+        ? 'bg-accent-soft font-semibold text-accent'
         : 'text-muted-foreground hover:bg-muted/70 hover:text-foreground',
     )
 
-  const mainNav = (
+  const drawerNav = (
     <>
-      <NavLink to="/" end className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/" end className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Gauge weight="regular" aria-hidden className="size-4 shrink-0" />
         Dashboard
       </NavLink>
-      <NavLink to="/projects" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/projects" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Stack weight="regular" aria-hidden className="size-4 shrink-0" />
         Projects
       </NavLink>
-      <NavLink to="/domains" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/domains" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Globe weight="regular" aria-hidden className="size-4 shrink-0" />
         Domains
       </NavLink>
-      <NavLink to="/rules" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/rules" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Funnel weight="regular" aria-hidden className="size-4 shrink-0" />
         Rules
       </NavLink>
-      <NavLink to="/firewall" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/firewall" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Shield weight="regular" aria-hidden className="size-4 shrink-0" />
         Firewall
       </NavLink>
-      <NavLink to="/backups" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/backups" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <CloudArrowUp weight="regular" aria-hidden className="size-4 shrink-0" />
         Backups
       </NavLink>
-      <NavLink to="/database" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/database" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Database weight="regular" aria-hidden className="size-4 shrink-0" />
         Database
       </NavLink>
-      <NavLink to="/audit" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/audit" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Scroll weight="regular" aria-hidden className="size-4 shrink-0" />
         Audit
       </NavLink>
-      <NavLink to="/settings" className={navLinkClass} onClick={() => setDrawerOpen(false)}>
+      <NavLink to="/settings" className={drawerNavLinkClass} onClick={() => setDrawerOpen(false)}>
         <Gear weight="regular" aria-hidden className="size-4 shrink-0" />
         Settings
       </NavLink>
     </>
   )
 
+  const desktopNav = (
+    <>
+      <NavLink to="/" end className={desktopNavLinkClass}>
+        Dashboard
+      </NavLink>
+      <NavLink to="/projects" className={desktopNavLinkClass}>
+        Projects
+      </NavLink>
+      <NavLink to="/domains" className={desktopNavLinkClass}>
+        Domains
+      </NavLink>
+      <NavLink to="/rules" className={desktopNavLinkClass}>
+        Rules
+      </NavLink>
+      <NavLink to="/firewall" className={desktopNavLinkClass}>
+        Firewall
+      </NavLink>
+      <NavLink to="/backups" className={desktopNavLinkClass}>
+        Backups
+      </NavLink>
+      <NavLink to="/database" className={desktopNavLinkClass}>
+        Database
+      </NavLink>
+      <NavLink to="/audit" className={desktopNavLinkClass}>
+        Audit
+      </NavLink>
+      <NavLink to="/settings" className={desktopNavLinkClass}>
+        Settings
+      </NavLink>
+    </>
+  )
+
   return (
-    <div className="fixed inset-0 flex overflow-hidden overscroll-none bg-background text-foreground">
+    <div className="fixed inset-0 flex flex-col overflow-hidden overscroll-none bg-background text-foreground">
       <a
         href="#main-content"
         onClick={(event) => {
@@ -131,25 +170,13 @@ export function Layout() {
         Skip to content
       </a>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
-      <div className="flex min-h-0 w-full flex-1">
-        <aside className="hidden min-h-0 w-56 shrink-0 flex-col overflow-y-auto border-r border-border bg-card lg:flex">
-          <div className="space-y-3 border-b border-border px-4 py-4">
-            <Link to="/" className="cursor-pointer">
-              <ProductLogo size="sm" showName nameClassName="tracking-tight" />
-            </Link>
-            <CommandPaletteSearchButton onClick={openPalette} />
-          </div>
-          <nav className="flex flex-col gap-0.5 p-2" aria-label="Main">
-            {mainNav}
-          </nav>
-        </aside>
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="flex items-center gap-3 border-b border-border bg-card px-4 py-3 lg:hidden">
+      <header className="z-20 shrink-0 border-b border-border bg-card/90 px-4 py-3 backdrop-blur-xl sm:px-6 xl:px-8">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex shrink-0 items-center gap-3">
             <button
               ref={menuButtonRef}
               type="button"
-              className="rounded-lg p-2 text-foreground transition-colors duration-150 hover:bg-muted cursor-pointer"
+              className="rounded-lg p-2 text-foreground transition-colors duration-150 hover:bg-muted cursor-pointer xl:hidden"
               aria-expanded={drawerOpen}
               aria-controls="mobile-nav-drawer"
               onClick={() => setDrawerOpen(true)}
@@ -157,57 +184,64 @@ export function Layout() {
               <span className="sr-only">Open navigation menu</span>
               <List weight="regular" aria-hidden className="size-5" />
             </button>
-            <ProductLogo size="sm" showName />
-            <IconButton label="Search" size="sm" className="ml-auto" onClick={openPalette}>
-              <MagnifyingGlass weight="regular" aria-hidden className="size-5" />
-            </IconButton>
-          </header>
+            <Link to="/" className="cursor-pointer">
+              <ProductLogo size="sm" showName nameClassName="tracking-tight" />
+            </Link>
+          </div>
 
-          {drawerOpen ? (
-            <div className="fixed inset-0 z-40 lg:hidden">
+          <nav className="hidden flex-1 justify-center gap-0.5 xl:flex" aria-label="Main">
+            {desktopNav}
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <CommandPaletteSearchButton onClick={openPalette} />
+          </div>
+        </div>
+      </header>
+
+      {drawerOpen ? (
+        <div className="fixed inset-0 z-40 xl:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 bg-background/80 cursor-pointer"
+            aria-label="Dismiss navigation menu"
+            onClick={closeDrawer}
+          />
+          <div
+            ref={drawerPanelRef}
+            id="mobile-nav-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={drawerTitleId}
+            className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-card shadow-popover"
+          >
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <p id={drawerTitleId} className="text-sm font-semibold">
+                Menu
+              </p>
               <button
                 type="button"
-                className="absolute inset-0 bg-background/80 cursor-pointer"
-                aria-label="Dismiss navigation menu"
+                className="rounded-lg p-2 transition-colors duration-150 hover:bg-muted cursor-pointer"
                 onClick={closeDrawer}
-              />
-              <div
-                ref={drawerPanelRef}
-                id="mobile-nav-drawer"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby={drawerTitleId}
-                className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col border-r border-border bg-card shadow-popover"
               >
-                <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                  <p id={drawerTitleId} className="text-sm font-semibold">
-                    Menu
-                  </p>
-                  <button
-                    type="button"
-                    className="rounded-lg p-2 transition-colors duration-150 hover:bg-muted cursor-pointer"
-                    onClick={closeDrawer}
-                  >
-                    <span className="sr-only">Close navigation menu</span>
-                    <X weight="regular" aria-hidden className="size-5" />
-                  </button>
-                </div>
-                <nav className="flex flex-col gap-0.5 p-2" aria-label="Main">
-                  {mainNav}
-                </nav>
-              </div>
+                <span className="sr-only">Close navigation menu</span>
+                <X weight="regular" aria-hidden className="size-5" />
+              </button>
             </div>
-          ) : null}
-
-          <main
-            id="main-content"
-            tabIndex={-1}
-            className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8"
-          >
-            <Outlet />
-          </main>
+            <nav className="flex flex-col gap-0.5 p-2" aria-label="Main">
+              {drawerNav}
+            </nav>
+          </div>
         </div>
-      </div>
+      ) : null}
+
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 xl:px-10 xl:py-8"
+      >
+        <Outlet />
+      </main>
     </div>
   )
 }

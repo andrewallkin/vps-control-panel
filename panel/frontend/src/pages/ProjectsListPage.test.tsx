@@ -137,6 +137,54 @@ describe('ProjectsListPage', () => {
     expect(screen.queryByText('There are no projects yet.')).not.toBeInTheDocument()
   })
 
+  it('loads the latest deploy when the project list omits last_deploy', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = typeof input === 'string' ? input : input.toString()
+        if (url.endsWith('/api/projects')) {
+          const { last_deploy: _omitted, ...withoutLastDeploy } = projectSummary
+          return Promise.resolve(jsonResponse([withoutLastDeploy]))
+        }
+        if (url.includes('/api/projects/demo-app/deploys')) {
+          return Promise.resolve(
+            jsonResponse([
+              {
+                id: 34,
+                status: 'succeeded',
+                trigger: 'deploy',
+                tags: {},
+                commit: 'abc',
+                started_at: '2026-11-13T15:20:44+00:00',
+                finished_at: '2026-11-13T15:21:34+00:00',
+                log: '',
+                job_id: null,
+              },
+            ]),
+          )
+        }
+        if (url.includes('/api/auth/me')) {
+          return Promise.resolve(
+            jsonResponse({
+              username: 'admin',
+              setup_complete: true,
+              csrf_token: 'csrf',
+              stepped_up_until: null,
+            }),
+          )
+        }
+        return Promise.resolve(jsonResponse({}))
+      }),
+    )
+
+    renderWithProviders(<ProjectsListPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Succeeded')).toBeInTheDocument()
+    })
+    expect(screen.queryByText('No deploys yet')).not.toBeInTheDocument()
+  })
+
   it('shows runtime, deploy summary, and a separate public URL link', async () => {
     renderWithProviders(<ProjectsListPage />)
 

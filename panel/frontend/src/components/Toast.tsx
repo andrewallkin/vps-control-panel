@@ -18,10 +18,10 @@ export function Toast({ message, onDismiss, durationMs = 5000 }: ToastProps) {
     <div
       role="status"
       className={cn(
-        'fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-3 rounded-xl border border-border bg-secondary px-4 py-3 text-sm text-foreground shadow-popover',
+        'fixed bottom-4 right-4 z-50 flex max-w-sm items-start gap-3 rounded-xl border border-border bg-card px-4 py-3 text-base text-foreground shadow-popover',
       )}
     >
-      <CheckCircle weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-accent" />
+      <CheckCircle weight="fill" aria-hidden className="mt-0.5 size-4 shrink-0 text-[#047857]" />
       <span className="min-w-0 flex-1">{message}</span>
     </div>
   )

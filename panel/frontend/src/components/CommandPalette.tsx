@@ -128,14 +128,15 @@ export function CommandPaletteSearchButton({
     <button
       type="button"
       onClick={onClick}
+      aria-label="Search"
       className={cn(
-        'flex w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-2 text-left text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground cursor-pointer',
+        'flex items-center gap-2 rounded-xl border border-border bg-muted/40 p-2 text-sm text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground cursor-pointer sm:px-3 sm:py-2',
         className,
       )}
     >
-      <MagnifyingGlass weight="regular" aria-hidden className="size-4 shrink-0" />
-      <span className="min-w-0 flex-1">Search…</span>
-      <kbd className="rounded border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+      <MagnifyingGlass weight="regular" aria-hidden className="size-5 shrink-0 sm:size-4" />
+      <span className="hidden sm:inline">Search</span>
+      <kbd className="hidden rounded border border-border bg-card px-1.5 py-0.5 font-mono text-sm text-muted-foreground shadow-sm sm:inline">
         {shortcut}
       </kbd>
     </button>
@@ -290,7 +291,7 @@ export function CommandPalette({
           ) : (
             groups.map((group) => (
               <div key={group.name} className="pb-2">
-                <p className="px-2 py-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="px-2 py-1 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   {group.name}
                 </p>
                 <ul className="space-y-0.5">
@@ -325,7 +326,7 @@ export function CommandPalette({
           )}
         </div>
 
-        <div className="flex flex-wrap gap-3 border-t border-border px-3 py-2 text-xs text-muted-foreground">
+        <div className="flex flex-wrap gap-3 border-t border-border px-3 py-2 text-sm text-muted-foreground">
           <span>
             <kbd className="font-mono">↑↓</kbd> navigate
           </span>

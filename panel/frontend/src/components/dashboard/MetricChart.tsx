@@ -8,6 +8,7 @@ import {
   YAxis,
 } from 'recharts'
 import { chartAxisTicks, historyTimeLabel } from '../../lib/chartData'
+import { CHART_PRIMARY } from './chartColors'
 import { buildMetricChartTooltipLines } from './metricChartTooltip'
 import { useReducedMotion } from '../../hooks/useReducedMotion'
 
@@ -51,7 +52,7 @@ function MetricChartTooltip({
     return null
   }
   return (
-    <div className="rounded-lg border border-border bg-card px-2.5 py-2 text-xs shadow-[var(--shadow-popover)]">
+    <div className="rounded-lg border border-border bg-card px-2.5 py-2 text-sm shadow-[var(--shadow-popover)]">
       <div className="font-medium text-foreground">{lines.timeLabel}</div>
       <div className="mt-0.5 font-mono tabular-nums text-muted-foreground">
         {lines.valueLabel}
@@ -64,7 +65,7 @@ export function MetricChart({
   data,
   paused,
   valueFormatter = (v) => String(v),
-  color = 'var(--color-accent)',
+  color = CHART_PRIMARY,
   yDomain,
 }: MetricChartProps) {
   const reduced = useReducedMotion()
@@ -89,7 +90,7 @@ export function MetricChart({
         <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity={0.22} />
+              <stop offset="0%" stopColor={color} stopOpacity={0.25} />
               <stop offset="100%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
@@ -104,14 +105,14 @@ export function MetricChart({
             scale="time"
             domain={['dataMin', 'dataMax']}
             ticks={xTicks}
-            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 10 }}
+            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 14 }}
             tickLine={false}
             axisLine={{ stroke: 'var(--color-border)' }}
             tickFormatter={axisTickFormatter}
           />
           <YAxis
             domain={yDomain ?? ['auto', 'auto']}
-            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 10 }}
+            tick={{ fill: 'var(--color-muted-foreground)', fontSize: 14 }}
             tickLine={false}
             axisLine={false}
             width={40}
@@ -130,7 +131,7 @@ export function MetricChart({
             type="monotone"
             dataKey="value"
             stroke={color}
-            strokeWidth={2}
+            strokeWidth={2.5}
             fill={`url(#${gradientId})`}
             dot={false}
             isAnimationActive={!reduced}

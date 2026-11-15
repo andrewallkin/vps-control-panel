@@ -49,7 +49,7 @@ export function DeployLogBox({ deploy }: { deploy: DeployRow }) {
 
   return (
     <section className="space-y-2">
-      <h2 className="text-base font-semibold">
+      <h2 className="text-xl font-semibold tracking-tight">
         {terminal ? 'Deploy log' : 'Deploying…'}
       </h2>
       <pre
@@ -57,7 +57,7 @@ export function DeployLogBox({ deploy }: { deploy: DeployRow }) {
         onScroll={handleScroll}
         aria-label="Deploy log"
         data-testid="deploy-log-box"
-        className="max-h-64 overflow-auto rounded-md border border-border bg-background p-3 font-mono text-xs"
+        className="max-h-64 overflow-auto rounded-xl border border-border bg-zinc-950 p-4 font-mono text-sm leading-relaxed text-zinc-200"
       >
         {text || 'Waiting for log…'}
       </pre>

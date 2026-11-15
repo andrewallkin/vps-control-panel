@@ -7,6 +7,7 @@ import {
   Button,
   EmptyState,
   Input,
+  type InputProps,
   PageHeader,
   Select,
   Spinner,
@@ -18,6 +19,7 @@ import {
   THead,
   TR,
 } from '../components/ui'
+import { cn } from '../lib/cn'
 import { useTickingNow } from '../hooks/useTickingNow'
 import { fetchAudit, type AuditEntry } from '../lib/auditApi'
 import { formatDateTime, formatRelativeTime } from '../lib/format'
@@ -29,6 +31,44 @@ const AUDIT_SOURCE_LABELS: Record<string, string> = {
 
 function auditSourceLabel(source: string): string {
   return AUDIT_SOURCE_LABELS[source.toLowerCase()] ?? source
+}
+
+function AuditDateTimeFilterInput({
+  className,
+  value,
+  onFocus,
+  onBlur,
+  ...props
+}: InputProps) {
+  const [focused, setFocused] = useState(false)
+  const showEmptyOverlay = value === '' && !focused
+
+  return (
+    <div className="relative">
+      <Input
+        type="datetime-local"
+        value={value}
+        onFocus={(event) => {
+          setFocused(true)
+          onFocus?.(event)
+        }}
+        onBlur={(event) => {
+          setFocused(false)
+          onBlur?.(event)
+        }}
+        className={cn(showEmptyOverlay && 'text-transparent', className)}
+        {...props}
+      />
+      {showEmptyOverlay ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-base text-muted-foreground"
+        >
+          Any time
+        </span>
+      ) : null}
+    </div>
+  )
 }
 
 function AuditResultBadge({ ok }: { ok: boolean }) {
@@ -51,17 +91,17 @@ function AuditResultBadge({ ok }: { ok: boolean }) {
 function AuditRow({ entry, nowMs }: { entry: AuditEntry; nowMs: number }) {
   return (
     <TR>
-      <TD className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+      <TD className="whitespace-nowrap font-mono text-sm text-muted-foreground">
         <time dateTime={entry.time} title={formatDateTime(entry.time)}>
           {formatRelativeTime(entry.time, nowMs)}
         </time>
       </TD>
       <TD>{auditSourceLabel(entry.source)}</TD>
-      <TD className="font-mono text-xs">{entry.operation}</TD>
+      <TD className="font-mono text-sm">{entry.operation}</TD>
       <TD>
         <details>
           <summary className="cursor-pointer text-sm text-muted-foreground">Params</summary>
-          <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-border bg-background p-3 font-mono text-xs">
+          <pre className="mt-2 max-h-40 overflow-auto rounded-lg border border-border bg-zinc-950 p-3 font-mono text-sm leading-relaxed text-zinc-200">
             {JSON.stringify(entry.params, null, 2)}
           </pre>
         </details>
@@ -69,7 +109,7 @@ function AuditRow({ entry, nowMs }: { entry: AuditEntry; nowMs: number }) {
       <TD>
         <AuditResultBadge ok={entry.ok} />
       </TD>
-      <TD className="whitespace-nowrap text-right font-mono text-xs tabular-nums">
+      <TD className="whitespace-nowrap text-right font-mono text-sm tabular-nums">
         {entry.duration_ms} ms
       </TD>
     </TR>
@@ -150,7 +190,7 @@ export function AuditPage() {
       <section className="space-y-3" aria-labelledby="audit-filters-heading">
         <nav className="flex items-center justify-between gap-3">
           <div>
-            <h2 id="audit-filters-heading" className="text-sm font-semibold">
+            <h2 id="audit-filters-heading" className="text-xl font-semibold">
               Filters
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
@@ -204,11 +244,9 @@ export function AuditPage() {
             <label htmlFor="audit-filter-since" className="block text-sm font-medium">
               Since
             </label>
-            <Input
+            <AuditDateTimeFilterInput
               id="audit-filter-since"
-              type="datetime-local"
               value={sinceFilter}
-              className="[color-scheme:dark]"
               onChange={(event) => setSinceFilter(event.target.value)}
             />
           </div>
@@ -216,12 +254,10 @@ export function AuditPage() {
             <label htmlFor="audit-filter-until" className="block text-sm font-medium">
               Until
             </label>
-            <Input
+            <AuditDateTimeFilterInput
               id="audit-filter-until"
-              type="datetime-local"
               value={untilFilter}
               aria-invalid={rangeInvalid}
-              className="[color-scheme:dark]"
               invalid={rangeInvalid}
               onChange={(event) => setUntilFilter(event.target.value)}
             />
@@ -240,7 +276,7 @@ export function AuditPage() {
         </p>
       ) : (
         <section className="space-y-3" aria-labelledby="audit-log-heading">
-          <h2 id="audit-log-heading" className="text-sm font-semibold">
+          <h2 id="audit-log-heading" className="text-xl font-semibold">
             Events
           </h2>
           <TableContainer>

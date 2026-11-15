@@ -68,10 +68,10 @@ export function PanelHostnameSetupStep({ onSaved, onContinue }: PanelHostnameSet
 
   return (
     <section className="space-y-4" aria-labelledby="panel-hostname-step-heading">
-      <h2 id="panel-hostname-step-heading" className="text-base font-semibold">
+      <h2 id="panel-hostname-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
         Panel hostname
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Choose the public URL for this control panel. DNS and nginx are updated automatically.
       </p>
 

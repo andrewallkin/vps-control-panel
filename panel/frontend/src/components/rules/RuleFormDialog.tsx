@@ -204,18 +204,18 @@ export function RuleFormDialog({
                 aria-describedby={
                   errors.expression ? `${expressionId}-error ${expressionId}-count` : `${expressionId}-count`
                 }
-                className="mt-1 font-mono text-xs leading-5"
+                className="mt-1 font-mono text-sm leading-6"
                 onChange={(event) => update({ expression: event.target.value })}
               />
             ) : (
               <pre
                 id={expressionId}
-                className="mt-1 whitespace-pre-wrap break-words rounded-lg border border-border bg-muted/40 p-3 font-mono text-xs leading-5 text-foreground"
+                className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-border bg-zinc-950 p-3 font-mono text-sm leading-6 text-zinc-200"
               >
                 {form.expression || 'No expression yet.'}
               </pre>
             )}
-            <p id={`${expressionId}-count`} className="mt-1 text-right text-xs text-muted-foreground">
+            <p id={`${expressionId}-count`} className="mt-1 text-right text-sm text-muted-foreground">
               {expressionCount} / {EXPRESSION_LIMIT} characters
             </p>
             {errors.expression ? (

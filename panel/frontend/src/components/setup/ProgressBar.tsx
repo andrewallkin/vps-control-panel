@@ -51,7 +51,7 @@ export function ProgressBar({
           style={{ width: `${percent}%` }}
         />
       </div>
-      <p className="text-xs text-muted-foreground tabular-nums">
+      <p className="text-sm text-muted-foreground tabular-nums">
         {formatBytes(bytesPerSec)}/s · ETA {formatEta(etaSec)}
       </p>
     </div>

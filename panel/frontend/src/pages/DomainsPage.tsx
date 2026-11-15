@@ -254,8 +254,8 @@ export function DomainsPage() {
               <Card key={row.name} className="overflow-hidden p-0">
                 <div className="flex flex-col gap-3 border-b border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="min-w-0 space-y-1">
-                    <p className="text-xs font-medium text-muted-foreground">Zone</p>
-                    <h2 className="truncate font-mono text-base font-semibold">{zoneName}</h2>
+                    <p className="text-sm font-medium text-muted-foreground">Zone</p>
+                    <h2 className="truncate font-mono text-lg font-semibold tracking-tight">{zoneName}</h2>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
                     <Button
@@ -335,7 +335,7 @@ export function DomainsPage() {
 
       {issueJobId ? (
         <section className="space-y-3" aria-labelledby="issue-log-heading">
-          <h2 id="issue-log-heading" className="text-sm font-semibold">
+          <h2 id="issue-log-heading" className="text-xl font-semibold">
             Certificate issue log
           </h2>
           <LogViewer

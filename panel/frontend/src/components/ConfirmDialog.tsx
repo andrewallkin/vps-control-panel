@@ -7,8 +7,6 @@ import {
   DialogFooter,
   DialogTitle,
 } from './ui/Dialog'
-import { cn } from '../lib/cn'
-
 export interface ConfirmDialogProps {
   open: boolean
   title: string
@@ -78,7 +76,6 @@ export function ConfirmDialog({
           <Button
             variant={tone === 'danger' ? 'danger' : 'primary'}
             loading={busy}
-            className={cn(tone === 'danger' && 'bg-destructive text-foreground hover:bg-destructive/90')}
             onClick={onConfirm}
           >
             {confirmLabel}

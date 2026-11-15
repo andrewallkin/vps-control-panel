@@ -172,7 +172,7 @@ export function EnvEditor({ rows, routePortEnvVars, onChange, onRevealValue }: E
                     </IconButton>
                   </>
                 ) : (
-                  <span className="text-xs text-muted-foreground">Managed</span>
+                  <span className="text-sm text-muted-foreground">Managed</span>
                 )}
               </div>
               </Card>

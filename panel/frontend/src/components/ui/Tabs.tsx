@@ -21,8 +21,8 @@ export function TabsTrigger({
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        'relative -mb-px pb-2.5 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground cursor-pointer',
-        'data-[state=active]:text-foreground',
+        'relative -mb-px pb-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground cursor-pointer',
+        'data-[state=active]:font-semibold data-[state=active]:text-accent',
         'after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:rounded-full after:bg-transparent data-[state=active]:after:bg-accent',
         className,
       )}

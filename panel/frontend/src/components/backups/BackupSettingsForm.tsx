@@ -71,14 +71,14 @@ function PassphraseHelpDialog({ open, onClose }: { open: boolean; onClose: () =>
         <div className="mt-3 space-y-4 text-sm text-muted-foreground">
           <p>
             When this is set, each backup uploads two age-encrypted files. Keep a copy of the
-            passphrase off this server. The stack <span className="font-mono text-xs">.env</span>{' '}
+            passphrase off this server. The stack <span className="font-mono text-sm">.env</span>{' '}
             inside the config archive contains the passphrase, so that file cannot be your only
             copy. Losing the passphrase makes both files unreadable.
           </p>
           <div className="space-y-2">
             <p className="font-medium text-foreground">
               Database dump{' '}
-              <span className="font-mono text-xs font-normal text-muted-foreground">
+              <span className="font-mono text-sm font-normal text-muted-foreground">
                 backup_….sql.gz.age
               </span>
             </p>
@@ -91,20 +91,20 @@ function PassphraseHelpDialog({ open, onClose }: { open: boolean; onClose: () =>
           <div className="space-y-2">
             <p className="font-medium text-foreground">
               Config archive{' '}
-              <span className="font-mono text-xs font-normal text-muted-foreground">
+              <span className="font-mono text-sm font-normal text-muted-foreground">
                 config_….tar.gz.age
               </span>
             </p>
             <ul className="list-disc space-y-1 pl-5">
               <li>
-                Each app’s <span className="font-mono text-xs">.env</span>, including its secrets.
+                Each app’s <span className="font-mono text-sm">.env</span>, including its secrets.
               </li>
               <li>
-                Every file under each app’s <span className="font-mono text-xs">data</span>{' '}
+                Every file under each app’s <span className="font-mono text-sm">data</span>{' '}
                 directory, such as uploaded files and local databases.
               </li>
               <li>
-                The stack <span className="font-mono text-xs">.env</span>: database password, bucket
+                The stack <span className="font-mono text-sm">.env</span>: database password, bucket
                 settings, and this passphrase.
               </li>
             </ul>
@@ -122,7 +122,7 @@ function PassphraseHelpDialog({ open, onClose }: { open: boolean; onClose: () =>
             <ul className="list-disc space-y-1 pl-5">
               <li>
                 The dump is uploaded as a plain{' '}
-                <span className="font-mono text-xs">backup_….sql.gz</span>.
+                <span className="font-mono text-sm">backup_….sql.gz</span>.
               </li>
               <li>The config archive is not created.</li>
             </ul>
@@ -405,7 +405,7 @@ export function BackupSettingsForm({
               autoComplete="off"
               spellCheck={false}
               mono
-              className="mt-1 text-xs"
+              className="mt-1 text-sm"
               onChange={(event) => setServiceAccountDraft(event.target.value)}
             />
             <input
@@ -437,11 +437,11 @@ export function BackupSettingsForm({
           </div>
         )}
         {serviceAccountDraft.trim() && !isJsonServiceAccount(serviceAccountDraft) ? (
-          <p className="text-xs text-muted-foreground">Pasted value will be sent as base64.</p>
+          <p className="text-sm text-muted-foreground">Pasted value will be sent as base64.</p>
         ) : null}
       </div>
 
-      <div className="grid gap-4 @min-[40rem]:grid-cols-2 @min-[64rem]:grid-cols-[minmax(0,1.6fr)_9rem_7rem_minmax(0,1.2fr)]">
+      <div className="grid gap-4 @min-[40rem]:grid-cols-2 @min-[64rem]:grid-cols-[minmax(0,1.6fr)_9rem_11rem_minmax(0,1.2fr)]">
         <div>
           <label htmlFor={bucketFieldId} className="block text-sm font-medium">
             GCS bucket
@@ -470,7 +470,7 @@ export function BackupSettingsForm({
         </div>
         <div>
           <label htmlFor={`${idPrefix}-minute`} className="block text-sm font-medium">
-            Minute
+            Minute past the hour
           </label>
           <Input
             id={`${idPrefix}-minute`}
@@ -539,9 +539,9 @@ export function BackupSettingsForm({
             )
           })}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Backups run at the selected hours in the timezone above. Backup filenames in the bucket
-          use UTC.
+        <p className="text-sm text-muted-foreground">
+          Backups run at the selected hours, at the minute above, in the timezone above. Filenames
+          in the bucket use UTC.
         </p>
       </div>
 
@@ -561,10 +561,7 @@ export function BackupSettingsForm({
           Encrypts the database dump and a config archive of app secrets and data files.
         </p>
         {settings.archive_passphrase_set ? (
-          <p className="text-sm">
-            Passphrase is set.{' '}
-            <span className="font-mono text-muted-foreground">••••••••</span>
-          </p>
+          <p className="text-sm">Passphrase is set.</p>
         ) : (
           <p className="text-sm text-muted-foreground">No archive passphrase configured.</p>
         )}

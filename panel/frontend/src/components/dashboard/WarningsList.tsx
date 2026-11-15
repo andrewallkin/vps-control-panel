@@ -18,7 +18,7 @@ export function WarningsList({ warnings }: WarningsListProps) {
           tone={warning.level === 'critical' ? 'danger' : 'warning'}
           title={warning.message}
         >
-          <span className="font-mono text-xs">{warning.code}</span>
+          <span className="font-mono text-sm">{warning.code}</span>
         </Alert>
       ))}
     </section>

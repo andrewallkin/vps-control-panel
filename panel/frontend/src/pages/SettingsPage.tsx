@@ -49,7 +49,7 @@ function ConfiguredRow({
   action: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background/40 px-3 py-3">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-3">
       <div className="flex min-w-0 items-center gap-3">
         <CheckCircle weight="regular" aria-hidden className="size-5 shrink-0 text-accent" />
         <div className="min-w-0">
@@ -267,7 +267,7 @@ export function SettingsPage() {
       ) : null}
       <Card aria-labelledby="account-settings-heading">
         <CardBody className="space-y-4 sm:p-6">
-        <h2 id="account-settings-heading" className="text-sm font-semibold">
+        <h2 id="account-settings-heading" className="text-xl font-semibold">
           Account
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -351,7 +351,7 @@ export function SettingsPage() {
               {totpSuccess ? <p className="text-sm text-muted-foreground">{totpSuccess}</p> : null}
               <p className="text-sm">
                 Secret:{' '}
-                <code className="rounded bg-muted/40 px-1.5 py-0.5 font-mono text-xs">
+                <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-sm">
                   {totpPending.secret}
                 </code>
               </p>
@@ -414,7 +414,7 @@ export function SettingsPage() {
                       ) : null}
                     </p>
                     <p className="truncate text-muted-foreground">{row.user_agent ?? '—'}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Last seen {formatDateTime(row.last_seen_at)}
                     </p>
                   </div>
@@ -437,7 +437,7 @@ export function SettingsPage() {
 
       <Card aria-labelledby="cf-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="cf-settings-heading" className="text-sm font-semibold">
+        <h2 id="cf-settings-heading" className="text-xl font-semibold">
           Cloudflare API token
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -526,7 +526,7 @@ export function SettingsPage() {
 
       <Card aria-labelledby="registry-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="registry-settings-heading" className="text-sm font-semibold">
+        <h2 id="registry-settings-heading" className="text-xl font-semibold">
           Docker Hub
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -623,7 +623,7 @@ export function SettingsPage() {
 
       <Card aria-labelledby="server-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="server-settings-heading" className="text-sm font-semibold">
+        <h2 id="server-settings-heading" className="text-xl font-semibold">
           Server settings
         </h2>
         <p className="text-sm text-muted-foreground">
@@ -675,7 +675,7 @@ export function SettingsPage() {
 
       <Card aria-labelledby="about-settings-heading">
         <CardBody className="space-y-3 sm:p-6">
-        <h2 id="about-settings-heading" className="text-sm font-semibold">
+        <h2 id="about-settings-heading" className="text-xl font-semibold">
           About
         </h2>
         <p className="text-sm text-muted-foreground">Versions running on this host.</p>
@@ -700,7 +700,7 @@ export function SettingsPage() {
 
       <Card aria-labelledby="danger-zone-heading" className="border-destructive/30">
         <CardBody className="space-y-3 sm:p-6">
-          <h2 id="danger-zone-heading" className="text-sm font-semibold text-destructive">
+          <h2 id="danger-zone-heading" className="text-xl font-semibold text-destructive">
             Danger zone
           </h2>
           <p className="text-sm text-muted-foreground">

@@ -89,40 +89,52 @@ export function DockerDiskCard({
 
   return (
     <>
-      <Card className={cn('flex min-h-0 flex-col', className)}>
-        <CardBody className="flex flex-col gap-3">
+      <Card className={cn('flex h-full min-h-0 flex-col', className)}>
+        <CardBody className="flex min-h-0 flex-1 flex-col gap-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <h2 className="text-sm font-semibold text-muted-foreground">Docker disk</h2>
-            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            <h2 className="text-xl font-semibold text-foreground">Docker disk</h2>
+            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span>updated {formatSecondsAgo(dataUpdatedAt, now)}</span>
               {isStale ? <StaleBadge /> : null}
             </div>
           </div>
           {isLoading && !df ? (
-            <div className="space-y-3" aria-busy>
+            <div className="grid flex-1 grid-cols-2 grid-rows-2 gap-3" aria-busy>
               {Array.from({ length: 4 }, (_, index) => (
-                <Skeleton key={index} className="h-10 w-full" />
+                <Skeleton key={index} className="h-full min-h-24 w-full" />
               ))}
               <span className="sr-only">Loading…</span>
             </div>
           ) : (
-            <ul className="space-y-3 text-sm">
-              {rows.map(({ label, data }) => (
-                <li key={label} className="flex items-baseline justify-between gap-3">
-                  <span className="text-muted-foreground">{label}</span>
-                  <span className="text-right">
-                    <span className="font-mono tabular whitespace-nowrap">
-                      {formatBytes(data.size_bytes)} ({data.count})
+            <ul className="grid min-h-0 flex-1 grid-cols-2 grid-rows-2 gap-3">
+              {rows.map(({ label, data }) => {
+                const reclaimable = data.reclaimable_bytes > 0
+                return (
+                  <li
+                    key={label}
+                    className="flex flex-col justify-center rounded-xl bg-muted/50 px-4 py-3"
+                  >
+                    <span className="text-sm text-muted-foreground">{label}</span>
+                    <span className="mt-1 font-mono text-xl font-semibold tabular-nums whitespace-nowrap">
+                      {formatBytes(data.size_bytes)}
+                      <span className="ml-1 text-base font-medium text-muted-foreground">
+                        ({data.count})
+                      </span>
                     </span>
-                    <span className="mt-0.5 block font-mono text-xs tabular whitespace-nowrap text-muted-foreground">
+                    <span
+                      className={cn(
+                        'mt-1 font-mono text-sm tabular-nums whitespace-nowrap',
+                        reclaimable ? 'font-medium text-warning' : 'text-muted-foreground',
+                      )}
+                    >
                       {formatBytes(data.reclaimable_bytes)} reclaimable
                     </span>
-                  </span>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
-          <div className="flex flex-wrap gap-2">
+          <div className="mt-auto flex flex-wrap gap-2">
             <Button
               type="button"
               variant="secondary"

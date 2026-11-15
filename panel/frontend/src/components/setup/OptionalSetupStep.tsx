@@ -76,10 +76,10 @@ export function OptionalSetupStep({ onContinueToFinish, onSkipped }: OptionalSet
   return (
     <section className="space-y-4" aria-labelledby="optional-step-heading">
       <div className="space-y-2">
-        <h2 id="optional-step-heading" className="text-base font-semibold">
+        <h2 id="optional-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
           Optional
         </h2>
-        <p className="text-sm text-muted-foreground">
+        <p className="text-base text-muted-foreground">
           Configure Docker Hub pulls and backups now, or skip and finish setup.
         </p>
       </div>

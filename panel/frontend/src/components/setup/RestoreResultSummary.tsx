@@ -41,7 +41,7 @@ export function RestoreResultSummary({ end, onContinue, onRetry }: RestoreResult
   const statusLabel = `Restore ${end.status}`
 
   return (
-    <Card className="bg-muted/40">
+    <Card className="border-border shadow-sm">
       <CardBody className="space-y-2">
         <div role="status" className="space-y-2">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -82,7 +82,7 @@ export function RestoreResultSummary({ end, onContinue, onRetry }: RestoreResult
                 {errorsOpen ? 'Hide error lines' : 'Show error lines'}
               </button>
               {errorsOpen ? (
-                <ul className="mt-2 max-h-40 list-disc overflow-auto pl-5 font-mono text-xs">
+                <ul className="mt-2 max-h-40 list-disc overflow-auto rounded-lg bg-zinc-950 pl-5 pr-3 py-2 font-mono text-sm text-zinc-200">
                   {errors.map((line) => (
                     <li key={line}>{line}</li>
                   ))}
@@ -99,7 +99,9 @@ export function RestoreResultSummary({ end, onContinue, onRetry }: RestoreResult
             <p className="text-sm text-muted-foreground">
               The previous cluster was saved on this server before the load started. Copy that file
               off the server and upload it here if you need the previous data back.
-              <span className="mt-1 block break-all font-mono text-xs text-foreground">{safetyDump}</span>
+              <span className="mt-1 block break-all rounded-lg bg-zinc-950 px-3 py-2 font-mono text-sm text-zinc-200">
+                {safetyDump}
+              </span>
             </p>
           ) : null}
           {end.status === 'failed' && onRetry ? (

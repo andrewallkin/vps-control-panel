@@ -79,10 +79,10 @@ export function DomainsSetupStep({ onCertReady }: DomainsSetupStepProps) {
 
   return (
     <section className="space-y-4" aria-labelledby="domains-step-heading">
-      <h2 id="domains-step-heading" className="text-base font-semibold">
+      <h2 id="domains-step-heading" className="text-xl font-semibold tracking-tight text-foreground">
         Domains
       </h2>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base text-muted-foreground">
         Add at least one apex domain. Certificate issuance runs in the background; continue once a
         certificate shows as valid.
       </p>

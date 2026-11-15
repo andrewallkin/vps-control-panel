@@ -37,7 +37,7 @@ export function ProjectDeleteSection({
     <Card className="space-y-4 border-destructive/40 p-4">
       <CardBody className="space-y-4 p-0">
         <div className="space-y-1">
-          <h2 className="text-sm font-semibold text-destructive">Delete project</h2>
+          <h2 className="text-xl font-semibold text-destructive">Delete project</h2>
           <p className="text-sm text-muted-foreground">
             This removes the project from the panel and agent. Type{' '}
             <span className="font-mono text-foreground">{slug}</span> to confirm.

@@ -15,8 +15,8 @@ const config: Record<
   },
   success: {
     role: 'status',
-    className: 'border-accent/30 bg-accent-soft text-foreground',
-    icon: <CheckCircle weight="fill" aria-hidden className="size-4 shrink-0 text-accent" />,
+    className: 'border-[#A7F3D0]/60 bg-[#ECFDF5] text-foreground',
+    icon: <CheckCircle weight="fill" aria-hidden className="size-4 shrink-0 text-[#047857]" />,
   },
   warning: {
     role: 'alert',
@@ -43,7 +43,7 @@ export function Alert({ tone = 'info', title, children, action, className }: Ale
   return (
     <div
       role={entry.role}
-      className={cn('flex gap-3 rounded-xl border p-3 text-sm', entry.className, className)}
+      className={cn('flex gap-3 rounded-xl border p-3 text-base', entry.className, className)}
     >
       {entry.icon}
       <div className="min-w-0 flex-1 space-y-1">

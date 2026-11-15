@@ -30,10 +30,10 @@ export function ProductLogo({
 
   const mark = (
     <span
-      className={cn('flex shrink-0 items-center justify-center bg-accent-soft', box)}
+      className={cn('flex shrink-0 items-center justify-center bg-accent text-accent-foreground', box)}
       aria-hidden={placement ? true : undefined}
     >
-      <Cube weight="fill" aria-hidden className={cn('text-accent', icon)} />
+      <Cube weight="fill" aria-hidden className={icon} />
     </span>
   )
 
@@ -46,7 +46,7 @@ export function ProductLogo({
   }
 
   const name = (
-    <span className={cn('text-sm font-semibold', nameClassName)}>{PRODUCT_NAME}</span>
+    <span className={cn('text-[18px] font-semibold tracking-tight', nameClassName)}>{PRODUCT_NAME}</span>
   )
 
   return (

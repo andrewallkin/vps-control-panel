@@ -53,11 +53,11 @@ import {
   fetchDatabases,
   rotateDatabasePassword,
   type AdoptDatabasePayload,
+  type DatabaseDumpRow,
   type DatabaseRow,
   type DropDatabasePayload,
 } from '../lib/databaseApi'
-import { formatBytes, formatDateTime, formatRelativeTime } from '../lib/format'
-import { useTickingNow } from '../hooks/useTickingNow'
+import { formatBytes, formatDateTime } from '../lib/format'
 import { deployToApplyEnv, fetchProjects, type ProjectSummary } from '../lib/projectsApi'
 import {
   startSetupRestore,
@@ -94,6 +94,16 @@ function databaseSummary(rows: DatabaseRow[]): string {
   return `${rows.length} ${noun}, ${unattached} not attached to a project`
 }
 
+function sortDatabaseDumps(dumps: DatabaseDumpRow[]): DatabaseDumpRow[] {
+  return [...dumps].sort((a, b) => {
+    const byTime = b.created_at.localeCompare(a.created_at)
+    if (byTime !== 0) {
+      return byTime
+    }
+    return b.name.localeCompare(a.name)
+  })
+}
+
 function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
   if (!(error instanceof ApiError) || !error.body || typeof error.body !== 'object') {
     return null
@@ -111,7 +121,6 @@ function clusterNotEmptyDetail(error: unknown): RestoreConflict | null {
 
 export function DatabasePage() {
   const { toast } = useToast()
-  const nowMs = useTickingNow(60_000)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const dropConfirmInputId = useId()
@@ -149,11 +158,19 @@ export function DatabasePage() {
 
   const dumpQueries = useQueries({
     queries: attachedSlugs.map((slug) => ({
-      queryKey: ['database', 'dumps', slug],
+      queryKey: ['database', 'dumps', slug] as const,
       queryFn: () => fetchDatabaseDumps(slug),
       refetchIntervalInBackground: false,
     })),
   })
+
+  const projectLabelBySlug = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const project of projectsQuery.data ?? []) {
+      map.set(project.slug, project.display_name)
+    }
+    return map
+  }, [projectsQuery.data])
 
   const [actionError, setActionError] = useState<string | null>(null)
   const [actionMessage, setActionMessage] = useState<string | null>(null)
@@ -421,7 +438,7 @@ export function DatabasePage() {
     <div className="flex w-full flex-col gap-6">
       <PageHeader
         title="Database"
-        description="PostgreSQL databases on the central cluster, and dumps for each attached project."
+        description="PostgreSQL databases on the central cluster."
       />
 
       {actionError ? (
@@ -439,7 +456,7 @@ export function DatabasePage() {
         <section ref={adoptPanelRef} aria-labelledby="adopt-heading">
           <Card className="space-y-4 p-4 sm:p-6">
           <div className="space-y-1">
-            <h2 id="adopt-heading" className="text-base font-semibold">
+            <h2 id="adopt-heading" className="text-xl font-semibold">
               Adopt <span className="font-mono">{adoptTarget.name}</span>
             </h2>
             <p className="text-sm text-muted-foreground">
@@ -544,7 +561,7 @@ export function DatabasePage() {
         <section ref={dropPanelRef} aria-labelledby="drop-heading">
           <Card className="space-y-4 border-destructive/40 p-4 sm:p-6">
           <div className="space-y-1">
-            <h2 id="drop-heading" className="text-base font-semibold text-destructive">
+            <h2 id="drop-heading" className="text-xl font-semibold text-destructive">
               Drop <span className="font-mono">{dropTarget.name}</span>
             </h2>
             <p className="max-w-2xl text-sm text-muted-foreground">
@@ -622,7 +639,7 @@ export function DatabasePage() {
       ) : (
         <section className="space-y-3" aria-labelledby="databases-heading">
           <div className="flex flex-wrap items-end justify-between gap-2">
-            <h2 id="databases-heading" className="text-sm font-semibold">
+            <h2 id="databases-heading" className="text-xl font-semibold">
               Databases
             </h2>
             {rows.length > 0 ? (
@@ -732,61 +749,142 @@ export function DatabasePage() {
       )}
 
       {attachedSlugs.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="dumps-heading">
-          <div className="space-y-1">
-            <h2 id="dumps-heading" className="text-base font-semibold">
-              Dumps
-            </h2>
-            <p className="text-sm text-muted-foreground">Saved dumps for attached projects.</p>
-          </div>
-          {attachedSlugs.map((slug, index) => {
-            const dumpQuery = dumpQueries[index]
-            const dumps = dumpQuery?.data ?? []
-            return (
-              <Card key={slug} className="overflow-hidden p-0">
-                <h3 className="border-b border-border px-4 py-3 text-sm font-semibold">
-                  <Link
-                    to={`/projects/${encodeURIComponent(slug)}`}
-                    className="text-accent hover:underline"
-                  >
-                    {slug}
-                  </Link>
-                </h3>
-                <ul className="divide-y divide-border">
-                  {dumps.length === 0 ? (
-                    <li className="px-4 py-4 text-sm text-muted-foreground">No dumps yet.</li>
-                  ) : (
-                    dumps.map((dump) => (
-                      <li
-                        key={dump.name}
-                        className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-sm"
-                      >
-                        <span className="font-mono">{dump.name}</span>
-                        <span className="text-muted-foreground tabular-nums">
-                          {formatBytes(dump.size_bytes)} ·{' '}
-                          <time dateTime={dump.created_at} title={formatDateTime(dump.created_at)}>
-                            {formatRelativeTime(dump.created_at, nowMs)}
-                          </time>
-                        </span>
+        <section className="space-y-3" aria-labelledby="predeploy-dumps-heading">
+          <h2 id="predeploy-dumps-heading" className="text-xl font-semibold">
+            Saved before a deploy
+          </h2>
+          <p className="max-w-2xl text-sm text-muted-foreground">
+            When you deploy a project that uses a database, the panel saves that database first and
+            keeps the five newest copies. Download a copy if you need the data from before a deploy.
+            The same copies are on that project&apos;s Database tab.
+          </p>
+          <TableContainer>
+            <Table className="min-w-[720px]">
+              <THead>
+                <TR className="border-b border-border bg-muted/40 hover:bg-muted/40">
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
+                    Project
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
+                    Saved
+                  </TH>
+                  <TH scope="col" className="font-medium normal-case tracking-normal">
+                    Size
+                  </TH>
+                  <TH scope="col" className="text-right font-medium normal-case tracking-normal">
+                    Download
+                  </TH>
+                </TR>
+              </THead>
+              <TBody className="divide-y divide-border">
+                {attachedSlugs.map((slug, index) => {
+                  const dumpQuery = dumpQueries[index]
+                  const sorted = sortDatabaseDumps(dumpQuery?.data ?? [])
+                  const newest = sorted[0]
+                  const older = sorted.slice(1)
+                  const projectLabel = projectLabelBySlug.get(slug) ?? slug
+                  const isPending = dumpQuery?.isPending ?? false
+
+                  if (!isPending && sorted.length === 0) {
+                    return (
+                      <TR key={slug}>
+                        <TD>
+                          <Link
+                            to={`/projects/${encodeURIComponent(slug)}`}
+                            className="font-medium text-accent hover:underline"
+                          >
+                            {projectLabel}
+                          </Link>
+                        </TD>
+                        <TD colSpan={3} className="text-muted-foreground">
+                          None yet
+                        </TD>
+                      </TR>
+                    )
+                  }
+
+                  if (isPending || !newest) {
+                    return (
+                      <TR key={slug}>
+                        <TD>
+                          <Link
+                            to={`/projects/${encodeURIComponent(slug)}`}
+                            className="font-medium text-accent hover:underline"
+                          >
+                            {projectLabel}
+                          </Link>
+                        </TD>
+                        <TD colSpan={3} className="text-muted-foreground">
+                          …
+                        </TD>
+                      </TR>
+                    )
+                  }
+
+                  return (
+                    <TR key={slug}>
+                      <TD>
+                        <Link
+                          to={`/projects/${encodeURIComponent(slug)}`}
+                          className="font-medium text-accent hover:underline"
+                        >
+                          {projectLabel}
+                        </Link>
+                      </TD>
+                      <TD>
+                        <div className="space-y-1">
+                          <time dateTime={newest.created_at}>{formatDateTime(newest.created_at)}</time>
+                          {older.length > 0 ? (
+                            <details className="text-sm">
+                              <summary className="cursor-pointer text-muted-foreground">
+                                {older.length} older
+                              </summary>
+                              <ul className="mt-2 space-y-2 border-l border-border pl-3">
+                                {older.map((dump) => (
+                                  <li
+                                    key={dump.name}
+                                    className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-sm"
+                                  >
+                                    <time dateTime={dump.created_at} className="text-foreground">
+                                      {formatDateTime(dump.created_at)}
+                                    </time>
+                                    <span className="tabular-nums text-muted-foreground">
+                                      {formatBytes(dump.size_bytes)}
+                                    </span>
+                                    <a
+                                      href={databaseDumpDownloadUrl(slug, dump.name)}
+                                      className="font-medium text-accent hover:underline"
+                                    >
+                                      Download
+                                    </a>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          ) : null}
+                        </div>
+                      </TD>
+                      <TD className="tabular-nums">{formatBytes(newest.size_bytes)}</TD>
+                      <TD className="text-right">
                         <a
-                          href={databaseDumpDownloadUrl(slug, dump.name)}
+                          href={databaseDumpDownloadUrl(slug, newest.name)}
                           className="font-medium text-accent hover:underline"
                         >
                           Download
                         </a>
-                      </li>
-                    ))
-                  )}
-                </ul>
-              </Card>
-            )
-          })}
+                      </TD>
+                    </TR>
+                  )
+                })}
+              </TBody>
+            </Table>
+          </TableContainer>
         </section>
       ) : null}
 
       <Card className="overflow-hidden p-0" aria-labelledby="restore-heading">
         <div className="border-b border-border px-4 py-4 sm:px-6">
-          <h2 id="restore-heading" className="text-base font-semibold">
+          <h2 id="restore-heading" className="text-xl font-semibold">
             Cluster restore
           </h2>
           <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
@@ -802,7 +900,7 @@ export function DatabasePage() {
                 If the cluster already has data, project containers that use it are stopped and
                 a safety dump is taken first. Nothing is overwritten until you confirm.
               </Alert>
-              <h3 className="mt-5 text-sm font-semibold">What the restore does</h3>
+              <h3 className="mt-5 text-base font-semibold">What the restore does</h3>
               <ol className="mt-2 list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
                 {RESTORE_STEPS.map((step) => (
                   <li key={step}>{step}</li>

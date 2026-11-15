@@ -16,17 +16,17 @@ const base =
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    'bg-accent text-accent-foreground hover:bg-accent-hover font-semibold',
+    'bg-accent text-accent-foreground hover:bg-accent-hover font-semibold shadow-[0_4px_16px_rgba(67,56,202,0.12)]',
   secondary:
-    'bg-muted border border-border-strong text-foreground hover:bg-secondary',
+    'border border-border bg-card text-foreground shadow-[0_1px_2px_rgba(24,24,27,0.04)] hover:bg-background',
   ghost: 'text-foreground hover:bg-muted',
   danger:
-    'bg-destructive-soft text-destructive hover:bg-destructive hover:text-foreground',
+    'bg-destructive-soft text-destructive hover:bg-destructive-soft/80',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3 text-xs rounded-lg',
-  md: 'h-9 px-4 text-sm rounded-lg',
+  sm: 'h-10 px-4 text-sm rounded-xl',
+  md: 'h-11 px-5 text-[15px] rounded-xl',
 }
 
 export function buttonClasses({

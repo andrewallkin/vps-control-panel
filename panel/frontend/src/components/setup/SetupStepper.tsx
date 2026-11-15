@@ -82,14 +82,14 @@ function StepIcon({
 }) {
   if (state === 'done') {
     return (
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent-soft">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent-soft">
         <Check weight="bold" aria-hidden className="size-4 text-accent" />
       </span>
     )
   }
   if (state === 'current') {
     return (
-      <span className="flex size-7 shrink-0 items-center justify-center rounded-full border-2 border-accent bg-accent-soft/50">
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-full border-2 border-accent bg-accent-soft/50">
         <CircleDashed weight="bold" aria-hidden className="size-4 text-foreground" />
       </span>
     )
@@ -97,7 +97,7 @@ function StepIcon({
   return (
     <span
       className={cn(
-        'flex size-7 shrink-0 items-center justify-center rounded-full border border-border text-xs font-medium tabular-nums text-muted-foreground',
+        'flex size-8 shrink-0 items-center justify-center rounded-full border border-border text-sm font-medium tabular-nums text-muted-foreground',
       )}
     >
       {index + 1}
@@ -107,7 +107,7 @@ function StepIcon({
 
 export function SetupStepper({ active, steps, hasValidCert = false }: SetupStepperProps) {
   return (
-    <ol className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+    <ol className="flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-card sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
       {stepOrder.map((stepId, index) => {
         const state = stepState(stepId, active, steps, hasValidCert)
 

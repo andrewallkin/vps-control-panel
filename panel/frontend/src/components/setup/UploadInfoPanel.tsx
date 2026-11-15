@@ -13,7 +13,7 @@ export function UploadInfoPanel({ info }: UploadInfoPanelProps) {
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold">Dump summary</h3>
-            <p className="mt-1 text-xs text-muted-foreground">
+            <p className="mt-1 text-sm text-muted-foreground">
               {info.filename} · {formatBytes(info.size)} · {info.kind}
             </p>
           </div>
@@ -23,7 +23,7 @@ export function UploadInfoPanel({ info }: UploadInfoPanelProps) {
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <h4 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               Databases found
             </h4>
             {info.databases.length === 0 ? (
@@ -37,7 +37,7 @@ export function UploadInfoPanel({ info }: UploadInfoPanelProps) {
             )}
           </div>
           <div>
-            <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <h4 className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
               Roles found
             </h4>
             {info.roles.length === 0 ? (
