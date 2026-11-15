@@ -10,6 +10,14 @@ function ControlledSwitch() {
 }
 
 describe('Switch', () => {
+  it('uses the visible label for its accessible name', () => {
+    render(
+      <Switch checked={false} onCheckedChange={() => {}} label="High availability" />,
+    )
+    const control = screen.getByRole('switch', { name: 'High availability' })
+    expect(control).toBeInTheDocument()
+  })
+
   it('toggles aria-checked on click', async () => {
     const user = userEvent.setup()
     render(<ControlledSwitch />)

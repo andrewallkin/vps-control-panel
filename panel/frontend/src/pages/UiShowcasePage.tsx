@@ -32,6 +32,7 @@ import {
   Spinner,
   Switch,
   Table,
+  useToast,
   TableContainer,
   TBody,
   TD,
@@ -49,6 +50,7 @@ export function UiShowcasePage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [tab, setTab] = useState('one')
   const [enabled, setEnabled] = useState(true)
+  const { toast } = useToast()
 
   return (
     <div className="min-h-dvh bg-background px-6 py-10">
@@ -104,18 +106,19 @@ export function UiShowcasePage() {
               {(props) => <Input {...props} mono defaultValue="0" />}
             </Field>
             <Textarea placeholder="Notes" />
-            <Select defaultValue="utc">
-              <option value="utc">UTC</option>
-              <option value="local">Local</option>
-            </Select>
+            <Field label="Timezone">
+              {(props) => (
+                <Select defaultValue="utc" {...props}>
+                  <option value="utc">UTC</option>
+                  <option value="local">Local</option>
+                </Select>
+              )}
+            </Field>
             <label className="flex items-center gap-2 text-sm">
               <Checkbox defaultChecked />
               Enable automatic backups
             </label>
-            <div className="flex items-center gap-2 text-sm">
-              <Switch checked={enabled} onCheckedChange={setEnabled} aria-label="HA mode" />
-              High availability
-            </div>
+            <Switch checked={enabled} onCheckedChange={setEnabled} label="High availability" />
           </div>
         </section>
 
@@ -227,6 +230,28 @@ export function UiShowcasePage() {
               </TBody>
             </Table>
           </TableContainer>
+        </section>
+
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Toasts</h2>
+          <div className="flex flex-wrap gap-2">
+            {(['success', 'danger', 'info', 'warning'] as const).map((tone) => (
+              <Button
+                key={tone}
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  toast({
+                    tone,
+                    title: `${tone.charAt(0).toUpperCase()}${tone.slice(1)} toast`,
+                    description: 'Optional detail text for the notification.',
+                  })
+                }
+              >
+                Show {tone}
+              </Button>
+            ))}
+          </div>
         </section>
 
         <section className="space-y-3">

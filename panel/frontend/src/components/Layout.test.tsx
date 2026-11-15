@@ -29,4 +29,36 @@ describe('Layout', () => {
 
     expect(screen.queryByRole('dialog', { name: /menu/i })).not.toBeInTheDocument()
   })
+
+  it('marks the active nav link with aria-current', () => {
+    renderWithProviders(
+      <Routes>
+        <Route element={<Layout />}>
+          <Route path="/firewall" element={<p>Firewall</p>} />
+        </Route>
+      </Routes>,
+      { routerProps: { initialEntries: ['/firewall'] } },
+    )
+
+    const firewallLinks = screen.getAllByRole('link', { name: /firewall/i })
+    expect(firewallLinks.some((link) => link.getAttribute('aria-current') === 'page')).toBe(true)
+  })
+
+  it('exposes skip to content targeting main', async () => {
+    const user = userEvent.setup()
+
+    renderWithProviders(
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<p>Page content</p>} />
+        </Route>
+      </Routes>,
+      { routerProps: { initialEntries: ['/'] } },
+    )
+
+    const skip = screen.getByRole('link', { name: /skip to content/i })
+    expect(skip).toHaveAttribute('href', '#main-content')
+    await user.click(skip)
+    expect(document.getElementById('main-content')).toHaveFocus()
+  })
 })
