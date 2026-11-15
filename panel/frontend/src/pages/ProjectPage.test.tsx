@@ -309,8 +309,9 @@ describe('ProjectPage overview, logs, and migrations', () => {
     renderProject()
 
     expect(await screen.findByRole('heading', { name: 'Demo' })).toBeInTheDocument()
-    expect(await screen.findByText('backend')).toBeInTheDocument()
-    expect(screen.getByText('frontend')).toBeInTheDocument()
+    expect(await screen.findAllByText('backend')).not.toHaveLength(0)
+    expect(screen.getAllByText('frontend')).not.toHaveLength(0)
+    expect(screen.getAllByText('andrewallkin/spliteasy')).toHaveLength(2)
     expect(screen.getByText('14-10-2026 18:00:00 SAST')).toBeInTheDocument()
     expect(screen.getByText('1.5%')).toBeInTheDocument()
     expect(screen.getByText('0.4%')).toBeInTheDocument()
