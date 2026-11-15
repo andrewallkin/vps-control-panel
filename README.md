@@ -61,6 +61,18 @@ browser ──ssh tunnel──▶ panel (API + UI, port 8080)
 
 For moving an existing VPS workload onto a fresh panel install, see [docs/migration.md](docs/migration.md).
 
+## How applications attach
+
+Hosted applications are separate Git repositories cloned under the VPS. In production the panel treats each project’s default `docker-compose.yml` as an **image-mode** stack: prebuilt images from Docker Hub, not a local `docker compose build`.
+
+- **Shared Postgres, no bundled database.** The compose file joins the external Docker network `postgres-net` and must not define its own Postgres service. The panel writes `POSTGRES_HOST=postgres-central` (and the matching `POSTGRES_*` credentials) into the project `.env` so services talk to the central `postgres-central` container on that network.
+- **Loopback ports, panel TLS.** Service ports in compose bind to `127.0.0.1` via panel-allocated env vars (for example `${BACKEND_PORT}`). The panel’s nginx terminates HTTPS using Cloudflare DNS-01 certificates and proxies to those loopback ports; applications do not publish TLS on their own.
+- **What a deploy does.** For each image deploy the agent pulls the latest app checkout, writes `DOCKER_IMAGE_*` tag values into `.env`, runs `docker compose pull`, optionally dumps the attached database, runs the project’s configured migration (`docker compose run --rm --no-deps <service> <command>`) **before** `docker compose up`, then probes the configured health URL on `http://127.0.0.1:<port>/…` until it succeeds. The panel also manages other locked `.env` keys (Postgres fields, route ports, image tags) so user edits cannot overwrite them.
+- **Local and standalone Compose.** BudgetHQ, SplitEasy, health-tracker, and strava-automation-service each ship `docker-compose.dev.yml` for day-to-day development (bundled Postgres, live reload) and `docker-compose.standalone.yml` for running the product with its own Postgres and without this panel. The panel never uses those files—only each repo’s production `docker-compose.yml`.
+- **Service names.** The panel runs migrations and health checks against compose service names declared in the project settings. BudgetHQ, SplitEasy, and health-tracker use `backend` and `frontend`. strava-automation-service uses `api`, `frontend`, and `mcp`.
+
+Per-application migration commands and health paths live in each repository’s deployment docs; they are not duplicated here. No hostnames, allocated ports, or credentials belong in public documentation.
+
 ## Agent API
 
 Mutating routes are audited; long-running work returns a `job_id` (poll or stream via `/v1/jobs`).
