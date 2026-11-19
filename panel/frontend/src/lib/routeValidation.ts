@@ -1,4 +1,4 @@
-export const ROUTE_PATH_RE = /^\/[A-Za-z0-9/_-]*$/
+export const ROUTE_PATH_RE = /^\/[A-Za-z0-9/_.-]*$/
 export const ENV_KEY_RE = /^[A-Z_][A-Z0-9_]*$/
 
 export interface RouteDraft {
@@ -15,6 +15,9 @@ export interface RouteDraft {
 export type RoutesValidationResult = { ok: true } | { ok: false; error: string }
 
 export function validateRoutePath(path: string): boolean {
+  if (path.includes('..')) {
+    return false
+  }
   return ROUTE_PATH_RE.test(path)
 }
 
