@@ -9,7 +9,7 @@ _ACME_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 SLUG_RE = re.compile(r"^[a-z][a-z0-9-]{1,38}$")
 SQL_IDENT_RE = re.compile(r"^[a-z][a-z0-9_]{1,62}$")
 ENV_KEY_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
-ROUTE_PATH_RE = re.compile(r"^/[A-Za-z0-9/_-]*$")
+ROUTE_PATH_RE = re.compile(r"^/[A-Za-z0-9/_.-]*$")
 _GITHUB_OWNER_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}$")
 _DOCKER_HUB_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]{1,100}/[A-Za-z0-9_.-]{1,100}$")
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9._/-]{1,100}$")
@@ -67,6 +67,8 @@ def validate_env_key(value: str) -> str:
 
 
 def validate_route_path(value: str) -> str:
+    if ".." in value:
+        raise ValueError(f"invalid route path: {value!r}")
     if not ROUTE_PATH_RE.fullmatch(value):
         raise ValueError(f"invalid route path: {value!r}")
     return value

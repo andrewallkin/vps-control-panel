@@ -10,7 +10,7 @@ DNS_LABEL_RE = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$")
 DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 ENV_KEY_RE = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 SQL_IDENT_RE = re.compile(r"^[a-z][a-z0-9_]{1,62}$")
-ROUTE_PATH_RE = re.compile(r"^/[A-Za-z0-9/_-]*$")
+ROUTE_PATH_RE = re.compile(r"^/[A-Za-z0-9/_.-]*$")
 
 MIN_PORT = 1024
 MAX_PORT = 65535
@@ -113,7 +113,12 @@ def is_ssh_repo_url(repo_url: str) -> bool:
 validate_domain = _matcher(DOMAIN_RE, "domain")
 validate_env_key = _matcher(ENV_KEY_RE, "env key")
 validate_sql_ident = _matcher(SQL_IDENT_RE, "SQL identifier")
-validate_route_path = _matcher(ROUTE_PATH_RE, "route path")
+def validate_route_path(value: str) -> str:
+    if ".." in value:
+        raise ValueError(f"invalid route path: {value!r}")
+    if not ROUTE_PATH_RE.fullmatch(value):
+        raise ValueError(f"invalid route path: {value!r}")
+    return value
 _validate_dns_label = _matcher(DNS_LABEL_RE, "subdomain")
 
 
