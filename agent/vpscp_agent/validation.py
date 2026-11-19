@@ -113,12 +113,16 @@ def is_ssh_repo_url(repo_url: str) -> bool:
 validate_domain = _matcher(DOMAIN_RE, "domain")
 validate_env_key = _matcher(ENV_KEY_RE, "env key")
 validate_sql_ident = _matcher(SQL_IDENT_RE, "SQL identifier")
+
+
 def validate_route_path(value: str) -> str:
     if ".." in value:
         raise ValueError(f"invalid route path: {value!r}")
     if not ROUTE_PATH_RE.fullmatch(value):
         raise ValueError(f"invalid route path: {value!r}")
     return value
+
+
 _validate_dns_label = _matcher(DNS_LABEL_RE, "subdomain")
 
 
